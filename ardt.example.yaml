@@ -1,0 +1,26 @@
+# ardt.yaml — one file per repo. Sections are namespaced per plugin; unknown
+# sections are errors unless the owning plugin simply is not installed here.
+
+project:
+  name: aos_edge # defaults to the project-root directory name
+
+# Exceptions to the ardt-shipped lint/format configs (repo hygiene, 06 §2).
+# check:
+#   ignore: []
+#   clang_format: path/to/.clang-format
+
+# ardt-tasks-ros — the `tasks.ros:` subsection.
+tasks:
+  ros:
+    distro: jazzy
+    repos_file: aos_edge.repos # imported by `ardt deps` before rosdep runs
+    repos_target: src/external
+    rosdep_skip_keys:
+      - rti-connext-dds
+    build_args:
+      - --cmake-args
+      - -DCMAKE_BUILD_TYPE=RelWithDebInfo
+    symlink_install: true
+
+# aos: # recognized once ardt-aos is installed (T3); a warning until then
+#   sdk_line: "2.1"
