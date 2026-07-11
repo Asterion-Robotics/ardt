@@ -33,14 +33,25 @@ def deps(ctx: Context, skip_vcs: bool, skip_rosdep: bool) -> None:
 
 @click.command(context_settings={"ignore_unknown_options": True})
 @_packages_option
+@click.option(
+    "--symlink-install/--no-symlink-install",
+    "symlink",
+    default=None,
+    help="Override tasks.ros.symlink_install from the config.",
+)
 @click.argument("colcon_args", nargs=-1, type=click.UNPROCESSED)
 @pass_ardt
-def build(ctx: Context, packages: tuple[str, ...], colcon_args: tuple[str, ...]) -> None:
+def build(
+    ctx: Context,
+    packages: tuple[str, ...],
+    symlink: bool | None,
+    colcon_args: tuple[str, ...],
+) -> None:
     """Build the workspace with colcon.
 
     Arguments after `--` are passed through to colcon.
     """
-    tasks.build(ctx, packages=packages, extra_args=colcon_args)
+    tasks.build(ctx, packages=packages, extra_args=colcon_args, symlink=symlink)
 
 
 @click.command(context_settings={"ignore_unknown_options": True})

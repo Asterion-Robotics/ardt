@@ -79,11 +79,16 @@ def build(
     *,
     packages: tuple[str, ...] = (),
     extra_args: tuple[str, ...] = (),
+    symlink: bool | None = None,
 ) -> None:
-    """``colcon build`` in the project root."""
+    """``colcon build`` in the project root.
+
+    ``symlink`` overrides ``tasks.ros.symlink_install`` when not None — image
+    builds need real files in the install base, dev checkouts want symlinks.
+    """
     cfg = ros_config(ctx.cfg)
     command = ["colcon", "build"]
-    if cfg.symlink_install:
+    if symlink if symlink is not None else cfg.symlink_install:
         command.append("--symlink-install")
     if cfg.merge_install:
         command.append("--merge-install")

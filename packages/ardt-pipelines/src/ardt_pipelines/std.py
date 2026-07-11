@@ -62,9 +62,7 @@ def build_variants(
     """
     args = [dagger.BuildArg(k, v) for k, v in (build_args or {}).items()]
     return [
-        dag.container(platform=dagger.Platform(p)).build(
-            context=src, dockerfile=dockerfile, build_args=args
-        )
+        src.docker_build(dockerfile=dockerfile, platform=dagger.Platform(p), build_args=args)
         for p in platforms
     ]
 

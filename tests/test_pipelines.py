@@ -196,9 +196,11 @@ def test_ros_ci_config_from_yaml(repo: Path) -> None:
     from ardt_pipelines.builtin import PipelinesSection
 
     (repo / "ardt.yaml").write_text(
-        "pipelines:\n  ros_ci:\n    builder: custom:1\n    platforms: [linux/arm64]\n"
+        "pipelines:\n  ros_ci:\n    builder: custom:1\n    base_image: base:2\n"
+        "    platforms: [linux/arm64]\n"
     )
     cfg, _ = config_module.load(repo)
     parsed = cfg.section_as("pipelines", PipelinesSection).ros_ci
     assert parsed.builder == "custom:1"
+    assert parsed.base_image == "base:2"
     assert parsed.platforms == ["linux/arm64"]
