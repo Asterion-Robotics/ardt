@@ -5,8 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from ardt_core import git as git_module
-
-from .conftest import git
+from ardt_core.testing import git
 
 
 def test_outside_a_repo_everything_degrades(tmp_path: Path) -> None:

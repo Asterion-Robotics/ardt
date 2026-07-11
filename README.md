@@ -27,14 +27,18 @@ neither ROS nor Dagger, so installing it never drags in an engine.
 
 ```
 ardt/
-├── packages/
+├── packages/                # each package owns its unit tests (<pkg>/tests/)
 │   ├── ardt-core/           # cli, plugin loader, context, config, runner, console, version policy
 │   ├── ardt-tasks-ros/      # deps / build / test (colcon, rosdep, vcs) — in-env tasks
 │   ├── ardt-pipelines/      # the generic Dagger plane: `ardt pipe`, @pipeline registry, std helpers
 │   └── ardt-pipelines-ros/  # ROS 2 pipeline plugin: ros-ci + the ros2 image recipe
-├── tests/                # unit suite (marked; unit runs anywhere, integration needs docker)
+├── tests/                # cross-package only: policy sweeps + docker-marked integration
 └── .github/workflows/    # bootstrap CI (lint + format + pyright strict + coverage gate)
 ```
+
+Shared test fixtures (`repo`, `console`, CI-env isolation) ship as
+`ardt_core.testing` — third-party plugins get them the same way our own
+packages do.
 
 ## Installation
 

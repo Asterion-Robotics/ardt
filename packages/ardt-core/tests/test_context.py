@@ -9,8 +9,7 @@ import pytest
 from ardt_core.context import Context
 from ardt_core.errors import ConfigError
 from ardt_core.plugins import Registry
-
-from .conftest import git
+from ardt_core.testing import git
 
 
 def build(root: Path, **kwargs: object) -> Context:

@@ -1,14 +1,12 @@
-"""The pipeline plane, engine-free: registry, param binding, CLI plumbing.
+"""The pipeline registry, engine-free: decorator, param binding, collection.
 
-Nothing here opens a Dagger connection (07 §5 AC: unit tests for registry and
-param binding run without an engine). The engine path is covered by the
-docker-marked test in test_pipelines_integration.py.
+Nothing here opens a Dagger connection (07 §5 AC). The engine path is covered
+by the docker-marked test in the workspace-level tests/.
 """
 
 from __future__ import annotations
 
 import types
-from pathlib import Path
 
 import pytest
 
@@ -137,70 +135,16 @@ class TestCollect:
             collect({"bad": object()})
 
 
-class TestCli:
-    """Through the real CLI, against the really-installed plugin."""
+def test_run_unknown_pipeline_is_clean(repo) -> None:
+    """Through the real CLI: unknown names get a one-line diagnosis."""
+    import contextlib
+    import io
 
-    @staticmethod
-    def _run(args: list[str], cwd: Path) -> tuple[int, str, str]:
-        import contextlib
-        import io
+    from ardt_core.cli import main
 
-        from ardt_core.cli import main
-
-        out, err = io.StringIO(), io.StringIO()
-        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-            code = main(["-C", str(cwd), *args])
-        return code, out.getvalue(), err.getvalue()
-
-    def test_pipe_list_shows_ros_ci(self, repo: Path) -> None:
-        code, _, err = self._run(["pipe", "list"], repo)
-        assert code == 0
-        assert "ros-ci" in err
-
-    def test_pipe_list_json(self, repo: Path) -> None:
-        import json
-
-        code, out, _ = self._run(["pipe", "list", "--json"], repo)
-        assert code == 0
-        names = {p["name"] for p in json.loads(out)["data"]["pipelines"]}
-        assert "ros-ci" in names
-
-    def test_run_unknown_pipeline_is_clean(self, repo: Path) -> None:
-        code, _, err = self._run(["pipe", "run", "nope"], repo)
-        assert code == 1
-        assert "no pipeline named" in err
-        assert "Traceback" not in err
-
-    def test_run_dry_run_needs_no_engine(self, repo: Path) -> None:
-        code, _, err = self._run(["pipe", "run", "ros-ci", "--dry-run"], repo)
-        assert code == 0
-        assert "[dry-run] pipe run ros-ci" in err
-
-    def test_malformed_arg_is_clean(self, repo: Path) -> None:
-        code, _, err = self._run(["pipe", "run", "ros-ci", "--arg", "novalue"], repo)
-        assert code == 1
-        assert "KEY=VALUE" in err
-
-
-def test_ros_ci_config_defaults(tmp_path: Path) -> None:
-    from ardt_core.config import ArdtConfig
-    from ardt_pipelines_ros.ros_ci import PipelinesSection
-
-    cfg = ArdtConfig().section_as("pipelines", PipelinesSection).ros_ci
-    assert cfg.builder == "ros:jazzy-ros-base"
-    assert cfg.platforms == ["linux/amd64"]
-
-
-def test_ros_ci_config_from_yaml(repo: Path) -> None:
-    from ardt_core import config as config_module
-    from ardt_pipelines_ros.ros_ci import PipelinesSection
-
-    (repo / "ardt.yaml").write_text(
-        "pipelines:\n  ros_ci:\n    builder: custom:1\n    base_image: base:2\n"
-        "    platforms: [linux/arm64]\n"
-    )
-    cfg, _ = config_module.load(repo)
-    parsed = cfg.section_as("pipelines", PipelinesSection).ros_ci
-    assert parsed.builder == "custom:1"
-    assert parsed.base_image == "base:2"
-    assert parsed.platforms == ["linux/arm64"]
+    out, err = io.StringIO(), io.StringIO()
+    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+        code = main(["-C", str(repo), "pipe", "run", "nope"])
+    assert code == 1
+    assert "no pipeline named" in err.getvalue()
+    assert "Traceback" not in err.getvalue()

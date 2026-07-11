@@ -45,6 +45,7 @@ ignore = ["ANN401"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["ANN", "B011"]
+"packages/*/tests/*" = ["ANN", "B011"]
 
 [tool.pyright]
 include = ["packages/ardt-core/src"]
@@ -53,7 +54,15 @@ pythonVersion = "3.11"
 reportMissingTypeStubs = false
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+# Each package owns its unit tests; the workspace-level tests/ holds only what
+# crosses package boundaries (policy sweeps, engine-backed integration).
+testpaths = [
+    "packages/ardt-core/tests",
+    "packages/ardt-tasks-ros/tests",
+    "packages/ardt-pipelines/tests",
+    "packages/ardt-pipelines-ros/tests",
+    "tests",
+]
 markers = [
     "unit: no docker, runs anywhere",
     "integration: needs docker or a dagger engine",
