@@ -1,0 +1,24 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ardt-pipelines-ros"
+version = "0.0.0"
+description = "ardt pipelines for ROS 2 repos: the ros-ci pipeline and the ros2 image recipe"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+
+# Depends on ardt-pipelines (which owns the exact dagger-io pin) — never on
+# dagger directly (ci_tools 02 §1 rule 5).
+dependencies = [
+    "ardt-core",
+    "ardt-pipelines",
+]
+
+[project.entry-points."ardt.pipelines"]
+ros = "ardt_pipelines_ros.ros_ci"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ardt_pipelines_ros"]

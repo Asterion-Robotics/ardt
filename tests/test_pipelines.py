@@ -184,7 +184,7 @@ class TestCli:
 
 def test_ros_ci_config_defaults(tmp_path: Path) -> None:
     from ardt_core.config import ArdtConfig
-    from ardt_pipelines.builtin import PipelinesSection
+    from ardt_pipelines_ros.ros_ci import PipelinesSection
 
     cfg = ArdtConfig().section_as("pipelines", PipelinesSection).ros_ci
     assert cfg.builder == "ros:jazzy-ros-base"
@@ -193,7 +193,7 @@ def test_ros_ci_config_defaults(tmp_path: Path) -> None:
 
 def test_ros_ci_config_from_yaml(repo: Path) -> None:
     from ardt_core import config as config_module
-    from ardt_pipelines.builtin import PipelinesSection
+    from ardt_pipelines_ros.ros_ci import PipelinesSection
 
     (repo / "ardt.yaml").write_text(
         "pipelines:\n  ros_ci:\n    builder: custom:1\n    base_image: base:2\n"

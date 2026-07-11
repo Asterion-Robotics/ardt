@@ -38,9 +38,9 @@ import dagger
 from pydantic import BaseModel, ConfigDict, Field
 
 from ardt_core.context import Context
+from ardt_pipelines import pipeline, std
 
-from . import recipes, std
-from .registry import pipeline
+from . import recipes
 
 JUNIT_EXPORT_DIR = "pipeline-reports"
 ARDT_GIT = "git+https://github.com/Asterion-Robotics/ardt.git"

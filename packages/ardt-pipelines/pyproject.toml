@@ -20,8 +20,5 @@ dependencies = [
 [project.entry-points."ardt.commands"]
 pipe = "ardt_pipelines.cli:pipe"
 
-[project.entry-points."ardt.pipelines"]
-builtin = "ardt_pipelines.builtin"
-
 [tool.hatch.build.targets.wheel]
 packages = ["src/ardt_pipelines"]

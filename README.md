@@ -28,9 +28,10 @@ neither ROS nor Dagger, so installing it never drags in an engine.
 ```
 ardt/
 ├── packages/
-│   ├── ardt-core/         # cli, plugin loader, context, config, runner, console, version policy
-│   ├── ardt-tasks-ros/    # deps / build / test (colcon, rosdep, vcs) — the first plugin
-│   └── ardt-pipelines/    # the Dagger plane: `ardt pipe`, @pipeline registry, std helpers, ros-ci
+│   ├── ardt-core/           # cli, plugin loader, context, config, runner, console, version policy
+│   ├── ardt-tasks-ros/      # deps / build / test (colcon, rosdep, vcs) — in-env tasks
+│   ├── ardt-pipelines/      # the generic Dagger plane: `ardt pipe`, @pipeline registry, std helpers
+│   └── ardt-pipelines-ros/  # ROS 2 pipeline plugin: ros-ci + the ros2 image recipe
 ├── tests/                # unit suite (marked; unit runs anywhere, integration needs docker)
 └── .github/workflows/    # bootstrap CI (lint + format + pyright strict + coverage gate)
 ```
@@ -45,12 +46,14 @@ project venv needed:
 # From a checkout (developers): editable, so source edits apply immediately
 uv tool install --editable ./packages/ardt-core \
     --with-editable ./packages/ardt-tasks-ros \
-    --with-editable ./packages/ardt-pipelines
+    --with-editable ./packages/ardt-pipelines \
+    --with-editable ./packages/ardt-pipelines-ros
 
 # From git (users, until PyPI publication):
 uv tool install "ardt-core @ git+https://github.com/Asterion-Robotics/ardt.git#subdirectory=packages/ardt-core" \
     --with "ardt-tasks-ros @ git+https://github.com/Asterion-Robotics/ardt.git#subdirectory=packages/ardt-tasks-ros" \
-    --with "ardt-pipelines @ git+https://github.com/Asterion-Robotics/ardt.git#subdirectory=packages/ardt-pipelines"
+    --with "ardt-pipelines @ git+https://github.com/Asterion-Robotics/ardt.git#subdirectory=packages/ardt-pipelines" \
+    --with "ardt-pipelines-ros @ git+https://github.com/Asterion-Robotics/ardt.git#subdirectory=packages/ardt-pipelines-ros"
 
 ardt --help    # from anywhere
 ```

@@ -21,47 +21,17 @@ build**. A pipeline never re-implements build logic; it starts a container and
 calls `ardt build` in it. And all Dagger imports live in this package — tasks
 and core never see it, so the inner loop works without any engine.
 
-## What `ros-ci` actually does
+## What this package contains — and deliberately does not
 
-**Repos own no Dockerfile.** The image recipe for the "ROS 2 workspace" repo
-type lives in this package (`recipes/ros2.Dockerfile.tmpl`) and updates by
-bumping the pinned ardt version — never by editing files across repos. The
-recipe runs the ardt tasks as build stages, so *building the image is the CI
-run*:
+This is the **generic machinery only**: the `@pipeline` registry and parameter
+binding, the `ardt pipe list/run` CLI, the engine connection (the single place
+the exact `dagger-io` pin is exercised), and `std` helpers (source dirs, cache
+volumes, image refs, registry secrets, multi-arch publish).
 
-```
-ardt pipe run ros-ci
-│
-├─ render the recipe from config (base_image, cmd, base.Dockerfile…)
-│     → exported to pipeline-reports/Dockerfile.rendered on every run,
-│       so `docker build -f … .` always works with no ardt installed
-│
-├─ build the `build` target        FROM pipelines.ros_ci.builder
-│     1) ardt deps                 ← the same tasks, config and flags
-│     2) ardt build                  as on a dev machine (two-plane rule)
-│     3) ardt test                 ← red tests = failed image build
-│     4) stage JUnit XMLs at /results
-│     └─ exported → pipeline-reports/                 ← CI renders these
-│
-└─ build the `runtime` target
-      5) FROM base_image (⊕ the repo's base extension, if any)
-         + COPY the built install base + CMD
-      → always built (a broken runtime stage fails the MR run)
-      → with --publish: one multi-arch manifest pushed as
-        <registry>/<project>:<ctx.version>, digest in the --json envelope
-```
-
-Per-repo knobs, all in `ardt.yaml` (`pipelines.ros_ci:`):
-
-| Knob | Role |
-|---|---|
-| `builder` | base of the build+test stage (process — never ships) |
-| `base_image` | `FROM` of the **shipped** runtime image |
-| `cmd` | the shipped image's CMD |
-| `base.Dockerfile` (file) | the only local Docker file a repo may carry: a single-stage base extension (`FROM ${BASE_IMAGE}` + layers below the app — drivers, kernel modules); spliced into the rendered recipe |
-
-Updating the recipe for every repo of the type = one change here + a version
-bump; repos update by bumping their pinned ardt, never by editing Dockerfiles.
+It knows nothing about ROS or any repo type. Domain pipelines live in their own
+plugins that depend on this package and register via the `ardt.pipelines`
+entry point — e.g. [ardt-pipelines-ros](../ardt-pipelines-ros) provides
+`ros-ci` and the ROS 2 image recipe.
 
 ## Authoring a pipeline
 

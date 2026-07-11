@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from ardt_core.errors import ArdtError
-from ardt_pipelines import recipes
+from ardt_pipelines_ros import recipes
 
 
 def render(tmp_path: Path, **overrides: object) -> str:

@@ -6,6 +6,7 @@ requires-python = ">=3.11"
 members = [
     "ardt-core",
     "ardt-pipelines",
+    "ardt-pipelines-ros",
     "ardt-tasks-ros",
     "ardt-workspace",
 ]
@@ -67,6 +68,21 @@ requires-dist = [
 ]
 
 [[package]]
+name = "ardt-pipelines-ros"
+version = "0.0.0"
+source = { editable = "packages/ardt-pipelines-ros" }
+dependencies = [
+    { name = "ardt-core" },
+    { name = "ardt-pipelines" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "ardt-core", editable = "packages/ardt-core" },
+    { name = "ardt-pipelines", editable = "packages/ardt-pipelines" },
+]
+
+[[package]]
 name = "ardt-tasks-ros"
 version = "0.0.0"
 source = { editable = "packages/ardt-tasks-ros" }
@@ -86,6 +102,7 @@ source = { virtual = "." }
 dev = [
     { name = "ardt-core" },
     { name = "ardt-pipelines" },
+    { name = "ardt-pipelines-ros" },
     { name = "ardt-tasks-ros" },
     { name = "pyright" },
     { name = "pytest" },
@@ -99,6 +116,7 @@ dev = [
 dev = [
     { name = "ardt-core", editable = "packages/ardt-core" },
     { name = "ardt-pipelines", editable = "packages/ardt-pipelines" },
+    { name = "ardt-pipelines-ros", editable = "packages/ardt-pipelines-ros" },
     { name = "ardt-tasks-ros", editable = "packages/ardt-tasks-ros" },
     { name = "pyright", specifier = ">=1.1.380" },
     { name = "pytest", specifier = ">=8.0" },

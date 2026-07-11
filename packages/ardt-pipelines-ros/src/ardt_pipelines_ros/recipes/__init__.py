@@ -23,7 +23,7 @@ from importlib import resources
 from pathlib import Path
 
 from ardt_core.errors import ArdtError
-from ardt_pipelines import __version__
+from ardt_pipelines_ros import __version__
 
 RENDERED_NAME = "Dockerfile.rendered"
 """The rendered recipe's filename, inside the build context and in the export."""
@@ -54,7 +54,7 @@ _BASE_FROM = re.compile(r"^FROM\s+\$\{?BASE_IMAGE\}?\s*$")
 
 
 def _template(name: str) -> str:
-    return (resources.files("ardt_pipelines.recipes") / name).read_text(encoding="utf-8")
+    return (resources.files("ardt_pipelines_ros.recipes") / name).read_text(encoding="utf-8")
 
 
 def _parse_base_extension(path: Path) -> str:
