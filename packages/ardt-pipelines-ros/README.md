@@ -39,6 +39,8 @@ Per-repo knobs, all in `ardt.yaml` (`pipelines.ros_ci:`):
 | `builder` | base of the build+test stage (process — never ships) |
 | `base_image` | `FROM` of the **shipped** runtime image |
 | `cmd` | the shipped image's CMD |
+| `install_base` | where the workspace installs in the image (default `/opt/ros/aos`) |
+| `strip_dev_files` | IP protection: strip headers, static libs and CMake/pkg-config exports before the runtime copy |
 | `base.Dockerfile` (file) | the only local Docker file a repo may carry: a single-stage base extension (`FROM ${BASE_IMAGE}` + layers below the app — drivers, kernel modules); spliced into the rendered recipe |
 
 Until the baked `ardt-ci` tool image exists (B4), the recipe pip-installs the

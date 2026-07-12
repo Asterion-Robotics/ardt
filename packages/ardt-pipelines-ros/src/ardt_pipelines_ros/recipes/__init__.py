@@ -28,6 +28,12 @@ from ardt_pipelines_ros import __version__
 RENDERED_NAME = "Dockerfile.rendered"
 """The rendered recipe's filename, inside the build context and in the export."""
 
+DOCKERIGNORE_NAME = f"{RENDERED_NAME}.dockerignore"
+"""Exported next to the rendered recipe. BuildKit picks up a per-Dockerfile
+``<name>.dockerignore``, so the plain ``docker build -f …`` escape hatch gets
+the same context excludes the pipeline uses — without it, a host checkout's
+``build/``/``install/`` trees leak into the image and break rosdep/colcon."""
+
 BUILD_TARGET = "build"
 RUNTIME_TARGET = "runtime"
 RESULTS_DIR = "/results"
@@ -52,9 +58,30 @@ RUN python3 -m pip install --break-system-packages \\
 
 _BASE_FROM = re.compile(r"^FROM\s+\$\{?BASE_IMAGE\}?\s*$")
 
+_STRIP_STEP = """\
+
+# 4b) IP protection: development files are removed BEFORE the runtime copy, so
+# the shipped image carries no headers, static libs, or CMake/pkg-config
+# exports that would let a third party develop against the proprietary
+# packages. Runtime data (launch files, urdf, plugins) is kept.
+RUN find {base} -type d \\( -name include -o -name cmake -o -name pkgconfig \\) \\
+      -prune -exec rm -rf {{}} + \\
+ && find {base} -name '*.a' -delete
+"""
+
 
 def _template(name: str) -> str:
     return (resources.files("ardt_pipelines_ros.recipes") / name).read_text(encoding="utf-8")
+
+
+def render_dockerignore(excludes: tuple[str, ...]) -> str:
+    """Context excludes for the standalone ``docker build`` escape hatch.
+
+    ``.ardt-src`` must never appear here: the dev-mode recipe COPYs it
+    explicitly, and an ignored path would fail that COPY.
+    """
+    lines = "\n".join(excludes)
+    return f"# Rendered by ardt ros-ci — keep next to {RENDERED_NAME}.\n{lines}\n"
 
 
 def _parse_base_extension(path: Path) -> str:
@@ -101,6 +128,8 @@ def render_ros2(
     cmd: list[str] | None,
     ardt_source: str,
     local_ardt: bool,
+    install_base: str = "/opt/ros/aos",
+    strip_dev_files: bool = False,
 ) -> str:
     """Render the ROS 2 workspace recipe for one repo."""
     base_ext = ""
@@ -116,6 +145,7 @@ def render_ros2(
 
     install = _LOCAL_INSTALL if local_ardt else _GIT_INSTALL.format(source=ardt_source)
     rendered_cmd = f"CMD {json.dumps(cmd)}\n" if cmd else ""
+    strip = _STRIP_STEP.format(base=install_base) if strip_dev_files else ""
 
     return (
         _template("ros2.Dockerfile.tmpl")
@@ -124,6 +154,8 @@ def render_ros2(
         .replace("@BASE_IMAGE@", base_image)
         .replace("@BASE_FILE@", base_dockerfile)
         .replace("@ARDT_INSTALL@", install)
+        .replace("@INSTALL_BASE@", install_base)
+        .replace("@STRIP@", strip)
         .replace("@BASE_EXT@", base_ext)
         .replace("@RUNTIME_FROM@", runtime_from)
         .replace("@CMD@", rendered_cmd)

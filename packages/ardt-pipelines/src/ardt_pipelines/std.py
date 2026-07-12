@@ -13,7 +13,15 @@ import dagger
 from ardt_core.context import Context
 from ardt_core.errors import ArdtError
 
-SOURCE_EXCLUDES = (".git", "build", "install", "log", ".venv", "__pycache__")
+SOURCE_EXCLUDES = (
+    ".git",
+    "build",
+    "install",
+    "log",
+    ".venv",
+    "__pycache__",
+    "pipeline-reports",
+)
 """Never ship the workspace's derived state into a build container."""
 
 

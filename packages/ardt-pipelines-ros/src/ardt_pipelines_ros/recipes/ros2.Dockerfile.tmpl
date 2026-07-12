@@ -1,5 +1,5 @@
-# Rendered by `ardt pipe run ros-ci` (ardt-pipelines @VERSION@) — machine-owned.
-# The recipe lives in ardt-pipelines and updates with the pinned ardt version;
+# Rendered by `ardt pipe run ros-ci` (ardt-pipelines-ros @VERSION@) — machine-owned.
+# The recipe lives in ardt-pipelines-ros and updates with the pinned ardt version;
 # repos contain NO Dockerfile. A repo needing local image content extends the
 # configured base via @BASE_FILE@ (spliced in below as a stage). Build, test and
 # packaging are ONE recipe — building this image proves the tests pass:
@@ -20,20 +20,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY . /ws/src
 WORKDIR /ws/src
 
-# 1) deps
+# 1) deps (exclusions come from ardt.yaml: tasks.ros.exclude_packages / rosdep_skip_keys)
 RUN apt-get update && rosdep update --rosdistro ${ROS_DISTRO} \
  && ardt deps \
  && rm -rf /var/lib/apt/lists/*
-# 2) build (real files, not symlinks: /opt/app must survive the stage copy)
-RUN ardt build --no-symlink-install -- --install-base /opt/app
+# 2) build (real files, not symlinks: the install base must survive the stage copy)
+RUN ardt build --no-symlink-install --install-base @INSTALL_BASE@
 # 3) test — red tests fail the image build (same install base as the build)
-RUN ardt test -- --install-base /opt/app
+RUN ardt test --install-base @INSTALL_BASE@
 # 4) stage the JUnit XMLs where the pipeline (or a human) can copy them from
 RUN mkdir -p /results && cd build \
  && (find . -path '*test_results*' -name '*.xml' -exec cp --parents -t /results {} +)
-@BASE_EXT@
+@STRIP@@BASE_EXT@
 # ---- step 5: the shipped runtime image ----
 FROM @RUNTIME_FROM@ AS runtime
 
-COPY --from=build /opt/app /opt/app
+COPY --from=build @INSTALL_BASE@ @INSTALL_BASE@
 @CMD@

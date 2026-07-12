@@ -104,3 +104,32 @@ class TestBaseExtension:
         (tmp_path / "base.Dockerfile").write_text("# only a comment\n")
         with pytest.raises(ArdtError, match="no FROM"):
             render(tmp_path)
+
+
+class TestInstallBaseAndStrip:
+    def test_default_install_base(self, tmp_path: Path) -> None:
+        rendered = render(tmp_path)
+        assert "--install-base /opt/ros/aos" in rendered
+        assert "COPY --from=build /opt/ros/aos /opt/ros/aos" in rendered
+
+    def test_custom_install_base(self, tmp_path: Path) -> None:
+        rendered = render(tmp_path, install_base="/opt/thing")
+        assert "--install-base /opt/thing" in rendered
+        assert "COPY --from=build /opt/thing /opt/thing" in rendered
+        assert "/opt/ros/aos" not in rendered
+
+    def test_no_strip_by_default(self, tmp_path: Path) -> None:
+        assert "IP protection" not in render(tmp_path)
+
+    def test_strip_removes_dev_files_before_runtime_copy(self, tmp_path: Path) -> None:
+        rendered = render(tmp_path, strip_dev_files=True)
+        assert "-name include" in rendered
+        assert "*.a" in rendered
+        # the strip runs in the build stage, before the runtime stage begins
+        assert rendered.index("IP protection") < rendered.index("AS runtime")
+
+
+def test_dockerignore_render_lists_excludes() -> None:
+    text = recipes.render_dockerignore(("build", "install", ".git"))
+    assert "build\ninstall\n.git" in text
+    assert ".ardt-src" not in text

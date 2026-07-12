@@ -77,7 +77,7 @@ def test_deps_without_repos_file_only_plans_rosdep(repo: Path) -> None:
     ctx = context(repo, dry_run=True)
     tasks.deps(ctx)
     text = output(ctx)
-    assert "rosdep install --from-paths . --ignore-src -r -y" in text
+    assert "rosdep install --from-paths $(colcon list --paths-only) --ignore-src -r -y" in text
     assert "vcs import" not in text
 
 
@@ -118,4 +118,57 @@ def test_rosdep_skip_keys_forwarded(repo: Path) -> None:
     )
     ctx = context(repo, dry_run=True)
     tasks.deps(ctx)
-    assert "--skip-keys rti-connext-dds foo" in output(ctx)
+    text = output(ctx)
+    assert "--skip-keys" in text
+    assert "rti-connext-dds foo" in text
+
+
+def test_build_install_base_from_config(repo: Path) -> None:
+    (repo / "ardt.yaml").write_text("tasks:\n  ros:\n    install_base: /opt/ros/aos\n")
+    ctx = context(repo, dry_run=True)
+    tasks.build(ctx)
+    assert "--install-base /opt/ros/aos" in output(ctx)
+    assert ctx.emitted["install_base"] == "/opt/ros/aos"
+
+
+def test_build_install_base_cli_overrides_config(repo: Path) -> None:
+    (repo / "ardt.yaml").write_text("tasks:\n  ros:\n    install_base: /opt/ros/aos\n")
+    ctx = context(repo, dry_run=True)
+    tasks.build(ctx, install_base="/elsewhere")
+    assert "--install-base /elsewhere" in output(ctx)
+
+
+def test_test_uses_same_install_base(repo: Path) -> None:
+    (repo / "ardt.yaml").write_text("tasks:\n  ros:\n    install_base: /opt/ros/aos\n")
+    ctx = context(repo, dry_run=True)
+    tasks.test(ctx)
+    assert "colcon test --install-base /opt/ros/aos" in output(ctx)
+
+
+def test_exclude_packages_skips_build_and_test(repo: Path) -> None:
+    (repo / "ardt.yaml").write_text("tasks:\n  ros:\n    exclude_packages: [big_sim]\n")
+    ctx = context(repo, dry_run=True)
+    tasks.build(ctx, exclude_packages=("flaky_pkg",))
+    assert "--packages-skip big_sim flaky_pkg" in output(ctx)
+
+    ctx = context(repo, dry_run=True)
+    tasks.test(ctx)
+    assert "--packages-skip big_sim" in output(ctx)
+
+
+def test_deps_excluded_packages_narrow_rosdep_paths(repo: Path) -> None:
+    (repo / "ardt.yaml").write_text("tasks:\n  ros:\n    exclude_packages: [big_sim]\n")
+    ctx = context(repo, dry_run=True)
+    tasks.deps(ctx, exclude_packages=("other",))
+    text = output(ctx)
+    assert "colcon list --paths-only --packages-skip big_sim other" in text
+    assert "rosdep install --from-paths $(" in text
+
+
+def test_deps_skip_keys_merge_config_and_cli(repo: Path) -> None:
+    (repo / "ardt.yaml").write_text("tasks:\n  ros:\n    rosdep_skip_keys: [gazebo]\n")
+    ctx = context(repo, dry_run=True)
+    tasks.deps(ctx, skip_keys=("rti-connext-dds",))
+    text = output(ctx)
+    assert "--skip-keys" in text
+    assert "gazebo rti-connext-dds" in text

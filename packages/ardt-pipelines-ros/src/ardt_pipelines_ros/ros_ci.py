@@ -59,6 +59,13 @@ class RosCiConfig(BaseModel):
     """Optional in-repo base extension: a single-stage Dockerfile starting
     ``FROM ${BASE_IMAGE}`` (kernel modules, vendor drivers…). When present it is
     spliced into the rendered recipe and the runtime image builds on it."""
+    install_base: str = "/opt/ros/aos"
+    """Where the workspace installs inside the image (build, test and the
+    runtime copy all use it)."""
+    strip_dev_files: bool = False
+    """IP protection: remove headers (``include/``), static libs (``*.a``) and
+    CMake/pkg-config exports from the install base before the runtime copy, so
+    the shipped image cannot be developed against."""
     cmd: list[str] | None = None
     """Container CMD of the shipped image."""
     platforms: list[str] = Field(default_factory=lambda: ["linux/amd64"])
@@ -93,6 +100,8 @@ def _build_context(
         cmd=cfg.cmd,
         ardt_source=ardt_source,
         local_ardt=local_ardt,
+        install_base=cfg.install_base,
+        strip_dev_files=cfg.strip_dev_files,
     )
     context = src.with_new_file(recipes.RENDERED_NAME, rendered)
     if local_ardt:
@@ -120,6 +129,10 @@ async def ros_ci(ctx: Context, dag: dagger.Client, ardt_source: str = ARDT_GIT) 
     rendered_path = export_dir / recipes.RENDERED_NAME
     rendered_path.parent.mkdir(parents=True, exist_ok=True)
     rendered_path.write_text(rendered, encoding="utf-8")
+    # The escape hatch needs the same context excludes the pipeline used.
+    (export_dir / recipes.DOCKERIGNORE_NAME).write_text(
+        recipes.render_dockerignore(std.SOURCE_EXCLUDES), encoding="utf-8"
+    )
     ctx.emit(
         junit_dir=JUNIT_EXPORT_DIR,
         tests_ok=True,

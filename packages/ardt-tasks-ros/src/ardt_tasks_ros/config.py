@@ -24,6 +24,14 @@ class RosConfig(BaseModel):
     repos_target: str = "src"
 
     rosdep_skip_keys: list[str] = Field(default_factory=list)
+    """rosdep keys never installed (vendored, proprietary, or known-broken deps)."""
+    exclude_packages: list[str] = Field(default_factory=list)
+    """Packages skipped everywhere: rosdep resolution, colcon build, colcon test.
+    The space-ros pattern — import a broad ``.repos``, build only what you need."""
+
+    install_base: str | None = None
+    """colcon ``--install-base``; None keeps colcon's default ``install/``."""
+
     build_args: list[str] = Field(default_factory=list)
     """Extra arguments appended to ``colcon build``."""
     test_args: list[str] = Field(default_factory=list)
