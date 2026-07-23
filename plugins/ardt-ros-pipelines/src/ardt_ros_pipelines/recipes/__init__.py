@@ -24,7 +24,7 @@ from pathlib import Path
 
 from ardt_core.errors import ArdtError
 from ardt_pipelines import std
-from ardt_pipelines_ros import __version__
+from ardt_ros_pipelines import __version__
 
 RENDERED_NAME = "Dockerfile.rendered"
 """The rendered recipe's filename, inside the build context and in the export."""
@@ -54,13 +54,13 @@ GIT_TOKEN_SECRET = std.GIT_TOKEN_SECRET
 _GIT_INSTALL = """\
 RUN python3 -m pip install --break-system-packages \\
       "ardt-core @ {source}#subdirectory=packages/ardt-core" \\
-      "ardt-tasks-ros @ {source}#subdirectory=packages/ardt-tasks-ros\""""
+      "ardt-ros-tasks @ {source}#subdirectory=plugins/ardt-ros-tasks\""""
 
 _LOCAL_INSTALL = f"""\
 # dev mode: ardt injected from a local checkout instead of the git default
 COPY {LOCAL_ARDT_DIR} /opt/ardt-src
 RUN python3 -m pip install --break-system-packages \\
-      /opt/ardt-src/packages/ardt-core /opt/ardt-src/packages/ardt-tasks-ros"""
+      /opt/ardt-src/packages/ardt-core /opt/ardt-src/plugins/ardt-ros-tasks"""
 
 _BASE_FROM = re.compile(r"^FROM\s+\$\{?BASE_IMAGE\}?\s*$")
 
@@ -102,7 +102,7 @@ RUN find {base} -type d \\( -name include -o -name cmake -o -name pkgconfig \\) 
 
 
 def _template(name: str) -> str:
-    return (resources.files("ardt_pipelines_ros.recipes") / name).read_text(encoding="utf-8")
+    return (resources.files("ardt_ros_pipelines.recipes") / name).read_text(encoding="utf-8")
 
 
 def render_dockerignore(excludes: tuple[str, ...]) -> str:

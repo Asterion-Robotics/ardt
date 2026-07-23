@@ -8,22 +8,22 @@ requires-python = ">=3.11"
 package = false
 
 [tool.uv.workspace]
-members = ["packages/*"]
+members = ["packages/*", "plugins/*"]
 
 [tool.uv.sources]
 ardt-core = { workspace = true }
-ardt-tasks-ros = { workspace = true }
-ardt-tasks-doc = { workspace = true }
+ardt-ros-tasks = { workspace = true }
+ardt-doc-tasks = { workspace = true }
 ardt-pipelines = { workspace = true }
-ardt-pipelines-ros = { workspace = true }
+ardt-ros-pipelines = { workspace = true }
 
 [dependency-groups]
 dev = [
     "ardt-core",
-    "ardt-tasks-ros",
-    "ardt-tasks-doc",
+    "ardt-ros-tasks",
+    "ardt-doc-tasks",
     "ardt-pipelines",
-    "ardt-pipelines-ros",
+    "ardt-ros-pipelines",
     "pytest>=8.0",
     "pytest-cov>=5.0",
     "ruff>=0.6",
@@ -35,10 +35,10 @@ line-length = 100
 target-version = "py311"
 src = [
     "packages/ardt-core/src",
-    "packages/ardt-tasks-ros/src",
-    "packages/ardt-tasks-doc/src",
+    "plugins/ardt-ros-tasks/src",
+    "plugins/ardt-doc-tasks/src",
     "packages/ardt-pipelines/src",
-    "packages/ardt-pipelines-ros/src",
+    "plugins/ardt-ros-pipelines/src",
     "tests",
 ]
 
@@ -61,10 +61,10 @@ reportMissingTypeStubs = false
 # crosses package boundaries (policy sweeps, engine-backed integration).
 testpaths = [
     "packages/ardt-core/tests",
-    "packages/ardt-tasks-ros/tests",
-    "packages/ardt-tasks-doc/tests",
+    "plugins/ardt-ros-tasks/tests",
+    "plugins/ardt-doc-tasks/tests",
     "packages/ardt-pipelines/tests",
-    "packages/ardt-pipelines-ros/tests",
+    "plugins/ardt-ros-pipelines/tests",
     "tests",
 ]
 markers = [

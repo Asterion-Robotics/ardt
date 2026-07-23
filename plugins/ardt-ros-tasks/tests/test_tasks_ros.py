@@ -1,4 +1,4 @@
-"""ardt-tasks-ros: config parsing and the deps/build/test command shapes.
+"""ardt-ros-tasks: config parsing and the deps/build/test command shapes.
 
 These stay `unit`: no real colcon/rosdep runs here. `--dry-run` lets us assert the
 *plan* (which commands, which flags) without an ROS install; the real green-on-
@@ -12,8 +12,8 @@ from pathlib import Path
 
 from ardt_core.context import Context
 from ardt_core.plugins import Registry
-from ardt_tasks_ros import tasks
-from ardt_tasks_ros.config import JUNIT_GLOB, ros_config
+from ardt_ros_tasks import tasks
+from ardt_ros_tasks.config import JUNIT_GLOB, ros_config
 
 
 def context(root: Path, **kwargs: object) -> Context:

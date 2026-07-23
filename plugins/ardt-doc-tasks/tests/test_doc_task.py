@@ -7,10 +7,10 @@ import io
 from pathlib import Path
 
 from ardt_core.config import ArdtConfig
-from ardt_tasks_doc import doxygen
-from ardt_tasks_doc.config import doc_config
+from ardt_doc_tasks import doxygen
+from ardt_doc_tasks.config import doc_config
 
-CONF = "from ardt_tasks_doc.preset import *  # noqa: F403\n\nproject = 'demo'\n"
+CONF = "from ardt_doc_tasks.preset import *  # noqa: F403\n\nproject = 'demo'\n"
 
 
 def run(args: list[str], cwd: Path) -> tuple[int, str, str]:

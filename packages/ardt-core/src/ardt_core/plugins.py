@@ -12,6 +12,12 @@ Every plugin distribution declares ``ARDT_PLUGIN_API`` on its root package. The
 guard is the same one the AOS SDK applies to BT plugins: an incompatible or
 undeclared API version is **refused loudly and skipped whole** — never
 half-loaded, never a traceback, and never fatal to the rest of the CLI.
+
+A root package may also declare ``ARDT_CONFIG_SECTION`` — the ``ardt.yaml``
+section it claims. Without it the section is derived from the distribution
+name (first word after ``ardt-``), which is why every first-party plugin
+declares it explicitly: package names group by theme (``ardt-ros-tasks``),
+config sections group by plane (``tasks.ros``).
 """
 
 from __future__ import annotations
@@ -40,20 +46,22 @@ class Plugin:
     """A successfully loaded plugin distribution."""
 
     name: str
-    """The distribution name, e.g. ``ardt-tasks-ros``."""
+    """The distribution name, e.g. ``ardt-ros-tasks``."""
     version: str
     api: int
     module: str
     """The root package that declared ``ARDT_PLUGIN_API``."""
+    section: str = ""
+    """The ``ardt.yaml`` section this plugin claims: the root package's
+    ``ARDT_CONFIG_SECTION``, else derived from the distribution name."""
     commands: dict[str, object] = field(default_factory=_empty)
     pipelines: dict[str, object] = field(default_factory=_empty)
     templates: dict[str, object] = field(default_factory=_empty)
 
-    @property
-    def section(self) -> str:
-        """The ``ardt.yaml`` section this plugin claims: ``ardt-tasks-ros`` -> ``tasks``."""
-        stem = self.name.removeprefix("ardt-")
-        return stem.split("-")[0]
+
+def derived_section(distribution: str) -> str:
+    """The name-derived fallback section: first word after ``ardt-``."""
+    return distribution.removeprefix("ardt-").split("-")[0]
 
 
 @dataclass(frozen=True)
@@ -147,7 +155,9 @@ def _load_distribution(
             f"declares ARDT_PLUGIN_API {api}, this ardt speaks {ARDT_PLUGIN_API}",
         )
 
-    plugin = Plugin(name=name, version=_version(name), api=api, module=root)
+    declared = getattr(importlib.import_module(root), "ARDT_CONFIG_SECTION", None)
+    section = declared if isinstance(declared, str) and declared else derived_section(name)
+    plugin = Plugin(name=name, version=_version(name), api=api, module=root, section=section)
 
     # Load whole-or-nothing: one bad entry point disqualifies the distribution,
     # so a plugin never contributes half its commands.

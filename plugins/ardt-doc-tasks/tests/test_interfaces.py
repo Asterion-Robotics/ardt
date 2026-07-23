@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ardt_tasks_doc import interfaces
+from ardt_doc_tasks import interfaces
 
 MSG = """\
 # The demo status message.

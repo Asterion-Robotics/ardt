@@ -27,7 +27,7 @@ def run(args: list[str], cwd: Path) -> tuple[int, str, str]:
 
 class TestConfig:
     def test_defaults(self) -> None:
-        from ardt_pipelines_ros.ros_ci import PipelinesSection
+        from ardt_ros_pipelines.ros_ci import PipelinesSection
 
         cfg = ArdtConfig().section_as("pipelines", PipelinesSection).ros_ci
         assert cfg.builder == "ros:jazzy-ros-base"
@@ -40,7 +40,7 @@ class TestConfig:
 
     def test_from_yaml(self, repo: Path) -> None:
         from ardt_core import config as config_module
-        from ardt_pipelines_ros.ros_ci import PipelinesSection
+        from ardt_ros_pipelines.ros_ci import PipelinesSection
 
         (repo / "ardt.yaml").write_text(
             "pipelines:\n  ros_ci:\n    builder: custom:1\n    base_image: base:2\n"
@@ -88,7 +88,7 @@ class TestGitCredentials:
 
         from ardt_core.context import Context
         from ardt_core.errors import ArdtError
-        from ardt_pipelines_ros import ros_ci as ros_ci_module
+        from ardt_ros_pipelines import ros_ci as ros_ci_module
 
         (repo / "ardt.yaml").write_text("pipelines:\n  ros_ci:\n    git_host: code.example.com\n")
         ctx = Context.build(cwd=repo)

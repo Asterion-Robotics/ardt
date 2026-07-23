@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "ardt-pipelines-ros"
+name = "ardt-ros-pipelines"
 version = "0.0.0"
 description = "ardt pipelines for ROS 2 repos: the ros-ci pipeline and the ros2 image recipe"
 readme = "README.md"
@@ -18,7 +18,7 @@ dependencies = [
 ]
 
 [project.entry-points."ardt.pipelines"]
-ros = "ardt_pipelines_ros.ros_ci"
+ros = "ardt_ros_pipelines.ros_ci"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/ardt_pipelines_ros"]
+packages = ["src/ardt_ros_pipelines"]

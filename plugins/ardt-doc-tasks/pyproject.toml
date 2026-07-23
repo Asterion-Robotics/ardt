@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "ardt-tasks-doc"
+name = "ardt-doc-tasks"
 version = "0.0.0"
 description = "ardt documentation tasks: sphinx + doxygen/breathe + ROS 2 interface autodoc, preset-driven"
 readme = "README.md"
@@ -33,7 +33,7 @@ dependencies = [
 ]
 
 [project.entry-points."ardt.commands"]
-doc = "ardt_tasks_doc.cli:doc"
+doc = "ardt_doc_tasks.cli:doc"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/ardt_tasks_doc"]
+packages = ["src/ardt_doc_tasks"]

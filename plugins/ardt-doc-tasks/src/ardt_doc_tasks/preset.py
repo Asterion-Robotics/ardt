@@ -2,7 +2,7 @@
 
 A repo's ``conf.py`` is three lines::
 
-    from ardt_tasks_doc.preset import *  # noqa: F403
+    from ardt_doc_tasks.preset import *  # noqa: F403
 
     project = "my_project"
 
@@ -27,7 +27,7 @@ import sys as _sys
 from pathlib import Path as _Path
 
 from ardt_core.config import find_project_root as _find_project_root
-from ardt_tasks_doc.config import DOC_OUTPUT as _DOC_OUTPUT
+from ardt_doc_tasks.config import DOC_OUTPUT as _DOC_OUTPUT
 
 _ROOT = _find_project_root(_Path.cwd())
 
@@ -47,7 +47,7 @@ extensions = [
     "sphinx.ext.mathjax",
     "sphinxcontrib.mermaid",
     "breathe",
-    "ardt_tasks_doc.sphinx_ext",
+    "ardt_doc_tasks.sphinx_ext",
 ]
 
 source_suffix = {".rst": "restructuredtext", ".md": "markdown"}

@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from ardt_core.errors import ArdtError
-from ardt_pipelines_ros import recipes
+from ardt_ros_pipelines import recipes
 
 
 def render(tmp_path: Path, **overrides: object) -> str:
@@ -26,7 +26,7 @@ def render(tmp_path: Path, **overrides: object) -> str:
 
 def test_no_placeholders_survive(tmp_path: Path) -> None:
     rendered = render(tmp_path)
-    assert "@" not in rendered.replace("ardt-core @", "").replace("ardt-tasks-ros @", "")
+    assert "@" not in rendered.replace("ardt-core @", "").replace("ardt-ros-tasks @", "")
 
 
 def test_bases_and_stages(tmp_path: Path) -> None:

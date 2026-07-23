@@ -30,7 +30,7 @@ volumes, image refs, registry secrets, multi-arch publish).
 
 It knows nothing about ROS or any repo type. Domain pipelines live in their own
 plugins that depend on this package and register via the `ardt.pipelines`
-entry point — e.g. [ardt-pipelines-ros](../ardt-pipelines-ros) provides
+entry point — e.g. [ardt-ros-pipelines](../ardt-ros-pipelines) provides
 `ros-ci` and the ROS 2 image recipe.
 
 ## Authoring a pipeline

@@ -61,7 +61,7 @@ def test_plugins_lists_the_real_plugin(repo: Path) -> None:
     code, out, _ = run(["plugins", "--json"], repo)
     assert code == 0
     names = {p["name"] for p in json.loads(out)["data"]["plugins"]}
-    assert "ardt-tasks-ros" in names
+    assert "ardt-ros-tasks" in names
 
 
 def test_unknown_section_is_one_line_error_not_traceback(repo: Path) -> None:
@@ -106,7 +106,7 @@ def test_dry_run_before_subcommand_also_works(repo: Path) -> None:
 def test_plugins_human_output_names_the_plugin(repo: Path) -> None:
     code, _out, err = run(["plugins"], repo)
     assert code == 0
-    assert "ardt-tasks-ros" in err
+    assert "ardt-ros-tasks" in err
     assert "commands:" in err
 
 

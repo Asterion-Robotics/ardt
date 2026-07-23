@@ -46,10 +46,12 @@ def fake_package(monkeypatch: pytest.MonkeyPatch):
 
     created: list[str] = []
 
-    def make(root: str, api: object | None) -> None:
+    def make(root: str, api: object | None, section: str | None = None) -> None:
         module = types.ModuleType(root)
         if api is not None:
             module.ARDT_PLUGIN_API = api  # type: ignore[attr-defined]
+        if section is not None:
+            module.ARDT_CONFIG_SECTION = section  # type: ignore[attr-defined]
         monkeypatch.setitem(sys.modules, root, module)
         created.append(root)
 
@@ -74,7 +76,22 @@ def test_compatible_plugin_loads(monkeypatch: pytest.MonkeyPatch, fake_package) 
     plugin = registry.plugins[0]
     assert plugin.name == "acme-plug"
     assert plugin.commands == {"hello": marker}
-    assert plugin.section == "acme"
+    assert plugin.section == "acme"  # name-derived fallback
+
+
+def test_declared_config_section_wins_over_derivation(
+    monkeypatch: pytest.MonkeyPatch, fake_package
+) -> None:
+    """`ardt-ros-tasks` claims `tasks:`, not `ros:` — names group by theme,
+    sections by plane, so the claim is an explicit declaration."""
+    fake_package("acme_plugin", plugins.ARDT_PLUGIN_API, section="tasks")
+    _version_ok(monkeypatch)
+    eps = [
+        FakeEntryPoint("hi", plugins.COMMANDS_GROUP, "acme_plugin.cli", object(), dist="acme-ros")
+    ]
+
+    plugin = discover(eps).plugins[0]
+    assert plugin.section == "tasks"
 
 
 def test_wrong_api_version_is_refused(monkeypatch: pytest.MonkeyPatch, fake_package) -> None:
@@ -155,8 +172,8 @@ def test_registry_helpers(monkeypatch: pytest.MonkeyPatch, fake_package) -> None
 
 
 def test_real_installed_plugin_is_discovered() -> None:
-    """The genuinely-installed ardt-tasks-ros must load with no problems."""
+    """The genuinely-installed ardt-ros-tasks must load with no problems."""
     registry = discover()
     names = {p.name for p in registry.plugins}
-    assert "ardt-tasks-ros" in names
+    assert "ardt-ros-tasks" in names
     assert registry.problems == []

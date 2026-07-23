@@ -34,7 +34,7 @@ def build(ctx: Context) -> None:
     if not (source / "conf.py").is_file():
         raise ArdtError(
             f"`{cfg.source_dir}/conf.py` not found",
-            hint="a 3-line conf.py suffices: `from ardt_tasks_doc.preset import *` "
+            hint="a 3-line conf.py suffices: `from ardt_doc_tasks.preset import *` "
             "plus your `project = ...`",
         )
 

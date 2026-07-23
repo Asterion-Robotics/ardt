@@ -9,5 +9,7 @@ entry point — nothing here is special-cased by the machinery.
 from __future__ import annotations
 
 ARDT_PLUGIN_API = 1
+ARDT_CONFIG_SECTION = "pipelines"
+"""Explicit config-section claim: package names group by theme, sections by plane."""
 
 __version__ = "0.0.0"

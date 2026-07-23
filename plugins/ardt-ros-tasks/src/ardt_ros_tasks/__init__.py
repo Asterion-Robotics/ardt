@@ -8,5 +8,7 @@ property that keeps the inner loop working without Dagger installed.
 from __future__ import annotations
 
 ARDT_PLUGIN_API = 1
+ARDT_CONFIG_SECTION = "tasks"
+"""Explicit config-section claim: package names group by theme, sections by plane."""
 
 __version__ = "0.0.0"

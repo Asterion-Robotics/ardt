@@ -3,7 +3,7 @@
 Pure text parsing — no built workspace, no rosidl import: fields, defaults,
 constants and the comments that document them are all in the files themselves.
 Nothing here may depend on sphinx; the directive front lives in
-:mod:`ardt_tasks_doc.sphinx_ext`.
+:mod:`ardt_doc_tasks.sphinx_ext`.
 
 Comment conventions honored (the ROS ones): a comment block immediately above
 a field documents that field; an inline ``#`` documents its line; a comment

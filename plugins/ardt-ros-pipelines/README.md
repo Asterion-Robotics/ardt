@@ -1,4 +1,4 @@
-# ardt-pipelines-ros
+# ardt-ros-pipelines
 
 The pipeline plugin for **ROS 2 workspace repos**: the `ros-ci` pipeline and the
 `ros2` image recipe it renders. Builds on [ardt-pipelines](../ardt-pipelines)

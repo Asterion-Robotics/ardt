@@ -1,4 +1,4 @@
-# ardt-tasks-ros
+# ardt-ros-tasks
 
 ROS 2 workspace tasks for [ardt](../../README.md): `ardt deps`, `ardt build`,
 `ardt test`. In-environment and engine-free — they run wherever invoked (dev shell,

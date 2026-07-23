@@ -11,6 +11,8 @@ from __future__ import annotations
 from .registry import Param, PipelineDef, collect, pipeline
 
 ARDT_PLUGIN_API = 1
+ARDT_CONFIG_SECTION = "pipelines"
+"""Explicit config-section claim: package names group by theme, sections by plane."""
 
 __version__ = "0.0.0"
 

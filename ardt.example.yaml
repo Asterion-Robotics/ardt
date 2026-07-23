@@ -9,7 +9,7 @@ project:
 #   ignore: []
 #   clang_format: path/to/.clang-format
 
-# ardt-tasks-ros — the `tasks.ros:` subsection.
+# ardt-ros-tasks — the `tasks.ros:` subsection.
 tasks:
   ros:
     distro: jazzy
@@ -24,7 +24,7 @@ tasks:
       - -DCMAKE_BUILD_TYPE=RelWithDebInfo
     symlink_install: true
 
-# ardt-pipelines-ros — the `pipelines.ros_ci:` subsection.
+# ardt-ros-pipelines — the `pipelines.ros_ci:` subsection.
 # pipelines:
 #   ros_ci:
 #     base_image: ros:jazzy-ros-base

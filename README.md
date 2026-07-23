@@ -5,7 +5,7 @@
 
 This repo implements milestones **B0–B1** of the [CI-tools spec](https://…/docs/ci_tools)
 (the `aos_poc/docs/ci_tools` design set): the uv workspace, a fully-typed
-`ardt-core`, and the first task plugin, `ardt-tasks-ros`. The Dagger pipeline plane
+`ardt-core`, and the first task plugin, `ardt-ros-tasks`. The Dagger pipeline plane
 (`ardt-pipelines`), the domain plugin (`ardt-aos`), and the pinned base images come
 in later milestones (B3–B4, T3).
 
@@ -17,8 +17,8 @@ in later milestones (B3–B4, T3).
 
 | Plane | What it is | Where it runs | Package |
 |---|---|---|---|
-| **tasks** | `ardt build` / `test` / `deps` … | wherever invoked — dev shell, devcontainer, CI container | `ardt-tasks-*` |
-| **pipelines** | `ardt pipe run <name>` | orchestrate containers/registries/services via Dagger | `ardt-pipelines` *(later)* |
+| **tasks** | `ardt build` / `test` / `deps` … | wherever invoked — dev shell, devcontainer, CI container | `ardt-<theme>-tasks` |
+| **pipelines** | `ardt pipe run <name>` | orchestrate containers/registries/services via Dagger | `ardt-pipelines` + `ardt-<theme>-pipelines` |
 
 Pipelines call tasks *inside* containers; tasks never call pipelines. Core imports
 neither ROS nor Dagger, so installing it never drags in an engine.
@@ -27,12 +27,13 @@ neither ROS nor Dagger, so installing it never drags in an engine.
 
 ```
 ardt/
-├── packages/                # each package owns its unit tests (<pkg>/tests/)
+├── packages/                # the platform (each package owns its unit tests, <pkg>/tests/)
 │   ├── ardt-core/           # cli, plugin loader, context, config, runner, console, version policy
-│   ├── ardt-tasks-ros/      # deps / build / test (colcon, rosdep, vcs) — in-env tasks
-│   ├── ardt-tasks-doc/      # doc build (sphinx preset + doxygen/breathe + ros2-interfaces)
-│   ├── ardt-pipelines/      # the generic Dagger plane: `ardt pipe`, @pipeline registry, std helpers
-│   └── ardt-pipelines-ros/  # ROS 2 pipeline plugin: ros-ci + the ros2 image recipe
+│   └── ardt-pipelines/      # the generic Dagger plane: `ardt pipe`, @pipeline registry, std helpers
+├── plugins/                 # first-party theme plugins (ardt-<theme>-tasks / -pipelines)
+│   ├── ardt-ros-tasks/      # deps / build / test (colcon, rosdep, vcs) — in-env tasks
+│   ├── ardt-ros-pipelines/  # ROS 2 pipeline plugin: ros-ci + the ros2 image recipe
+│   └── ardt-doc-tasks/      # doc build (sphinx preset + doxygen/breathe + ros2-interfaces)
 ├── tests/                # cross-package only: policy sweeps + docker-marked integration
 └── .github/workflows/    # bootstrap CI (lint + format + pyright strict + coverage gate)
 ```
@@ -50,15 +51,15 @@ project venv needed:
 ```bash
 # From a checkout (developers): editable, so source edits apply immediately
 uv tool install --editable ./packages/ardt-core \
-    --with-editable ./packages/ardt-tasks-ros \
+    --with-editable ./plugins/ardt-ros-tasks \
     --with-editable ./packages/ardt-pipelines \
-    --with-editable ./packages/ardt-pipelines-ros
+    --with-editable ./plugins/ardt-ros-pipelines
 
 # From git (users, until PyPI publication):
 uv tool install "ardt-core @ git+https://github.com/Asterion-Robotics/ardt.git#subdirectory=packages/ardt-core" \
-    --with "ardt-tasks-ros @ git+https://github.com/Asterion-Robotics/ardt.git#subdirectory=packages/ardt-tasks-ros" \
+    --with "ardt-ros-tasks @ git+https://github.com/Asterion-Robotics/ardt.git#subdirectory=plugins/ardt-ros-tasks" \
     --with "ardt-pipelines @ git+https://github.com/Asterion-Robotics/ardt.git#subdirectory=packages/ardt-pipelines" \
-    --with "ardt-pipelines-ros @ git+https://github.com/Asterion-Robotics/ardt.git#subdirectory=packages/ardt-pipelines-ros"
+    --with "ardt-ros-pipelines @ git+https://github.com/Asterion-Robotics/ardt.git#subdirectory=plugins/ardt-ros-pipelines"
 
 ardt --help    # from anywhere
 ```
@@ -115,7 +116,7 @@ PYTHONPATH= uv run pytest --cov=ardt_core --cov-report=term-missing
 - ✅ B0 workspace, bootstrap CI, quality gate
 - ✅ B1 `ardt-core` (cli, plugin loader + `ARDT_PLUGIN_API` guard, context, config,
   runner, console, `ctx.version` tag policy) — core coverage ≥ 90 %
-- ✅ B2 (partial) `ardt-tasks-ros` `deps`/`build`/`test` — verified on the
+- ✅ B2 (partial) `ardt-ros-tasks` `deps`/`build`/`test` — verified on the
   [ardt_ros2_demo](https://github.com/Asterion-Robotics/ardt_ros2_demo) repo, host
   + jazzy container; a green run on `aos_edge` still to be done
 - ✅ B3 (partial) `ardt-pipelines`: `@pipeline` registry, `ardt pipe list/run`,
