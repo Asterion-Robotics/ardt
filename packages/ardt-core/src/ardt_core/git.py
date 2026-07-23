@@ -99,6 +99,17 @@ def collect(cwd: Path) -> GitInfo:
     )
 
 
+def list_tags(cwd: Path, pattern: str) -> list[str]:
+    """Tags matching a glob ``pattern``, newest version first. Empty outside a repo."""
+    out = _run(["tag", "--list", pattern, "--sort=-v:refname"], cwd)
+    return out.split() if out else []
+
+
+def ref_exists(cwd: Path, ref: str) -> bool:
+    """True when ``ref`` resolves to a commit in the repository containing ``cwd``."""
+    return _run(["rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"], cwd) is not None
+
+
 def _branch(cwd: Path) -> str | None:
     branch = _run(["rev-parse", "--abbrev-ref", "HEAD"], cwd)
     if branch in (None, "HEAD"):  # detached

@@ -16,6 +16,7 @@ ardt-ros-tasks = { workspace = true }
 ardt-doc-tasks = { workspace = true }
 ardt-pipelines = { workspace = true }
 ardt-ros-pipelines = { workspace = true }
+ardt-doc-pipelines = { workspace = true }
 
 [dependency-groups]
 dev = [
@@ -24,6 +25,7 @@ dev = [
     "ardt-doc-tasks",
     "ardt-pipelines",
     "ardt-ros-pipelines",
+    "ardt-doc-pipelines",
     "pytest>=8.0",
     "pytest-cov>=5.0",
     "ruff>=0.6",
@@ -39,6 +41,7 @@ src = [
     "plugins/ardt-doc-tasks/src",
     "packages/ardt-pipelines/src",
     "plugins/ardt-ros-pipelines/src",
+    "plugins/ardt-doc-pipelines/src",
     "tests",
 ]
 
@@ -65,6 +68,7 @@ testpaths = [
     "plugins/ardt-doc-tasks/tests",
     "packages/ardt-pipelines/tests",
     "plugins/ardt-ros-pipelines/tests",
+    "plugins/ardt-doc-pipelines/tests",
     "tests",
 ]
 markers = [

@@ -11,6 +11,7 @@ import ast
 from pathlib import Path
 
 import ardt_core
+import ardt_doc_pipelines
 import ardt_doc_tasks
 import ardt_pipelines
 import ardt_ros_pipelines
@@ -36,7 +37,14 @@ def _reads_environ(tree: ast.AST) -> bool:
 
 def test_only_env_module_reads_the_environment() -> None:
     offenders: list[str] = []
-    packages = (ardt_core, ardt_ros_tasks, ardt_doc_tasks, ardt_pipelines, ardt_ros_pipelines)
+    packages = (
+        ardt_core,
+        ardt_ros_tasks,
+        ardt_doc_tasks,
+        ardt_pipelines,
+        ardt_ros_pipelines,
+        ardt_doc_pipelines,
+    )
     for package in packages:
         for path in _package_files(package):
             if path.name in ALLOWED:

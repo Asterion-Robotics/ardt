@@ -28,8 +28,10 @@ rendered recipe as a stage:
         git_host: code.asterion-robotics.com   # private `.repos` deps need auth
         git_ssh_port: 5022
 
-Until ardt is published, ``--arg ardt_source=/path/to/checkout`` injects a local
-ardt into the build instead of pip-installing from git.
+The ardt installed inside the image comes from the repo's ``ardt:`` config
+section (:mod:`ardt_core.dist`) — pin ``ardt.version`` there for reproducible
+recipes. ``--arg ardt_source=`` overrides it for one run: a directory injects
+a local checkout into the build; a ``git+…`` URL swaps the monorepo address.
 """
 
 from __future__ import annotations
@@ -40,12 +42,12 @@ import dagger
 from pydantic import BaseModel, ConfigDict, Field
 
 from ardt_core.context import Context
+from ardt_core.dist import DistConfig
 from ardt_pipelines import pipeline, std
 
 from . import recipes
 
 JUNIT_EXPORT_DIR = "pipeline-reports"
-ARDT_GIT = "git+https://github.com/Asterion-Robotics/ardt.git"
 
 
 class RosCiConfig(BaseModel):
@@ -107,20 +109,28 @@ def _git_credentials(
     return std.git_credentials(dag, ctx, host=cfg.git_host)
 
 
+def _ardt_dist(ctx: Context, ardt_source: str) -> DistConfig:
+    """The repo's ``ardt:`` section, with a ``--arg ardt_source=git+…`` swap."""
+    section = ctx.cfg.ardt
+    if ardt_source:
+        section = section.model_copy(update={"git": ardt_source})
+    return section
+
+
 def _build_context(
     ctx: Context, dag: dagger.Client, cfg: RosCiConfig, ardt_source: str
 ) -> tuple[dagger.Directory, str]:
     """The build context (source + rendered recipe) and the rendered text."""
     src = std.source_dir(dag, ctx)
 
-    local_ardt = Path(ardt_source).is_dir()
+    local_ardt = bool(ardt_source) and Path(ardt_source).is_dir()
     rendered = recipes.render_ros2(
         builder=cfg.builder,
         base_image=cfg.base_image,
         project_root=ctx.project_root,
         base_dockerfile=cfg.base_dockerfile,
         cmd=cfg.cmd,
-        ardt_source=ardt_source,
+        ardt_requirements=_ardt_dist(ctx, ardt_source).requirements(recipes.ARDT_MODULES),
         local_ardt=local_ardt,
         install_base=cfg.install_base,
         strip_dev_files=cfg.strip_dev_files,
@@ -136,7 +146,7 @@ def _build_context(
 
 
 @pipeline(name="ros-ci", doc="deps/build/test as image stages; publish the result on --publish")
-async def ros_ci(ctx: Context, dag: dagger.Client, ardt_source: str = ARDT_GIT) -> None:
+async def ros_ci(ctx: Context, dag: dagger.Client, ardt_source: str = "") -> None:
     cfg = _config(ctx)
     secrets, ssh = _git_credentials(ctx, dag, cfg)
     context, rendered = _build_context(ctx, dag, cfg, ardt_source)

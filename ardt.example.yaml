@@ -4,6 +4,16 @@
 project:
   name: aos_edge # defaults to the project-root directory name
 
+# Which ardt the pipelines install inside the images they build (core-owned).
+# Pin `version` for reproducible recipes — without it installs track HEAD.
+# ardt:
+#   git: git+https://github.com/Asterion-Robotics/ardt.git # the default
+#   version: v0.3.0 # git rev (tag/branch/sha) every monorepo module installs at
+#   modules:
+#     ardt-aos: # out-of-monorepo module: its own address + pin
+#       git: git+https://code.asterion-robotics.com/aos/ardt-aos.git
+#       version: v1.2.0
+
 # Exceptions to the ardt-shipped lint/format configs (repo hygiene, 06 §2).
 # check:
 #   ignore: []
@@ -31,6 +41,13 @@ tasks:
 #     platforms: [linux/amd64]
 #     git_host: code.asterion-robotics.com # auth for private `.repos` deps:
 #     git_ssh_port: 5022                   # CI job token, or a local ssh agent
+
+# ardt-doc-pipelines — the `pipelines.docs_ci:` subsection.
+#   docs_ci:
+#     builder: python:3.12-slim # docs toolchain container (never ships)
+#     versions:
+#       branches: [main] # historical versions joining the site (+ working tree)
+#       tags: "v*"
 
 # aos: # recognized once ardt-aos is installed (T3); a warning until then
 #   sdk_line: "2.1"

@@ -19,9 +19,11 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Sequence
 from importlib import resources
 from pathlib import Path
 
+from ardt_core import dist
 from ardt_core.errors import ArdtError
 from ardt_pipelines import std
 from ardt_ros_pipelines import __version__
@@ -46,21 +48,30 @@ BASE_EXT_STAGE = "base-ext"
 LOCAL_ARDT_DIR = ".ardt-src"
 """Context subdirectory the pipeline injects a local ardt checkout into."""
 
+ARDT_MODULES = ("ardt-core", "ardt-ros-tasks")
+"""The ardt modules this recipe's build stage needs (it runs ``ardt deps`` /
+``build`` / ``test``). *Where* they install from is the repo's ``ardt:``
+section (:mod:`ardt_core.dist`) — the recipe only owns the list."""
+
 # Re-exported so recipe consumers need not care where the contract lives.
 GIT_TOKEN_SECRET = std.GIT_TOKEN_SECRET
 """BuildKit secret id the deps layer's token mount uses — the contract with
 ``ardt_pipelines.std.git_credentials``."""
 
-_GIT_INSTALL = """\
-RUN python3 -m pip install --break-system-packages \\
-      "ardt-core @ {source}#subdirectory=packages/ardt-core" \\
-      "ardt-ros-tasks @ {source}#subdirectory=plugins/ardt-ros-tasks\""""
 
-_LOCAL_INSTALL = f"""\
-# dev mode: ardt injected from a local checkout instead of the git default
-COPY {LOCAL_ARDT_DIR} /opt/ardt-src
-RUN python3 -m pip install --break-system-packages \\
-      /opt/ardt-src/packages/ardt-core /opt/ardt-src/plugins/ardt-ros-tasks"""
+def _git_install(requirements: Sequence[str]) -> str:
+    specs = " \\\n      ".join(f'"{r}"' for r in requirements)
+    return f"RUN python3 -m pip install --break-system-packages \\\n      {specs}"
+
+
+def _local_install() -> str:
+    paths = " ".join(f"/opt/ardt-src/{dist.subdirectory(m)}" for m in ARDT_MODULES)
+    return (
+        "# dev mode: ardt injected from a local checkout instead of the configured git\n"
+        f"COPY {LOCAL_ARDT_DIR} /opt/ardt-src\n"
+        f"RUN python3 -m pip install --break-system-packages \\\n      {paths}"
+    )
+
 
 _BASE_FROM = re.compile(r"^FROM\s+\$\{?BASE_IMAGE\}?\s*$")
 
@@ -157,7 +168,7 @@ def render_ros2(
     project_root: Path,
     base_dockerfile: str,
     cmd: list[str] | None,
-    ardt_source: str,
+    ardt_requirements: Sequence[str],
     local_ardt: bool,
     install_base: str = "/opt/ros/aos",
     strip_dev_files: bool = False,
@@ -167,6 +178,9 @@ def render_ros2(
 ) -> str:
     """Render the ROS 2 workspace recipe for one repo.
 
+    ``ardt_requirements`` (from :meth:`ardt_core.dist.DistConfig.requirements`
+    for :data:`ARDT_MODULES`) is how ardt installs into the build stage;
+    ``local_ardt`` replaces it with the injected-checkout install.
     ``git_host`` switches on private-host git auth for the deps layer (the
     ``vcs import`` of a private ``.repos``): SSH-agent and token mounts plus
     the runtime branching between them.
@@ -182,7 +196,7 @@ def render_ros2(
         )
         runtime_from = BASE_EXT_STAGE
 
-    install = _LOCAL_INSTALL if local_ardt else _GIT_INSTALL.format(source=ardt_source)
+    install = _local_install() if local_ardt else _git_install(ardt_requirements)
     rendered_cmd = f"CMD {json.dumps(cmd)}\n" if cmd else ""
     strip = _STRIP_STEP.format(base=install_base) if strip_dev_files else ""
     git_mounts = _GIT_MOUNTS if git_host else ""

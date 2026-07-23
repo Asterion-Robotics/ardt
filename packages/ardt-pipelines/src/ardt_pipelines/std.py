@@ -23,6 +23,7 @@ SOURCE_EXCLUDES = (
     ".venv",
     "__pycache__",
     "pipeline-reports",
+    "public",
 )
 """Never ship the workspace's derived state into a build container."""
 

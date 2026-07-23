@@ -6,8 +6,14 @@ from pathlib import Path
 
 import pytest
 
+from ardt_core import dist
 from ardt_core.errors import ArdtError
 from ardt_ros_pipelines import recipes
+
+REQUIREMENTS = (
+    "ardt-core @ git+https://example.com/ardt.git#subdirectory=packages/ardt-core",
+    "ardt-ros-tasks @ git+https://example.com/ardt.git#subdirectory=plugins/ardt-ros-tasks",
+)
 
 
 def render(tmp_path: Path, **overrides: object) -> str:
@@ -17,7 +23,7 @@ def render(tmp_path: Path, **overrides: object) -> str:
         "project_root": tmp_path,
         "base_dockerfile": "base.Dockerfile",
         "cmd": None,
-        "ardt_source": "git+https://example.com/ardt.git",
+        "ardt_requirements": REQUIREMENTS,
         "local_ardt": False,
     }
     kwargs.update(overrides)
@@ -47,14 +53,24 @@ def test_tasks_run_as_stages(tmp_path: Path) -> None:
 
 
 def test_git_install_by_default(tmp_path: Path) -> None:
-    rendered = render(tmp_path, ardt_source="git+https://example.com/ardt.git")
-    assert "git+https://example.com/ardt.git#subdirectory=packages/ardt-core" in rendered
+    rendered = render(tmp_path)
+    for requirement in REQUIREMENTS:
+        assert f'"{requirement}"' in rendered
     assert recipes.LOCAL_ARDT_DIR not in rendered
 
 
+def test_pinned_requirements_render_verbatim(tmp_path: Path) -> None:
+    pinned = (
+        "ardt-core @ git+https://example.com/ardt.git@v1.2.0#subdirectory=packages/ardt-core",
+    )
+    assert "@v1.2.0#subdirectory" in render(tmp_path, ardt_requirements=pinned)
+
+
 def test_local_install_copies_checkout(tmp_path: Path) -> None:
-    rendered = render(tmp_path, ardt_source="/somewhere/ardt", local_ardt=True)
+    rendered = render(tmp_path, local_ardt=True)
     assert f"COPY {recipes.LOCAL_ARDT_DIR} /opt/ardt-src" in rendered
+    for module in recipes.ARDT_MODULES:
+        assert f"/opt/ardt-src/{dist.subdirectory(module)}" in rendered
     assert "git+" not in rendered
 
 

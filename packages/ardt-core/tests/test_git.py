@@ -56,6 +56,20 @@ def test_dirty_tree_ignores_untracked_files(repo: Path) -> None:
     assert git_module.collect(repo).dirty is True
 
 
+def test_list_tags_matches_glob_newest_first(repo: Path) -> None:
+    for tag in ("v0.9.0", "v0.10.0", "other"):
+        git("tag", tag, cwd=repo)
+    assert git_module.list_tags(repo, "v*") == ["v0.10.0", "v0.9.0"]
+    assert git_module.list_tags(repo / "nowhere-outside" / "..", "nomatch*") == []
+
+
+def test_ref_exists(repo: Path) -> None:
+    git("branch", "feature", cwd=repo)
+    assert git_module.ref_exists(repo, "main")
+    assert git_module.ref_exists(repo, "feature")
+    assert not git_module.ref_exists(repo, "ghost")
+
+
 def test_remote_url_is_collected(repo: Path) -> None:
     assert git_module.collect(repo).remote_url is None
     git("remote", "add", "origin", "git@code.example.com:group/proj.git", cwd=repo)

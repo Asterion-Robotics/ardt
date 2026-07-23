@@ -19,6 +19,7 @@ from typing import TypeVar, cast
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from .dist import DistConfig
 from .errors import ConfigError
 
 CONFIG_FILENAMES = ("ardt.yaml", "ardt.yml")
@@ -60,6 +61,9 @@ class ArdtConfig(BaseModel):
 
     project: ProjectConfig = Field(default_factory=ProjectConfig)
     check: CheckConfig = Field(default_factory=CheckConfig)
+    ardt: DistConfig = Field(default_factory=DistConfig)
+    """Where ardt itself installs from inside pipeline-built images
+    (:mod:`.dist`). Core-owned like ``project:`` and ``check:``."""
 
     def section(self, name: str) -> dict[str, object]:
         """The raw mapping for a plugin section, or ``{}`` when absent."""

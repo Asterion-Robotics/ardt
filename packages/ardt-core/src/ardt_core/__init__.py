@@ -15,6 +15,7 @@ from .ci import CIInfo, Platform
 from .config import ArdtConfig
 from .console import Console
 from .context import Context
+from .dist import ARDT_GIT, DistConfig, ModulePin
 from .errors import (
     ArdtError,
     ConfigError,
@@ -29,6 +30,7 @@ from .runner import Result, Runner
 __version__ = "0.0.0"
 
 __all__ = [
+    "ARDT_GIT",
     "ARDT_PLUGIN_API",
     "ArdtConfig",
     "ArdtError",
@@ -36,7 +38,9 @@ __all__ = [
     "ConfigError",
     "Console",
     "Context",
+    "DistConfig",
     "GitInfo",
+    "ModulePin",
     "Platform",
     "Plugin",
     "PluginError",

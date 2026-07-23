@@ -9,6 +9,7 @@ resolution-markers = [
 [manifest]
 members = [
     "ardt-core",
+    "ardt-doc-pipelines",
     "ardt-doc-tasks",
     "ardt-pipelines",
     "ardt-ros-pipelines",
@@ -76,6 +77,21 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.7" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "rich", specifier = ">=13.0" },
+]
+
+[[package]]
+name = "ardt-doc-pipelines"
+version = "0.0.0"
+source = { editable = "plugins/ardt-doc-pipelines" }
+dependencies = [
+    { name = "ardt-core" },
+    { name = "ardt-pipelines" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "ardt-core", editable = "packages/ardt-core" },
+    { name = "ardt-pipelines", editable = "packages/ardt-pipelines" },
 ]
 
 [[package]]
@@ -153,6 +169,7 @@ source = { virtual = "." }
 [package.dev-dependencies]
 dev = [
     { name = "ardt-core" },
+    { name = "ardt-doc-pipelines" },
     { name = "ardt-doc-tasks" },
     { name = "ardt-pipelines" },
     { name = "ardt-ros-pipelines" },
@@ -168,6 +185,7 @@ dev = [
 [package.metadata.requires-dev]
 dev = [
     { name = "ardt-core", editable = "packages/ardt-core" },
+    { name = "ardt-doc-pipelines", editable = "plugins/ardt-doc-pipelines" },
     { name = "ardt-doc-tasks", editable = "plugins/ardt-doc-tasks" },
     { name = "ardt-pipelines", editable = "packages/ardt-pipelines" },
     { name = "ardt-ros-pipelines", editable = "plugins/ardt-ros-pipelines" },

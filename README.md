@@ -33,7 +33,8 @@ ardt/
 ├── plugins/                 # first-party theme plugins (ardt-<theme>-tasks / -pipelines)
 │   ├── ardt-ros-tasks/      # deps / build / test (colcon, rosdep, vcs) — in-env tasks
 │   ├── ardt-ros-pipelines/  # ROS 2 pipeline plugin: ros-ci + the ros2 image recipe
-│   └── ardt-doc-tasks/      # doc build (sphinx preset + doxygen/breathe + ros2-interfaces)
+│   ├── ardt-doc-tasks/      # doc build (sphinx preset + doxygen/breathe + ros2-interfaces)
+│   └── ardt-doc-pipelines/  # docs-ci: versioned site (working tree + tags) -> public/
 ├── tests/                # cross-package only: policy sweeps + docker-marked integration
 └── .github/workflows/    # bootstrap CI (lint + format + pyright strict + coverage gate)
 ```

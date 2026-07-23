@@ -1,0 +1,34 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ardt-doc-pipelines"
+version = "0.0.0"
+description = "ardt docs pipeline: docs-ci builds a versioned site (working tree + tagged releases) for Pages"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+authors = [{ name = "Asterion Robotics" }]
+keywords = ["ci", "cli", "robotics", "sphinx", "dagger", "pages"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
+]
+
+# The doc toolchain itself (sphinx, doxygen…) lives INSIDE the builder
+# container via ardt-doc-tasks — this package only orchestrates (two-plane
+# rule) and therefore depends on the pipeline plane alone.
+dependencies = [
+    "ardt-core",
+    "ardt-pipelines",
+]
+
+[project.entry-points."ardt.pipelines"]
+doc = "ardt_doc_pipelines.docs_ci"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ardt_doc_pipelines"]
