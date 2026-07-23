@@ -27,6 +27,8 @@ class GitInfo:
     """The most recent tag reachable from HEAD (equals ``tag`` when on a tag)."""
     commits_since_tag: int = 0
     dirty: bool = False
+    remote_url: str | None = None
+    """URL of the ``origin`` remote, if the repo has one."""
 
     @property
     def is_tag(self) -> bool:
@@ -57,10 +59,18 @@ def collect(cwd: Path) -> GitInfo:
     if root is None:
         return GitInfo(is_repo=False)
 
+    remote_url = _run(["remote", "get-url", "origin"], cwd)
+
     sha = _run(["rev-parse", "HEAD"], cwd)
     if sha is None:
         # A repo with no commits yet: a repo for all other purposes.
-        return GitInfo(is_repo=True, root=Path(root), branch=_branch(cwd), dirty=_dirty(cwd))
+        return GitInfo(
+            is_repo=True,
+            root=Path(root),
+            branch=_branch(cwd),
+            dirty=_dirty(cwd),
+            remote_url=remote_url,
+        )
 
     tag = _run(["describe", "--tags", "--exact-match", "HEAD"], cwd)
     last_tag = _run(["describe", "--tags", "--abbrev=0"], cwd)
@@ -85,6 +95,7 @@ def collect(cwd: Path) -> GitInfo:
         last_tag=last_tag,
         commits_since_tag=commits_since_tag,
         dirty=_dirty(cwd),
+        remote_url=remote_url,
     )
 
 

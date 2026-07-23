@@ -84,6 +84,7 @@ def test_local_reads_credentials_file(monkeypatch: pytest.MonkeyPatch, tmp_path:
     (home / ".config" / "ardt").mkdir(parents=True)
     (home / ".config" / "ardt" / "credentials.yaml").write_text(
         "registry: registry.example.com\nregistry_user: me\nregistry_password: pw\n"
+        "project_path: aos-edge-poc/aos_edge\n"
     )
     monkeypatch.setenv("HOME", str(home))
 
@@ -91,6 +92,7 @@ def test_local_reads_credentials_file(monkeypatch: pytest.MonkeyPatch, tmp_path:
     assert info.platform is Platform.LOCAL
     assert info.registry == "registry.example.com"
     assert info.registry_password == "pw"
+    assert info.project_path == "aos-edge-poc/aos_edge"
 
 
 def test_malformed_credentials_file_is_a_clean_error(

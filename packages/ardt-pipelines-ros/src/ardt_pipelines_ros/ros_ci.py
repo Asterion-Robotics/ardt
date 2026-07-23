@@ -70,7 +70,8 @@ class RosCiConfig(BaseModel):
     """Container CMD of the shipped image."""
     platforms: list[str] = Field(default_factory=lambda: ["linux/amd64"])
     image: str | None = None
-    """Published image name; defaults to the project name."""
+    """Sub-image appended under the registry project path
+    (``<registry>/<project-path>/<image>``); None publishes at the path itself."""
 
 
 class PipelinesSection(BaseModel):

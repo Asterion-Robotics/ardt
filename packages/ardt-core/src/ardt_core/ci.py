@@ -143,4 +143,5 @@ def _local() -> CIInfo:
         registry_user=creds.get("registry_user"),
         registry_password=creds.get("registry_password"),
         job_token=creds.get("job_token"),
+        project_path=creds.get("project_path"),
     )

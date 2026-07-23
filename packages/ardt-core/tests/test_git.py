@@ -56,6 +56,12 @@ def test_dirty_tree_ignores_untracked_files(repo: Path) -> None:
     assert git_module.collect(repo).dirty is True
 
 
+def test_remote_url_is_collected(repo: Path) -> None:
+    assert git_module.collect(repo).remote_url is None
+    git("remote", "add", "origin", "git@code.example.com:group/proj.git", cwd=repo)
+    assert git_module.collect(repo).remote_url == "git@code.example.com:group/proj.git"
+
+
 def test_detached_head_has_no_branch(repo: Path) -> None:
     git("checkout", "-q", "--detach", "HEAD", cwd=repo)
     assert git_module.collect(repo).branch is None

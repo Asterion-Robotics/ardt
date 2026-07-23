@@ -125,6 +125,7 @@ class Context:
                 "last_tag": self.git.last_tag,
                 "commits_since_tag": self.git.commits_since_tag,
                 "dirty": self.git.dirty,
+                "remote_url": self.git.remote_url,
             },
             "ci": self.ci.redacted(),
             "plugins": [

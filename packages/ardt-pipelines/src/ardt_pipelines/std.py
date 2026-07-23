@@ -7,6 +7,7 @@ most SDK churn lands here and in :mod:`.engine` rather than in every plugin.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from urllib.parse import urlsplit
 
 import dagger
 
@@ -35,14 +36,61 @@ def cache_volume(dag: dagger.Client, ctx: Context, purpose: str) -> dagger.Cache
     return dag.cache_volume(f"{purpose}-{ctx.project}")
 
 
+def _path_from_remote(url: str) -> str | None:
+    """``group/subgroup/project`` from a git remote URL, or ``None``.
+
+    Handles ``https://host/g/p.git``, ``ssh://git@host:5022/g/p.git`` and the
+    scp-like ``git@host:g/p.git``. A path-only remote (no host) yields None.
+    """
+    if "://" in url:
+        path = urlsplit(url).path
+    else:
+        _, colon, path = url.partition(":")
+        if not colon:
+            return None
+    path = path.strip("/").removesuffix(".git")
+    return path or None
+
+
+def project_path(ctx: Context) -> str | None:
+    """The registry namespace of this project: CI's project path, else the git remote's."""
+    if ctx.ci.project_path is not None:
+        return ctx.ci.project_path
+    if ctx.git.remote_url is not None:
+        return _path_from_remote(ctx.git.remote_url)
+    return None
+
+
 def image_ref(ctx: Context, name: str | None = None) -> str:
-    """``<registry>/<project>:<version>`` — the tag policy applied to images."""
+    """``<registry>/<group>/<project>[/<name>]:<version>`` — the one image name.
+
+    The reference is identical wherever it is computed (the parity rule): the
+    project path comes from CI (``$CI_PROJECT_PATH`` / ``GITHUB_REPOSITORY``),
+    else ``project_path:`` in ``~/.config/ardt/credentials.yaml``, else the git
+    ``origin`` remote. GitLab's registry accepts nothing outside that
+    namespace, so there is deliberately no flat fallback; ``name`` appends a
+    sub-image. Under ``--dry-run`` an unresolvable path becomes a placeholder
+    so the plan still renders.
+    """
     if ctx.ci.registry is None:
         raise ArdtError(
             "no registry configured",
             hint="CI provides one; locally set `registry:` in ~/.config/ardt/credentials.yaml",
         )
-    return f"{ctx.ci.registry}/{name or ctx.project}:{ctx.version}"
+    path = project_path(ctx)
+    if path is None:
+        if ctx.dry_run:
+            path = "<project-path>"
+        else:
+            raise ArdtError(
+                "cannot determine the registry project path",
+                hint="CI provides it; locally set `project_path:` in "
+                "~/.config/ardt/credentials.yaml, or add a git `origin` remote",
+            )
+    repository = f"{path}/{name}" if name else path
+    # Registry repository paths must be lowercase (GitLab lowercases
+    # CI_REGISTRY_IMAGE; ghcr rejects uppercase). The tag is left untouched.
+    return f"{ctx.ci.registry}/{repository.lower()}:{ctx.version}"
 
 
 def registry_secret(dag: dagger.Client, ctx: Context) -> dagger.Secret:
