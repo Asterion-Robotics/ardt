@@ -1,0 +1,39 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ardt-tasks-doc"
+version = "0.0.0"
+description = "ardt documentation tasks: sphinx + doxygen/breathe + ROS 2 interface autodoc, preset-driven"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+authors = [{ name = "Asterion Robotics" }]
+keywords = ["ci", "cli", "robotics", "ros", "sphinx", "doxygen"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
+]
+
+# The doc toolchain is pinned HERE (06 §2: the tool owns the configs and the
+# dependency set; repos carry exceptions only). Bumping an extension is one MR
+# in this package, applied to every repo at the next release.
+dependencies = [
+    "ardt-core",
+    "sphinx>=7.4",
+    "myst-parser>=3.0",
+    "breathe>=4.36",
+    "sphinx-rtd-theme>=3.0",
+    "pydata-sphinx-theme>=0.15",
+    "sphinxcontrib-mermaid>=0.9",
+]
+
+[project.entry-points."ardt.commands"]
+doc = "ardt_tasks_doc.cli:doc"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ardt_tasks_doc"]

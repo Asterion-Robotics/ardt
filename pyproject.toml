@@ -13,6 +13,7 @@ members = ["packages/*"]
 [tool.uv.sources]
 ardt-core = { workspace = true }
 ardt-tasks-ros = { workspace = true }
+ardt-tasks-doc = { workspace = true }
 ardt-pipelines = { workspace = true }
 ardt-pipelines-ros = { workspace = true }
 
@@ -20,6 +21,7 @@ ardt-pipelines-ros = { workspace = true }
 dev = [
     "ardt-core",
     "ardt-tasks-ros",
+    "ardt-tasks-doc",
     "ardt-pipelines",
     "ardt-pipelines-ros",
     "pytest>=8.0",
@@ -34,6 +36,7 @@ target-version = "py311"
 src = [
     "packages/ardt-core/src",
     "packages/ardt-tasks-ros/src",
+    "packages/ardt-tasks-doc/src",
     "packages/ardt-pipelines/src",
     "packages/ardt-pipelines-ros/src",
     "tests",
@@ -59,6 +62,7 @@ reportMissingTypeStubs = false
 testpaths = [
     "packages/ardt-core/tests",
     "packages/ardt-tasks-ros/tests",
+    "packages/ardt-tasks-doc/tests",
     "packages/ardt-pipelines/tests",
     "packages/ardt-pipelines-ros/tests",
     "tests",

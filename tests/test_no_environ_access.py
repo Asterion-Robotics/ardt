@@ -13,6 +13,7 @@ from pathlib import Path
 import ardt_core
 import ardt_pipelines
 import ardt_pipelines_ros
+import ardt_tasks_doc
 import ardt_tasks_ros
 
 ALLOWED = {"env.py"}
@@ -35,7 +36,8 @@ def _reads_environ(tree: ast.AST) -> bool:
 
 def test_only_env_module_reads_the_environment() -> None:
     offenders: list[str] = []
-    for package in (ardt_core, ardt_tasks_ros, ardt_pipelines, ardt_pipelines_ros):
+    packages = (ardt_core, ardt_tasks_ros, ardt_tasks_doc, ardt_pipelines, ardt_pipelines_ros)
+    for package in packages:
         for path in _package_files(package):
             if path.name in ALLOWED:
                 continue
