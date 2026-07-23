@@ -47,6 +47,10 @@ class CIInfo:
     is_default_branch: bool = False
     project_path: str | None = None
     """``group/subgroup/project`` on GitLab, ``owner/repo`` on GitHub."""
+    ssh_auth_sock: str | None = None
+    """The local SSH agent socket, when one is running (local platform only).
+    Pipelines forward it into builds that must clone private repos — the
+    environment stays reachable only through this normalization."""
 
     def redacted(self) -> dict[str, object]:
         """Serializable view with secrets replaced by a presence marker."""
@@ -61,6 +65,7 @@ class CIInfo:
             "is_tag": self.is_tag,
             "is_default_branch": self.is_default_branch,
             "project_path": self.project_path,
+            "ssh_auth_sock": self.ssh_auth_sock,
         }
 
 
@@ -144,4 +149,5 @@ def _local() -> CIInfo:
         registry_password=creds.get("registry_password"),
         job_token=creds.get("job_token"),
         project_path=creds.get("project_path"),
+        ssh_auth_sock=env.get("SSH_AUTH_SOCK"),
     )

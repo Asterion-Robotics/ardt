@@ -129,6 +129,43 @@ class TestInstallBaseAndStrip:
         assert rendered.index("IP protection") < rendered.index("AS runtime")
 
 
+class TestGitAuth:
+    def test_off_by_default(self, tmp_path: Path) -> None:
+        rendered = render(tmp_path)
+        assert "--mount" not in rendered
+        assert "credential" not in rendered
+
+    def test_syntax_directive_is_the_first_line(self, tmp_path: Path) -> None:
+        """BuildKit mounts in the escape-hatch `docker build` need the directive."""
+        assert render(tmp_path).startswith("# syntax=docker/dockerfile:1\n")
+
+    def test_mounts_and_branching(self, tmp_path: Path) -> None:
+        rendered = render(tmp_path, git_host="code.example.com", git_ssh_port=5022)
+        assert "--mount=type=ssh" in rendered
+        assert f"--mount=type=secret,id={recipes.GIT_TOKEN_SECRET},required=false" in rendered
+        assert "ssh-keyscan -p 5022 code.example.com" in rendered
+        assert (
+            'url."ssh://git@code.example.com:5022/".insteadOf "https://code.example.com/"'
+            in rendered
+        )
+        assert "username=gitlab-ci-token" in rendered
+        # auth is configured in the same RUN, before the vcs import runs
+        assert rendered.index("elif [ -f /run/secrets/") < rendered.index("ardt deps")
+
+    def test_token_read_at_use_time_never_baked(self, tmp_path: Path) -> None:
+        rendered = render(tmp_path, git_host="code.example.com")
+        assert f"$(cat /run/secrets/{recipes.GIT_TOKEN_SECRET})" in rendered
+
+    def test_token_user_is_configurable(self, tmp_path: Path) -> None:
+        rendered = render(tmp_path, git_host="ghe.example.com", git_token_user="x-access-token")
+        assert "username=x-access-token" in rendered
+
+    def test_no_credentials_message_names_the_escape_hatch(self, tmp_path: Path) -> None:
+        rendered = render(tmp_path, git_host="code.example.com")
+        assert "no git credentials for code.example.com" in rendered
+        assert f"docker build --ssh default -f {recipes.RENDERED_NAME} ." in rendered
+
+
 def test_dockerignore_render_lists_excludes() -> None:
     text = recipes.render_dockerignore(("build", "install", ".git"))
     assert "build\ninstall\n.git" in text

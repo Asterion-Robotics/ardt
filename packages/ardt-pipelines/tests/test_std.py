@@ -92,3 +92,47 @@ class TestPathFromRemote:
         git("remote", "add", "origin", "/srv/git/mirror", cwd=repo)
         ctx = _context(repo, _ci())
         assert std.project_path(ctx) is None
+
+
+class TestGitCredentials:
+    """Domain-agnostic credential plumbing any private-clone recipe reuses."""
+
+    def test_no_credentials_is_a_clean_error(self, repo: Path) -> None:
+        ctx = _context(repo, _ci())
+        with pytest.raises(ArdtError, match="no git credentials"):
+            # The (stub) dagger client is never touched on the failure path.
+            std.git_credentials(object(), ctx, host="code.example.com")
+
+    def test_job_token_becomes_the_named_secret(self, repo: Path) -> None:
+        class FakeDag:
+            def __init__(self) -> None:
+                self.named: list[str] = []
+
+            def set_secret(self, name: str, value: str) -> str:
+                self.named.append(name)
+                assert value == "tok"
+                return "secret-handle"
+
+        ctx = _context(
+            repo,
+            CIInfo(platform=Platform.GITLAB, is_ci=True, registry=REGISTRY, job_token="tok"),
+        )
+        dag = FakeDag()
+        secrets, sock = std.git_credentials(dag, ctx, host="code.example.com")
+        assert dag.named == [std.GIT_TOKEN_SECRET]
+        assert secrets == ["secret-handle"]
+        assert sock is None
+
+    def test_stale_agent_path_is_ignored(self, repo: Path, tmp_path: Path) -> None:
+        """SSH_AUTH_SOCK pointing at nothing must not count as a credential."""
+        ctx = _context(
+            repo,
+            CIInfo(
+                platform=Platform.LOCAL,
+                is_ci=False,
+                registry=REGISTRY,
+                ssh_auth_sock=str(tmp_path / "gone.sock"),
+            ),
+        )
+        with pytest.raises(ArdtError, match="no git credentials"):
+            std.git_credentials(object(), ctx, host="code.example.com")

@@ -38,6 +38,7 @@ _CI_VARIABLES = (
     "GITHUB_ACTOR",
     "GITHUB_TOKEN",
     "GITHUB_REPOSITORY",
+    "SSH_AUTH_SOCK",  # not a CI variable, but ctx.ci reads it locally
 )
 
 

@@ -23,6 +23,7 @@ from importlib import resources
 from pathlib import Path
 
 from ardt_core.errors import ArdtError
+from ardt_pipelines import std
 from ardt_pipelines_ros import __version__
 
 RENDERED_NAME = "Dockerfile.rendered"
@@ -45,6 +46,11 @@ BASE_EXT_STAGE = "base-ext"
 LOCAL_ARDT_DIR = ".ardt-src"
 """Context subdirectory the pipeline injects a local ardt checkout into."""
 
+# Re-exported so recipe consumers need not care where the contract lives.
+GIT_TOKEN_SECRET = std.GIT_TOKEN_SECRET
+"""BuildKit secret id the deps layer's token mount uses — the contract with
+``ardt_pipelines.std.git_credentials``."""
+
 _GIT_INSTALL = """\
 RUN python3 -m pip install --break-system-packages \\
       "ardt-core @ {source}#subdirectory=packages/ardt-core" \\
@@ -57,6 +63,31 @@ RUN python3 -m pip install --break-system-packages \\
       /opt/ardt-src/packages/ardt-core /opt/ardt-src/packages/ardt-tasks-ros"""
 
 _BASE_FROM = re.compile(r"^FROM\s+\$\{?BASE_IMAGE\}?\s*$")
+
+_GIT_MOUNTS = f"""--mount=type=ssh \\
+    --mount=type=secret,id={GIT_TOKEN_SECRET},required=false \\
+    """
+
+# The proven aos_edge auth branching, verbatim in mechanism: an SSH agent when
+# BuildKit forwarded one, else the token secret via a credential helper that
+# reads /run/secrets at *use* time (the token itself never lands in a layer),
+# else fail with the two ways to provide credentials.
+_GIT_AUTH = """ \\
+ && if [ -n "$SSH_AUTH_SOCK" ] && [ -S "$SSH_AUTH_SOCK" ]; then \\
+      echo "git auth for {host}: ssh agent" \\
+      && mkdir -m 0700 -p ~/.ssh \\
+      && ssh-keyscan -p {port} {host} >> ~/.ssh/known_hosts \\
+      && git config --global url."ssh://git@{host}:{port}/".insteadOf "https://{host}/"; \\
+    elif [ -f /run/secrets/{secret} ]; then \\
+      echo "git auth for {host}: token" \\
+      && git config --global credential."https://{host}".helper \\
+           '!f() {{ echo "username={user}"; echo "password=$(cat /run/secrets/{secret})"; }}; f'; \\
+    else \\
+      echo "no git credentials for {host}: CI injects the job token; locally set" >&2 \\
+      && echo "job_token: in ~/.config/ardt/credentials.yaml or run an ssh agent —" >&2 \\
+      && echo "escape hatch: docker build --ssh default -f {rendered} ." >&2 \\
+      && exit 1; \\
+    fi"""
 
 _STRIP_STEP = """\
 
@@ -130,8 +161,16 @@ def render_ros2(
     local_ardt: bool,
     install_base: str = "/opt/ros/aos",
     strip_dev_files: bool = False,
+    git_host: str | None = None,
+    git_ssh_port: int = 22,
+    git_token_user: str = "gitlab-ci-token",
 ) -> str:
-    """Render the ROS 2 workspace recipe for one repo."""
+    """Render the ROS 2 workspace recipe for one repo.
+
+    ``git_host`` switches on private-host git auth for the deps layer (the
+    ``vcs import`` of a private ``.repos``): SSH-agent and token mounts plus
+    the runtime branching between them.
+    """
     base_ext = ""
     runtime_from = "${BASE_IMAGE}"
     base_path = project_root / base_dockerfile
@@ -146,6 +185,18 @@ def render_ros2(
     install = _LOCAL_INSTALL if local_ardt else _GIT_INSTALL.format(source=ardt_source)
     rendered_cmd = f"CMD {json.dumps(cmd)}\n" if cmd else ""
     strip = _STRIP_STEP.format(base=install_base) if strip_dev_files else ""
+    git_mounts = _GIT_MOUNTS if git_host else ""
+    git_auth = (
+        _GIT_AUTH.format(
+            host=git_host,
+            port=git_ssh_port,
+            secret=GIT_TOKEN_SECRET,
+            user=git_token_user,
+            rendered=RENDERED_NAME,
+        )
+        if git_host
+        else ""
+    )
 
     return (
         _template("ros2.Dockerfile.tmpl")
@@ -154,6 +205,8 @@ def render_ros2(
         .replace("@BASE_IMAGE@", base_image)
         .replace("@BASE_FILE@", base_dockerfile)
         .replace("@ARDT_INSTALL@", install)
+        .replace("@GIT_MOUNTS@", git_mounts)
+        .replace("@GIT_AUTH@", git_auth)
         .replace("@INSTALL_BASE@", install_base)
         .replace("@STRIP@", strip)
         .replace("@BASE_EXT@", base_ext)

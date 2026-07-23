@@ -25,6 +25,8 @@ rendered recipe as a stage:
         base_image: ros:jazzy-ros-base
         cmd: ["bash", "-lc", ". /opt/app/setup.bash && ros2 run my_pkg node"]
         platforms: [linux/amd64, linux/arm64]
+        git_host: code.asterion-robotics.com   # private `.repos` deps need auth
+        git_ssh_port: 5022
 
 Until ardt is published, ``--arg ardt_source=/path/to/checkout`` injects a local
 ardt into the build instead of pip-installing from git.
@@ -72,6 +74,16 @@ class RosCiConfig(BaseModel):
     image: str | None = None
     """Sub-image appended under the registry project path
     (``<registry>/<project-path>/<image>``); None publishes at the path itself."""
+    git_host: str | None = None
+    """Private git host the ``.repos`` file clones from (``vcs import`` inside
+    the deps layer needs credentials for it). When set, the pipeline forwards
+    the CI job token (or a local ssh agent) into the build, and the rendered
+    recipe branches between them; when None the deps layer stays credential-free."""
+    git_ssh_port: int = 22
+    """SSH port of ``git_host`` for the ssh-agent path."""
+    git_token_user: str = "gitlab-ci-token"
+    """Username the token authenticates as (GitLab job tokens require this
+    literal; PATs accept any username, so the default serves both)."""
 
 
 class PipelinesSection(BaseModel):
@@ -84,6 +96,15 @@ class PipelinesSection(BaseModel):
 
 def _config(ctx: Context) -> RosCiConfig:
     return ctx.cfg.section_as("pipelines", PipelinesSection).ros_ci
+
+
+def _git_credentials(
+    ctx: Context, dag: dagger.Client, cfg: RosCiConfig
+) -> tuple[list[dagger.Secret], dagger.Socket | None]:
+    """The std credential plumbing, switched by the ``git_host`` knob."""
+    if cfg.git_host is None:
+        return [], None
+    return std.git_credentials(dag, ctx, host=cfg.git_host)
 
 
 def _build_context(
@@ -103,6 +124,9 @@ def _build_context(
         local_ardt=local_ardt,
         install_base=cfg.install_base,
         strip_dev_files=cfg.strip_dev_files,
+        git_host=cfg.git_host,
+        git_ssh_port=cfg.git_ssh_port,
+        git_token_user=cfg.git_token_user,
     )
     context = src.with_new_file(recipes.RENDERED_NAME, rendered)
     if local_ardt:
@@ -114,12 +138,13 @@ def _build_context(
 @pipeline(name="ros-ci", doc="deps/build/test as image stages; publish the result on --publish")
 async def ros_ci(ctx: Context, dag: dagger.Client, ardt_source: str = ARDT_GIT) -> None:
     cfg = _config(ctx)
+    secrets, ssh = _git_credentials(ctx, dag, cfg)
     context, rendered = _build_context(ctx, dag, cfg, ardt_source)
 
     # Steps 1-4: the `build` target runs ardt deps/build/test as layers.
     # A red test is a failed image build — there is no separate test phase.
     build_stage = context.docker_build(
-        dockerfile=recipes.RENDERED_NAME, target=recipes.BUILD_TARGET
+        dockerfile=recipes.RENDERED_NAME, target=recipes.BUILD_TARGET, secrets=secrets, ssh=ssh
     )
     await build_stage.sync()
 
@@ -147,6 +172,9 @@ async def ros_ci(ctx: Context, dag: dagger.Client, ardt_source: str = ARDT_GIT) 
             dockerfile=recipes.RENDERED_NAME,
             platform=dagger.Platform(p),
             target=recipes.RUNTIME_TARGET,
+            # Non-native platforms rebuild the build stage, deps layer included.
+            secrets=secrets,
+            ssh=ssh,
         )
         for p in cfg.platforms
     ]

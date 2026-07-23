@@ -95,6 +95,13 @@ def test_local_reads_credentials_file(monkeypatch: pytest.MonkeyPatch, tmp_path:
     assert info.project_path == "aos-edge-poc/aos_edge"
 
 
+def test_local_carries_the_ssh_agent_socket(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SSH_AUTH_SOCK", "/tmp/agent.sock")
+    info = ci.detect()
+    assert info.platform is Platform.LOCAL
+    assert info.ssh_auth_sock == "/tmp/agent.sock"
+
+
 def test_malformed_credentials_file_is_a_clean_error(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

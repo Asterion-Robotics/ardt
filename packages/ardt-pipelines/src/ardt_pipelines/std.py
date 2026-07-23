@@ -7,6 +7,7 @@ most SDK churn lands here and in :mod:`.engine` rather than in every plugin.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from pathlib import Path
 from urllib.parse import urlsplit
 
 import dagger
@@ -91,6 +92,39 @@ def image_ref(ctx: Context, name: str | None = None) -> str:
     # Registry repository paths must be lowercase (GitLab lowercases
     # CI_REGISTRY_IMAGE; ghcr rejects uppercase). The tag is left untouched.
     return f"{ctx.ci.registry}/{repository.lower()}:{ctx.version}"
+
+
+GIT_TOKEN_SECRET = "git_token"
+"""BuildKit secret id for the git token, the contract between
+:func:`git_credentials` and any recipe cloning private repos. The escape hatch
+passes the same id the existing repo CI already uses:
+``docker build --secret id=git_token,env=CI_JOB_TOKEN``."""
+
+
+def git_credentials(
+    dag: dagger.Client, ctx: Context, *, host: str
+) -> tuple[list[dagger.Secret], dagger.Socket | None]:
+    """Credentials for a build that clones private repos from ``host``.
+
+    Domain-agnostic, natively forwarded by Dagger: the job token travels as a
+    secret named :data:`GIT_TOKEN_SECRET` (scrubbed, never a layer), a local
+    ssh agent as a forwarded socket; the recipe's runtime branching picks
+    whichever arrived. Raises when neither exists — failing fast beats a
+    mid-build clone error.
+    """
+    secrets: list[dagger.Secret] = []
+    socket: dagger.Socket | None = None
+    if ctx.ci.job_token is not None:
+        secrets.append(dag.set_secret(GIT_TOKEN_SECRET, ctx.ci.job_token))
+    if ctx.ci.ssh_auth_sock is not None and Path(ctx.ci.ssh_auth_sock).is_socket():
+        socket = dag.host().unix_socket(ctx.ci.ssh_auth_sock)
+    if not secrets and socket is None:
+        raise ArdtError(
+            f"no git credentials available for `{host}`",
+            hint="CI provides the job token; locally run an ssh agent or set "
+            "`job_token:` (a PAT) in ~/.config/ardt/credentials.yaml",
+        )
+    return secrets, socket
 
 
 def registry_secret(dag: dagger.Client, ctx: Context) -> dagger.Secret:

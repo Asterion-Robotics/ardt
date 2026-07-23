@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # Rendered by `ardt pipe run ros-ci` (ardt-pipelines-ros @VERSION@) — machine-owned.
 # The recipe lives in ardt-pipelines-ros and updates with the pinned ardt version;
 # repos contain NO Dockerfile. A repo needing local image content extends the
@@ -12,7 +13,7 @@ ARG BASE_IMAGE=@BASE_IMAGE@
 FROM ${BUILDER_IMAGE} AS build
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      build-essential git python3-pip \
+      build-essential git python3-pip openssh-client \
  && rm -rf /var/lib/apt/lists/*
 
 # The same ardt tasks as on a dev machine run the build (two-plane rule).
@@ -21,7 +22,7 @@ COPY . /ws/src
 WORKDIR /ws/src
 
 # 1) deps (exclusions come from ardt.yaml: tasks.ros.exclude_packages / rosdep_skip_keys)
-RUN apt-get update && rosdep update --rosdistro ${ROS_DISTRO} \
+RUN @GIT_MOUNTS@apt-get update && rosdep update --rosdistro ${ROS_DISTRO}@GIT_AUTH@ \
  && ardt deps \
  && rm -rf /var/lib/apt/lists/*
 # 2) build (real files, not symlinks: the install base must survive the stage copy)

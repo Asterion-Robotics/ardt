@@ -24,5 +24,13 @@ tasks:
       - -DCMAKE_BUILD_TYPE=RelWithDebInfo
     symlink_install: true
 
+# ardt-pipelines-ros — the `pipelines.ros_ci:` subsection.
+# pipelines:
+#   ros_ci:
+#     base_image: ros:jazzy-ros-base
+#     platforms: [linux/amd64]
+#     git_host: code.asterion-robotics.com # auth for private `.repos` deps:
+#     git_ssh_port: 5022                   # CI job token, or a local ssh agent
+
 # aos: # recognized once ardt-aos is installed (T3); a warning until then
 #   sdk_line: "2.1"
