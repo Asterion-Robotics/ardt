@@ -1,0 +1,53 @@
+# syntax=docker/dockerfile:1
+# Rendered by `ardt dev sync` (ardt-dev @VERSION@) — machine-owned, gitignored.
+# The recipe lives in ardt-dev and updates by bumping the pinned ardt version;
+# repos contain NO Dockerfile. Destination: this becomes the `ros2-dev` node of
+# the platform/base-images DAG (ADR-015 — a dev image is a child image, so it
+# takes an image *name*, never a tag variant suffix), at which point `dev.image:`
+# replaces this build entirely.
+#
+# PARITY RULE: BASE_IMAGE is the image `pipelines.ros_ci.builder` uses. This
+# layer only ADDS tooling on top of it; it never changes the ROS or apt state CI
+# builds against, or "works here, fails in CI" comes back. `ardt dev doctor`
+# fails when the two drift apart.
+ARG BASE_IMAGE=@BASE_IMAGE@
+FROM ${BASE_IMAGE}
+
+ARG DEBIAN_FRONTEND=noninteractive
+ARG USERNAME=@USER@
+
+# Unlike a CI image, a dev image keeps its apt state usable (no
+# `rm -rf /var/lib/apt/lists`): `ardt deps` runs apt inside the container, and a
+# cache volume backs the downloads.
+RUN printf 'Binary::apt::APT::Keep-Downloaded-Packages "true";\n' \
+      > /etc/apt/apt.conf.d/99keep-downloads
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+@APT@
+
+# Passwordless sudo: rosdep shells out to `sudo apt-get install` during
+# `ardt deps`, and the user must be able to chown its cache volumes.
+RUN if ! id -u ${USERNAME} >/dev/null 2>&1; then \
+      useradd --uid 1000 --user-group --create-home --shell /bin/bash ${USERNAME}; \
+    fi \
+ && echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/90-${USERNAME} \
+ && chmod 0440 /etc/sudoers.d/90-${USERNAME}
+
+ENV @ENV@
+
+# ROS sourcing goes in profile.d (login and non-interactive `bash -lc`, which is
+# what tasks and `docker exec` use) and is pulled into .bashrc for VS Code's
+# interactive terminals, which read neither /etc/profile nor .bash_profile.
+RUN printf '%s\n' \
+      '# --- ardt dev ---' \
+      '. /opt/ros/$ROS_DISTRO/setup.bash' \
+      '[ -f @WORKSPACE@/install/setup.bash ] && . @WORKSPACE@/install/setup.bash' \
+      '. /usr/share/colcon_argcomplete/hook/colcon-argcomplete.bash 2>/dev/null || true' \
+      > /etc/profile.d/10-ardt-dev.sh \
+ && chmod 0644 /etc/profile.d/10-ardt-dev.sh \
+ && printf '%s\n' '' '. /etc/profile.d/10-ardt-dev.sh' >> /home/${USERNAME}/.bashrc \
+ && mkdir -p /home/${USERNAME}/.ccache /home/${USERNAME}/.claude \
+ && chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}
+
+USER ${USERNAME}
+@CLAUDE@

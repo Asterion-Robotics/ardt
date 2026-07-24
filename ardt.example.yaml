@@ -19,6 +19,24 @@ project:
 #   ignore: []
 #   clang_format: path/to/.clang-format
 
+# ardt-dev — the `dev:` section. Everything here is optional: a ROS 2 repo with
+# no `dev:` section gets the standard environment, and the whole `.devcontainer/`
+# is rendered (and gitignored) by `ardt dev sync`. The dev container's base image
+# defaults to `pipelines.ros_ci.builder` below — that is the parity rule, and
+# `ardt dev doctor` fails when the two drift apart.
+# dev:
+#   profile: ros2 # `ardt dev profiles` lists them
+#   image: registry.example.com/platform/base-images/ros2-dev@sha256:… # skips the local build
+#   base_image: ros:jazzy-ros-base # overrides the ros_ci builder (rarely wanted)
+#   apt_packages: [libeigen3-dev] # extra packages in the dev layer
+#   ardt_modules: [ardt-aos] # extra ardt modules installed in the container
+#   workspace_folder: /ws/src # the CI recipe's path, so CMake caches match
+#   gui: false # headless repo: no display sockets, no host GPU
+#   claude_code: false
+#   isolate_build_dirs: false # share build/ install/ log/ with the host checkout
+#   extensions: [ms-vscode.hexeditor] # extra VS Code extension ids
+#   mounts: ["/mnt/data:/data:ro"] # extra compose volume entries, verbatim
+
 # ardt-ros-tasks — the `tasks.ros:` subsection.
 tasks:
   ros:

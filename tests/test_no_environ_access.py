@@ -11,6 +11,7 @@ import ast
 from pathlib import Path
 
 import ardt_core
+import ardt_dev
 import ardt_doc_pipelines
 import ardt_doc_tasks
 import ardt_pipelines
@@ -39,6 +40,7 @@ def test_only_env_module_reads_the_environment() -> None:
     offenders: list[str] = []
     packages = (
         ardt_core,
+        ardt_dev,
         ardt_ros_tasks,
         ardt_doc_tasks,
         ardt_pipelines,

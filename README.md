@@ -34,6 +34,7 @@ ardt/
 │   ├── ardt-ros-tasks/      # deps / build / test (colcon, rosdep, vcs) — in-env tasks
 │   ├── ardt-ros-pipelines/  # ROS 2 pipeline plugin: ros-ci + the ros2 image recipe
 │   ├── ardt-doc-tasks/      # doc build (sphinx preset + doxygen/breathe + ros2-interfaces)
+│   ├── ardt-dev/            # `ardt dev`: renders + drives the repo's devcontainer (gitignored)
 │   └── ardt-doc-pipelines/  # docs-ci: versioned site (working tree + tags) -> public/
 ├── tests/                # cross-package only: policy sweeps + docker-marked integration
 └── .github/workflows/    # bootstrap CI (lint + format + pyright strict + coverage gate)
@@ -53,12 +54,14 @@ project venv needed:
 # From a checkout (developers): editable, so source edits apply immediately
 uv tool install --editable ./packages/ardt-core \
     --with-editable ./plugins/ardt-ros-tasks \
+    --with-editable ./plugins/ardt-dev \
     --with-editable ./packages/ardt-pipelines \
     --with-editable ./plugins/ardt-ros-pipelines
 
 # From git (users, until PyPI publication):
 uv tool install "ardt-core @ git+https://github.com/Asterion-Robotics/ardt.git#subdirectory=packages/ardt-core" \
     --with "ardt-ros-tasks @ git+https://github.com/Asterion-Robotics/ardt.git#subdirectory=plugins/ardt-ros-tasks" \
+    --with "ardt-dev @ git+https://github.com/Asterion-Robotics/ardt.git#subdirectory=plugins/ardt-dev" \
     --with "ardt-pipelines @ git+https://github.com/Asterion-Robotics/ardt.git#subdirectory=packages/ardt-pipelines" \
     --with "ardt-ros-pipelines @ git+https://github.com/Asterion-Robotics/ardt.git#subdirectory=plugins/ardt-ros-pipelines"
 
@@ -81,6 +84,7 @@ ardt plugins               # what's loaded, from where, at which API version
 ardt build --dry-run       # print the plan; run nothing
 ardt pipe list             # registered pipelines
 ardt pipe run ros-ci       # containerized build+test via Dagger (needs docker)
+ardt dev sync              # render the repo's devcontainer (gitignored) — then `ardt dev up`
 ardt info --json           # machine-readable envelope on stdout (diagnostics on stderr)
 ```
 

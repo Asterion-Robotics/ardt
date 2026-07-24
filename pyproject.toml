@@ -14,6 +14,7 @@ members = ["packages/*", "plugins/*"]
 ardt-core = { workspace = true }
 ardt-ros-tasks = { workspace = true }
 ardt-doc-tasks = { workspace = true }
+ardt-dev = { workspace = true }
 ardt-pipelines = { workspace = true }
 ardt-ros-pipelines = { workspace = true }
 ardt-doc-pipelines = { workspace = true }
@@ -23,6 +24,7 @@ dev = [
     "ardt-core",
     "ardt-ros-tasks",
     "ardt-doc-tasks",
+    "ardt-dev",
     "ardt-pipelines",
     "ardt-ros-pipelines",
     "ardt-doc-pipelines",
@@ -39,6 +41,7 @@ src = [
     "packages/ardt-core/src",
     "plugins/ardt-ros-tasks/src",
     "plugins/ardt-doc-tasks/src",
+    "plugins/ardt-dev/src",
     "packages/ardt-pipelines/src",
     "plugins/ardt-ros-pipelines/src",
     "plugins/ardt-doc-pipelines/src",
@@ -66,6 +69,7 @@ testpaths = [
     "packages/ardt-core/tests",
     "plugins/ardt-ros-tasks/tests",
     "plugins/ardt-doc-tasks/tests",
+    "plugins/ardt-dev/tests",
     "packages/ardt-pipelines/tests",
     "plugins/ardt-ros-pipelines/tests",
     "plugins/ardt-doc-pipelines/tests",

@@ -25,7 +25,7 @@ from .errors import ConfigError
 CONFIG_FILENAMES = ("ardt.yaml", "ardt.yml")
 PYPROJECT = "pyproject.toml"
 
-RESERVED_SECTIONS = frozenset({"tasks", "pipelines", "aos", "doc", "templates"})
+RESERVED_SECTIONS = frozenset({"tasks", "pipelines", "aos", "doc", "dev", "templates"})
 """Section names owned by first-party plugins.
 
 Present here so that a repo configuring ``aos:`` on a machine without ``ardt-aos``
