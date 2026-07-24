@@ -1,10 +1,10 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project]
 name = "ardt-ros-tasks"
-version = "0.0.1"
+dynamic = ["version"]
 description = "ardt tasks for ROS 2 workspaces: deps, build, test"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -21,3 +21,16 @@ test = "ardt_ros_tasks.cli:test"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ardt_ros_tasks"]
+
+# The git tag is the only version that exists: no string in this repo states it,
+# so `pyproject.toml`, `__version__` and `ctx.version` cannot drift apart. Bump
+# = `git tag vX.Y.Z`. Every package here is a subdirectory of one repo, hence
+# `root`; `fallback-version` keeps a .git-less source export buildable.
+[tool.hatch.version]
+source = "vcs"
+fallback-version = "0.0.0"
+
+[tool.hatch.version.raw-options]
+root = "../.."
+version_scheme = "no-guess-dev"
+local_scheme = "node-and-date"

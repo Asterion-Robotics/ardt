@@ -69,3 +69,29 @@ def test_short_sha_is_derived_when_absent() -> None:
 )
 def test_only_a_clean_exact_tag_is_publishable(value: str, expected: bool) -> None:
     assert version.is_release(value) is expected
+
+
+# --- the build-time / runtime contract -------------------------------------
+
+
+def test_a_release_version_is_exactly_the_tag_which_is_what_the_wheel_carries() -> None:
+    """The one string hatch-vcs and `compute` must agree on.
+
+    Wheels are versioned by hatch-vcs (setuptools-scm) and `ctx.version` by
+    `compute`; both read the same tag but their *dev* formats differ
+    (setuptools-scm emits `1.4.0.post1.dev3`, this emits `1.4.0.dev3`). That
+    divergence is cosmetic and only ever appears off-tag. On a clean tag — the
+    only publishable state — both must produce the bare tag, or a published
+    wheel would not be findable at the version it was released as.
+    """
+    computed = version.compute(info(tag="v1.4.0", last_tag="v1.4.0"))
+    assert computed == "1.4.0"
+    assert version.is_release(computed)
+
+
+def test_installed_falls_back_instead_of_raising_for_an_uninstalled_package() -> None:
+    assert version.installed("ardt-not-a-real-distribution") == version.UNKNOWN
+
+
+def test_installed_reads_real_metadata() -> None:
+    assert version.installed("ardt-core") not in ("", None)

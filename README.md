@@ -10,8 +10,36 @@ This repo implements milestones **B0–B1** of the [CI-tools spec](https://…/d
 in later milestones (B3–B4, T3).
 
 > **Name note.** The design docs use the working name *turret*; the chosen name is
-> **ardt** — *Asterion Robotics Development Tools*. A greenfield project, starting
-> at **0.0.0**. Reserve the PyPI name (spec T0.1) before the first publish.
+> **ardt** — *Asterion Robotics Development Tools*. A greenfield project, first
+> tagged **v0.0.1**. Reserve the PyPI name (spec T0.1) before the first publish.
+
+## Versioning
+
+**The git tag is the only version that exists.** No file in this repo states one:
+every `pyproject.toml` is `dynamic = ["version"]` via `hatch-vcs`, and every
+package's `__version__` reads its installed metadata. So a release is one command
+and there is nothing to keep in sync:
+
+```bash
+git tag v0.1.0 && git push --tags
+```
+
+Reading it back:
+
+| Where | Command | Source |
+|---|---|---|
+| the working tree | `ardt info` | `ctx.version` → `git describe` |
+| the installed CLI | `ardt --version` | metadata stamped at build time |
+| the tag itself | `git describe --tags --dirty` | git |
+
+Two formats meet here and agree **on a clean tag** — the only publishable state,
+which is what `is_release()` gates on. Off-tag they differ cosmetically:
+`hatch-vcs` emits `0.1.0.post1.dev3+g0a1b2c3`, `ctx.version` emits
+`0.1.0.dev3+g0a1b2c3`. Both are PEP 440 and both name the same commit.
+
+A checkout without `.git` (GitHub's "Download ZIP") builds as `0.0.0` via
+`fallback-version` rather than failing. `pip install git+…` is unaffected: pip
+clones, so the tags are there.
 
 ## The two-plane model
 
