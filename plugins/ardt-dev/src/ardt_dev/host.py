@@ -35,6 +35,8 @@ class HostFacts:
     dri: bool = False
     """``/dev/dri`` present: native GPU nodes."""
     display: str | None = None
+    wsl_distro: str | None = None
+    """``WSL_DISTRO_NAME`` — needed to name this distro from the Windows side."""
 
     @classmethod
     def probe(cls) -> HostFacts:
@@ -50,6 +52,7 @@ class HostFacts:
             dxg=Path("/dev/dxg").exists(),
             dri=Path("/dev/dri").exists(),
             display=env.get("DISPLAY"),
+            wsl_distro=env.get("WSL_DISTRO_NAME"),
         )
 
 
@@ -87,6 +90,32 @@ def detect(facts: HostFacts, *, gui: bool = True) -> HostProfile:
             "Run ardt from a WSL2 distro, Linux, or macOS."
         ],
     )
+
+
+def editor_host_path(path: Path, facts: HostFacts) -> str | None:
+    """How VS Code addresses ``path``, which is not how the shell addresses it.
+
+    On WSL2 the editor is a Windows process driving a Linux workspace, so it
+    knows the repo by its UNC path and nothing else. Everywhere else the two
+    agree. None when the machine is WSL2 but will not say which distro it is —
+    the caller has no safe guess to make there.
+    """
+    if facts.system == "Linux" and facts.wsl_kernel:
+        if not facts.wsl_distro:
+            return None
+        return f"\\\\wsl.localhost\\{facts.wsl_distro}" + str(path).replace("/", "\\")
+    return str(path)
+
+
+def folder_uri(host_path: str, workspace_folder: str) -> str:
+    """The ``vscode-remote://`` URI that opens a dev container directly.
+
+    The authority is ``dev-container+<host path, hex-encoded>`` and the URI path
+    is the folder *inside* the container. This scheme is not in VS Code's public
+    docs, which is why `ardt dev open` prefers `devcontainer open` and falls back
+    to building the URI only when the Dev Containers CLI is not installed.
+    """
+    return f"vscode-remote://dev-container+{host_path.encode('utf-8').hex()}{workspace_folder}"
 
 
 def _dds_service() -> dict[str, object]:

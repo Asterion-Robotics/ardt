@@ -19,6 +19,7 @@ from ardt_core.cli import pass_ardt
 from ardt_core.context import Context
 from ardt_core.errors import ArdtError
 
+from . import host as host_module
 from . import render as render_module
 from .config import DEVCONTAINER_DIR, ci_builder, dev_config, ros_distro
 from .profiles import DISTRO, PROFILES, profile
@@ -247,6 +248,71 @@ def up(ctx: Context, build: bool, no_bootstrap: bool) -> None:
                 POST_CREATE,
             ]
         )
+
+
+def _code_argv(ctx: Context, plan: Render, workspace: str) -> list[str]:
+    """`code` opening the container directly, via a hand-built remote URI."""
+    ctx.runner.require(
+        "code",
+        hint=(
+            "install VS Code's `code` command (Shell Command: Install 'code' in PATH), "
+            "or the Dev Containers CLI for `devcontainer open`"
+        ),
+    )
+    host_path = host_module.editor_host_path(ctx.project_root, plan.host_facts)
+    if host_path is None:
+        raise ArdtError(
+            "WSL2 without WSL_DISTRO_NAME: cannot say which distro holds this repo",
+            hint="run `ardt dev open` from a WSL shell, or open the folder in VS Code by hand",
+        )
+    return ["code", "--folder-uri", host_module.folder_uri(host_path, workspace)]
+
+
+def _open_editor(ctx: Context, plan: Render, workspace: str) -> str:
+    """Open the editor on the container, best option first. Returns what ran.
+
+    `devcontainer open` is the supported entry point, but only the CLI installed
+    *from VS Code* has it — npm's `@devcontainers/cli` dropped `open` to stay
+    editor-agnostic, and the two are the same binary name on PATH. So the probe
+    cannot be trusted: try it, and treat a failure as "this is the other one"
+    rather than as the end of the road.
+    """
+    if ctx.runner.which("devcontainer"):
+        argv = ["devcontainer", "open", str(ctx.project_root)]
+        if ctx.runner.run(argv, check=False, quiet=True).ok:
+            return argv[0]
+        ctx.console.detail("`devcontainer open` failed (npm CLI has no `open`) — using `code`")
+    ctx.runner.run(_code_argv(ctx, plan, workspace))
+    return "code"
+
+
+@dev.command(name="open")
+@click.option("--build", is_flag=True, help="Rebuild the dev image before opening.")
+@pass_ardt
+def open_command(ctx: Context, build: bool) -> None:
+    """Open VS Code attached to the dev container."""
+    compose = _compose_argv(ctx)
+    cfg = dev_config(ctx.cfg)
+    plan = _plan(ctx, ardt_source=_remembered_source(ctx))
+
+    if build:
+        if cfg.image:
+            raise ArdtError(
+                f"nothing to build: dev.image pins {cfg.image}",
+                hint="drop `dev.image` from ardt.yaml to build the rendered recipe locally",
+            )
+        ctx.runner.run([*compose, "build"])
+    _ensure_volumes(ctx, plan)
+    # Start it ourselves so --build is deterministic. VS Code still owns
+    # postCreate: it runs postCreateCommand the first time it attaches,
+    # whoever created the container.
+    with ctx.console.section("compose up"):
+        ctx.runner.run([*compose, "up", "-d"])
+
+    editor = _open_editor(ctx, plan, cfg.workspace_folder)
+    ctx.emit(editor=editor, workspace_folder=cfg.workspace_folder)
+    if not ctx.json_output:
+        ctx.console.success(f"opening {cfg.workspace_folder} in the dev container ({editor})")
 
 
 @dev.command()

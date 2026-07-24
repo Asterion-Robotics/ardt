@@ -118,6 +118,9 @@ class Render:
     profile: Profile
     base_image: str
     host: HostProfile
+    host_facts: HostFacts
+    """The raw probe. ``host`` is what compose needs; this is what anything else
+    host-shaped needs — `ardt dev open` asks it for the editor's view of a path."""
     distro: str
     ardt_source: str | None
     requirements: tuple[str, ...]
@@ -413,7 +416,8 @@ def build(
     prof = profile(dev.profile)
     distro = ros_distro(cfg)
     base_image = resolve_base_image(cfg, dev, prof, distro)
-    host = detect(facts or HostFacts.probe(), gui=dev.gui)
+    probed = facts or HostFacts.probe()
+    host = detect(probed, gui=dev.gui)
     reqs = requirements(cfg, dev, prof, ardt_source)
 
     files = {
@@ -437,6 +441,7 @@ def build(
         profile=prof,
         base_image=base_image,
         host=host,
+        host_facts=probed,
         distro=distro,
         ardt_source=ardt_source,
         requirements=reqs,

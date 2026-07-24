@@ -24,6 +24,7 @@ still flags comments there
 |---|---|---|
 | `ardt dev sync` | host | render `.devcontainer/` + `.vscode/` and add them to `.gitignore` |
 | `ardt dev up` / `shell` / `down` | host | `docker compose` up + postCreate / login shell / stop |
+| `ardt dev open` | host | start the container and open VS Code inside it (`--build` rebuilds first) |
 | `ardt dev volumes` | host | create the shared caches and the colcon subpaths (idempotent) |
 | `ardt dev doctor` | either | check CI parity, ardt pin, render freshness, host wiring |
 | `ardt dev host-config` | host | re-derive only the host overlay (the `initializeCommand`) |
@@ -46,6 +47,28 @@ The container a developer works in and the image CI builds must not drift:
 
 `ardt dev doctor` fails when any of that drifts, and warns when `ardt.version` is
 unpinned (a recipe is only reproducible when the ardt inside it is).
+
+## Opening the editor
+
+`ardt dev open` starts the container and attaches VS Code to it in one step —
+`--build` rebuilds the image first. It runs from the host, and the two supported
+shapes are **a native Linux shell** and **a shell inside a WSL2 distro**.
+
+Two ways to launch, best first:
+
+1. `devcontainer open`, if the Dev Containers CLI is installed. This is the
+   supported entry point, but it exists only when the CLI came *from VS Code*
+   ("Dev Containers: Install devcontainer CLI") — the npm `@devcontainers/cli`
+   dropped it to stay editor-agnostic.
+2. `code --folder-uri vscode-remote://dev-container+<hex>/<workspace>`, built by
+   hand. The hex is the **host** path; the URI path is the folder inside the
+   container. Not a documented VS Code scheme, hence the ordering.
+
+The host path is not always the path you typed. Under WSL2 the editor is a
+Windows process driving a Linux workspace, so it knows the repo only as
+`\\wsl.localhost\<distro>\…`; `editor_host_path` converts it, using
+`WSL_DISTRO_NAME`. On native Linux the two agree and the path passes through. If
+`WSL_DISTRO_NAME` is unset on a WSL2 kernel the command stops rather than guess.
 
 ## Volumes
 

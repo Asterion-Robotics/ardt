@@ -93,6 +93,31 @@ def test_gui_off_wires_no_display() -> None:
     assert not host_module.detect(WSL, gui=False).gui
 
 
+def test_wsl2_repos_are_addressed_by_unc_path_because_vscode_runs_on_windows() -> None:
+    facts = HostFacts(system="Linux", wsl_kernel=True, wsl_distro="Ubuntu")
+    path = host_module.editor_host_path(Path("/home/me/dev/repo"), facts)
+    assert path == r"\\wsl.localhost\Ubuntu\home\me\dev\repo"
+
+
+def test_native_hosts_address_a_repo_the_way_the_shell_does() -> None:
+    for facts in (LINUX, MAC):
+        assert host_module.editor_host_path(Path("/home/me/repo"), facts) == "/home/me/repo"
+
+
+def test_wsl2_without_a_distro_name_refuses_to_guess() -> None:
+    facts = HostFacts(system="Linux", wsl_kernel=True)
+    assert host_module.editor_host_path(Path("/home/me/repo"), facts) is None
+
+
+def test_folder_uri_hex_encodes_the_host_path_and_keeps_the_container_path_plain() -> None:
+    uri = host_module.folder_uri("/home/me/repo", "/ws/src")
+    authority, _, container_path = uri.partition("/ws/src")
+    assert container_path == ""
+    encoded = authority.removeprefix("vscode-remote://dev-container+")
+    assert bytes.fromhex(encoded).decode() == "/home/me/repo"
+    assert uri.endswith("/ws/src")
+
+
 def test_unknown_host_is_reported_not_guessed() -> None:
     host = host_module.detect(HostFacts(system="Windows"))
     assert host.kind == host_module.UNKNOWN
