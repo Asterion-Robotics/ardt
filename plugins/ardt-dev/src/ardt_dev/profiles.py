@@ -91,8 +91,8 @@ ROS2 = Profile(
         ("ROS dev tooling (colcon extensions, mixins, rosdep, vcstool)", ("ros-dev-tools",)),
         ("debuggers and analysers", ("gdb", "valgrind", "cppcheck")),
         # IDE-side only: `ardt check` remains the CI truth for format/lint.
-        # apt's pre-commit is 3.6.2 on noble; a repo whose .pre-commit-config.yaml
-        # sets a higher `minimum_pre_commit_version` installs its own.
+        # Note that a repo whose .pre-commit-config.yaml sets a higher
+        # `minimum_pre_commit_version` installs its own.
         (
             "language servers, formatters, and the local hook runner",
             ("clangd", "clang-format", "clang-tidy", "pre-commit"),
