@@ -161,8 +161,24 @@ def test_dockerfile_pins_the_base_and_keeps_apt_usable() -> None:
     assert "ARG BASE_IMAGE=ros:jazzy-ros-base" in content
     assert "ros-jazzy-rviz2" in content  # the distro token is resolved
     assert "@DISTRO@" not in content
-    assert "Keep-Downloaded-Packages" in content
     assert "ARDT_DEV_CONTAINER=1" in content
+
+
+def test_the_apt_cache_is_enabled_after_the_installs_not_before() -> None:
+    """Order is load-bearing: docker-clean must survive the build layers.
+
+    Removed before them, every .deb the dev layer downloads (~1 GB) is baked
+    into the image; left in place forever, the apt cache volume never fills.
+    """
+    content = plan(ArdtConfig()).files["Dockerfile"]
+    assert "docker-clean" in content and "Keep-Downloaded-Packages" in content
+    assert content.index("apt-get install") < content.index("docker-clean")
+
+
+def test_the_expensive_rqt_metapackage_is_not_pulled_in() -> None:
+    content = plan(ArdtConfig()).files["Dockerfile"]
+    assert "rqt-common-plugins" not in content  # 398 packages, 1.45 GB
+    assert "ros-jazzy-rqt-graph" in content
 
 
 def test_extra_apt_packages_are_labelled_in_the_recipe() -> None:

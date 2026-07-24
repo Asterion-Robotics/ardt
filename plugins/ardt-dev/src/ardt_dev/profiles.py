@@ -62,10 +62,21 @@ ROS2 = Profile(
         # IDE-side only: `ardt check` remains the CI truth for format/lint.
         ("language servers and formatters", ("clangd", "clang-format", "clang-tidy")),
         (
+            # Measured on jazzy (installed size, deps included): rviz2 358 MB,
+            # this rqt set ~500 MB (mostly Qt, shared with rviz2), mesa 192 MB.
+            # `rqt-common-plugins` is deliberately NOT here: that metapackage
+            # pulls 398 packages / 1.45 GB, because rqt_image_view drags in
+            # OpenCV's dev packages and rqt_plot drags in scipy/matplotlib/VTK.
+            # A repo that wants them adds them to `dev.apt_packages`.
             "GUI tools — the reason a dev image exists at all",
             (
                 f"ros-{DISTRO}-rviz2",
-                f"ros-{DISTRO}-rqt-common-plugins",
+                f"ros-{DISTRO}-rqt-gui",
+                f"ros-{DISTRO}-rqt-gui-cpp",
+                f"ros-{DISTRO}-rqt-graph",
+                f"ros-{DISTRO}-rqt-console",
+                f"ros-{DISTRO}-rqt-topic",
+                f"ros-{DISTRO}-rqt-reconfigure",
                 "x11-utils",
                 "mesa-utils",
                 "libgl1-mesa-dri",
