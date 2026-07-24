@@ -91,7 +91,12 @@ ROS2 = Profile(
         ("ROS dev tooling (colcon extensions, mixins, rosdep, vcstool)", ("ros-dev-tools",)),
         ("debuggers and analysers", ("gdb", "valgrind", "cppcheck")),
         # IDE-side only: `ardt check` remains the CI truth for format/lint.
-        ("language servers and formatters", ("clangd", "clang-format", "clang-tidy")),
+        # apt's pre-commit is 3.6.2 on noble; a repo whose .pre-commit-config.yaml
+        # sets a higher `minimum_pre_commit_version` installs its own.
+        (
+            "language servers, formatters, and the local hook runner",
+            ("clangd", "clang-format", "clang-tidy", "pre-commit"),
+        ),
         (
             # Measured on jazzy (installed size, deps included): rviz2 358 MB,
             # this rqt set ~500 MB (mostly Qt, shared with rviz2), mesa 192 MB.
@@ -101,20 +106,26 @@ ROS2 = Profile(
             # A repo that wants them adds them to `dev.apt_packages`.
             "GUI tools — the reason a dev image exists at all",
             (
+                # Rviz2
                 f"ros-{DISTRO}-rviz2",
+                # Rqt
                 f"ros-{DISTRO}-rqt-gui",
                 f"ros-{DISTRO}-rqt-gui-cpp",
                 f"ros-{DISTRO}-rqt-graph",
                 f"ros-{DISTRO}-rqt-console",
                 f"ros-{DISTRO}-rqt-topic",
                 f"ros-{DISTRO}-rqt-reconfigure",
+                # Other GUI dependencies
                 "x11-utils",
                 "mesa-utils",
                 "libgl1-mesa-dri",
             ),
         ),
         ("docs toolchain (ardt doc build)", ("doxygen", "graphviz")),
-        ("shell", ("bash-completion", "sudo", "curl", "wget", "jq", "less", "nano", "unzip")),
+        (
+            "shell",
+            ("bash-completion", "sudo", "curl", "wget", "jq", "less", "nano", "unzip", "tree"),
+        ),
     ),
     bootstrap=(
         ("sudo", "apt-get", "update", "-qq"),
