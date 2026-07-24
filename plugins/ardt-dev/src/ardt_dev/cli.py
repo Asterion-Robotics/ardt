@@ -146,6 +146,58 @@ def host_config(ctx: Context) -> None:
             ctx.console.warn(note)
 
 
+def _ensure_volumes(ctx: Context, plan: Render) -> list[str]:
+    """Create what compose will not create itself, and return what was touched.
+
+    Two gaps, both by design elsewhere: an ``external:`` volume is compose's cue
+    that something else owns it (which is exactly what keeps `--purge`
+    repo-scoped), and Docker refuses to mount a subpath that does not exist
+    rather than creating it (moby#47842). Both are fixed with a `docker volume
+    create` and one throwaway `mkdir` container, all idempotent.
+    """
+    touched: list[str] = []
+    for name in plan.shared_volumes:
+        ctx.runner.run(["docker", "volume", "create", name], quiet=True)
+        touched.append(name)
+    if plan.colcon_volume:
+        ctx.runner.run(["docker", "volume", "create", plan.colcon_volume], quiet=True)
+        # The provisioning image is the one this repo pulls anyway, so this
+        # costs no extra download.
+        ctx.runner.run(
+            [
+                "docker",
+                "run",
+                "--rm",
+                "-v",
+                f"{plan.colcon_volume}:/volume",
+                plan.provision_image,
+                "mkdir",
+                "-p",
+                *[f"/volume/{name}" for name in render_module.COLCON_DIRS],
+            ],
+            quiet=True,
+        )
+        touched.append(plan.colcon_volume)
+    return touched
+
+
+@dev.command(name="volumes")
+@pass_ardt
+def volumes(ctx: Context) -> None:
+    """Create the shared caches and the colcon volume's subpaths. Idempotent."""
+    ctx.runner.require(
+        "docker", hint="install Docker Engine, or enable Docker Desktop's WSL integration"
+    )
+    plan = _plan(ctx, ardt_source=_remembered_source(ctx))
+    touched = _ensure_volumes(ctx, plan)
+    ctx.emit(volumes=touched, shared=list(plan.shared_volumes))
+    if ctx.json_output:
+        return
+    for name in touched:
+        scope = "shared" if name in plan.shared_volumes else "this repo"
+        ctx.console.info(f"  {name:32} ({scope})")
+
+
 def _compose_argv(ctx: Context) -> list[str]:
     for name in (COMPOSE, COMPOSE_HOST):
         if not (ctx.project_root / name).is_file():
@@ -174,6 +226,9 @@ def up(ctx: Context, build: bool, no_bootstrap: bool) -> None:
     workspace = dev_config(ctx.cfg).workspace_folder
     if build:
         ctx.runner.run([*compose, "build"])
+    # Before `up`, not after: compose fails on a missing external volume, and
+    # the container fails to start on a missing subpath.
+    _ensure_volumes(ctx, _plan(ctx, ardt_source=_remembered_source(ctx)))
     with ctx.console.section("compose up"):
         ctx.runner.run([*compose, "up", "-d"])
     if no_bootstrap:
@@ -218,14 +273,31 @@ def shell(ctx: Context) -> None:
 
 
 @dev.command()
-@click.option("--purge", is_flag=True, help="Also delete the cache volumes (build, ccache, apt).")
+@click.option("--purge", is_flag=True, help="Also delete this repo's colcon volume.")
+@click.option(
+    "--purge-shared",
+    is_flag=True,
+    help="Also delete the machine-wide caches — every repo's, not just this one's.",
+)
 @pass_ardt
-def down(ctx: Context, purge: bool) -> None:
-    """Stop the dev container. Volumes survive unless --purge."""
+def down(ctx: Context, purge: bool, purge_shared: bool) -> None:
+    """Stop the dev container. Volumes survive unless --purge.
+
+    `--purge` is repo-scoped by construction: the shared caches are `external:`,
+    so compose leaves them alone however hard `down` is asked to clean. Wiping
+    ccache, the apt archives and the Claude Code login for *every* repo on this
+    machine takes the separate --purge-shared, because it is a separate decision.
+    """
+    plan = _plan(ctx, ardt_source=_remembered_source(ctx))
     argv = [*_compose_argv(ctx), "down"]
     if purge:
         argv.append("--volumes")
     ctx.runner.run(argv)
+    if not purge_shared:
+        return
+    for name in plan.shared_volumes:
+        ctx.runner.run(["docker", "volume", "rm", "--force", name], quiet=True)
+    ctx.console.warn(f"removed the machine-wide caches: {', '.join(plan.shared_volumes)}")
 
 
 @dev.command()

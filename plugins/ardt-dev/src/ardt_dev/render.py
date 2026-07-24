@@ -52,6 +52,31 @@ ARDT_SRC_MOUNT = "/opt/ardt-src"
 """Where a local ardt checkout mounts — the dev twin of the pipeline's
 ``--arg ardt_source=<dir>`` escape hatch."""
 
+COLCON_VOLUME = "colcon"
+"""One volume per repo for the whole colcon output tree. Compose namespaces it
+under the project, so two repos never share it."""
+
+COLCON_DIRS = ("build", "install", "log")
+"""Mounted from :data:`COLCON_VOLUME` by ``subpath``, not as a volume each.
+
+Docker refuses to mount a subpath that does not exist yet and will not create it
+(moby#47842), so ``ardt dev volumes`` provisions these before the first start."""
+
+SHARED_VOLUMES = {
+    "ardt-ccache": "ccache is content-addressed: sharing it across repos raises the hit rate",
+    "ardt-apt-cache": "downloaded .debs are the same Ubuntu packages in every repo",
+    "ardt-claude": "one `claude login` for every repo, surviving any rebuild",
+}
+"""Declared ``external:`` and named without the project prefix, so every repo on
+the machine uses the same three instead of three more.
+
+``external:`` is the load-bearing part, not just the fixed name: it keeps
+``ardt dev down --purge`` repo-scoped — compose does not delete what it does not
+own, so purging one repo cannot wipe another's caches. The cost is that they
+have to exist before ``up``; ``ardt dev volumes`` creates them."""
+
+CLAUDE_VOLUME = "ardt-claude"
+
 EXECUTABLE = frozenset({POST_CREATE, HOST_CONFIG})
 
 BASE_MODULES = ("ardt-core", "ardt-dev")
@@ -69,11 +94,15 @@ _HOST_CONFIG_BODY = """\
 # Rendered by `ardt dev sync` (ardt-dev @VERSION@) — machine-owned, gitignored.
 #
 # initializeCommand: re-derive the host overlay, so one clone works on WSL2,
-# Linux and macOS without a per-machine edit. A host without ardt installed is
-# not fatal: the overlay `ardt dev sync` already wrote stays in place.
+# Linux and macOS without a per-machine edit, then create the volumes compose
+# will not create for itself. Both must happen before VS Code runs its own
+# `compose up`, which is why they hang off initializeCommand and not postCreate.
+# A host without ardt installed is not fatal: the overlay `ardt dev sync` already
+# wrote stays in place.
 set -eu
 if command -v ardt >/dev/null 2>&1; then
   ardt dev host-config
+  ardt dev volumes
 else
   echo "ardt not on PATH: keeping the existing .devcontainer/compose.host.yaml" >&2
 fi
@@ -92,12 +121,25 @@ class Render:
     distro: str
     ardt_source: str | None
     requirements: tuple[str, ...]
+    image: str | None = None
+    """``dev.image`` when the repo pins a published one, else None."""
+    shared_volumes: tuple[str, ...] = ()
+    """The machine-wide caches. ``external:``, so they must exist before compose
+    starts and compose never removes them."""
+    colcon_volume: str | None = None
+    """The repo's colcon volume, already project-prefixed as Docker names it.
+    None when ``isolate_build_dirs`` is off and there is nothing to provision."""
     executable: frozenset[str] = EXECUTABLE
 
     @property
     def host_files(self) -> dict[str, str]:
         """The subset ``ardt dev host-config`` may rewrite on its own."""
         return {COMPOSE_HOST: self.files[COMPOSE_HOST]}
+
+    @property
+    def provision_image(self) -> str:
+        """An image guaranteed to be pulled anyway, used to mkdir the subpaths."""
+        return self.image or self.base_image
 
 
 def _template(name: str) -> str:
@@ -228,19 +270,29 @@ def compose(
     workspace = dev.workspace_folder
     home = f"/home/{USER}"
 
-    volumes: list[str] = [f"..:{workspace}:cached"]
-    named: dict[str, None] = {}
+    volumes: list[object] = [f"..:{workspace}:cached"]
+    named: dict[str, object] = {}
     if dev.isolate_build_dirs:
-        for name in ("build", "install", "log"):
-            volumes.append(f"colcon-{name}:{workspace}/{name}")
-            named[f"colcon-{name}"] = None
-    volumes.append(f"ccache:{home}/.ccache")
-    named["ccache"] = None
-    volumes.append("apt-cache:/var/cache/apt/archives")
-    named["apt-cache"] = None
+        # One volume, three subpaths — long syntax, since the `src:dst` short
+        # form cannot express a subpath.
+        for name in COLCON_DIRS:
+            volumes.append(
+                {
+                    "type": "volume",
+                    "source": COLCON_VOLUME,
+                    "target": f"{workspace}/{name}",
+                    "volume": {"subpath": name},
+                }
+            )
+        named[COLCON_VOLUME] = None
+    volumes.append(f"ardt-ccache:{home}/.ccache")
+    volumes.append("ardt-apt-cache:/var/cache/apt/archives")
+    for shared in SHARED_VOLUMES:
+        if shared == CLAUDE_VOLUME and not dev.claude_code:
+            continue
+        named[shared] = {"external": True}
     if dev.claude_code:
-        volumes.append(f"claude:{home}/.claude")
-        named["claude"] = None
+        volumes.append(f"{CLAUDE_VOLUME}:{home}/.claude")
     if ardt_source is not None:
         volumes.append(f"{ardt_source}:{ARDT_SRC_MOUNT}:ro")
     volumes += dev.mounts
@@ -261,7 +313,7 @@ def compose(
 
     return _yaml_document(
         {
-            "name": f"{_slug(ctx_project)}-dev",
+            "name": compose_project(ctx_project),
             "services": {"dev": service},
             "volumes": named,
         },
@@ -344,6 +396,11 @@ def _slug(name: str) -> str:
     return "".join(c if c.isalnum() else "-" for c in name.lower()).strip("-")
 
 
+def compose_project(project: str) -> str:
+    """The compose project name — and so the prefix on every non-external volume."""
+    return f"{_slug(project)}-dev"
+
+
 def build(
     project: str,
     cfg: ArdtConfig,
@@ -374,6 +431,7 @@ def build(
     }
     if prof.cpp_properties:
         files[CPP_PROPERTIES] = cpp_properties(prof, distro)
+    shared = tuple(v for v in SHARED_VOLUMES if dev.claude_code or v != CLAUDE_VOLUME)
     return Render(
         files=files,
         profile=prof,
@@ -382,6 +440,11 @@ def build(
         distro=distro,
         ardt_source=ardt_source,
         requirements=reqs,
+        image=dev.image,
+        shared_volumes=shared,
+        colcon_volume=(
+            f"{compose_project(project)}_{COLCON_VOLUME}" if dev.isolate_build_dirs else None
+        ),
     )
 
 

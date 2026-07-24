@@ -24,6 +24,7 @@ still flags comments there
 |---|---|---|
 | `ardt dev sync` | host | render `.devcontainer/` + `.vscode/` and add them to `.gitignore` |
 | `ardt dev up` / `shell` / `down` | host | `docker compose` up + postCreate / login shell / stop |
+| `ardt dev volumes` | host | create the shared caches and the colcon subpaths (idempotent) |
 | `ardt dev doctor` | either | check CI parity, ardt pin, render freshness, host wiring |
 | `ardt dev host-config` | host | re-derive only the host overlay (the `initializeCommand`) |
 | `ardt dev bootstrap` | container | claim the volume dirs, then the profile's create steps |
@@ -45,6 +46,33 @@ The container a developer works in and the image CI builds must not drift:
 
 `ardt dev doctor` fails when any of that drifts, and warns when `ardt.version` is
 unpinned (a recipe is only reproducible when the ardt inside it is).
+
+## Volumes
+
+Four per repo, not six, and three of the four are shared machine-wide:
+
+| Volume | Scope | Holds | Removed by |
+|---|---|---|---|
+| `<project>-dev_colcon` | this repo | `build/`, `install/`, `log/` as three `subpath` mounts of one volume | `ardt dev down --purge` |
+| `ardt-ccache` | **every repo** | compiler cache — sharing it raises the hit rate | `ardt dev down --purge-shared` |
+| `ardt-apt-cache` | **every repo** | downloaded `.deb`s, the same packages everywhere | `--purge-shared` |
+| `ardt-claude` | **every repo** | Claude Code state, so `claude login` happens once | `--purge-shared` |
+
+The shared three are declared `external:`. That is what keeps `--purge`
+repo-scoped: compose does not delete what it does not own, so cleaning one repo
+can never wipe another's caches. The cost is that they must exist before `up` —
+`ardt dev volumes` creates them, and both `ardt dev up` and the devcontainer's
+`initializeCommand` call it.
+
+That command also `mkdir`s the three subpaths inside the colcon volume, because
+Docker refuses to mount a subpath that does not exist rather than creating one
+([moby#47842](https://github.com/moby/moby/issues/47842)). It is idempotent and
+uses the image the repo pulls anyway, so it costs no extra download.
+
+> **Upgrading from a per-repo layout:** the old `…_colcon-build`,
+> `…_colcon-install`, `…_colcon-log`, `…_ccache`, `…_apt-cache` and `…_claude`
+> volumes are orphaned, not migrated. Run `ardt dev down` first, then remove them
+> by name. Your build tree and `claude login` start fresh once.
 
 ## Hosts
 

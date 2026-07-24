@@ -198,12 +198,47 @@ def test_claude_code_can_be_left_out() -> None:
     assert "claude:/home/ubuntu/.claude" not in plan(cfg).files[render_module.COMPOSE]
 
 
-def test_compose_isolates_the_colcon_output_dirs() -> None:
+def test_compose_isolates_the_colcon_output_dirs_in_one_volume() -> None:
     compose = yaml.safe_load(plan(ArdtConfig()).files[render_module.COMPOSE])
     volumes = compose["services"]["dev"]["volumes"]
     assert "..:/ws/src:cached" in volumes
-    assert "colcon-build:/ws/src/build" in volumes
-    assert set(compose["volumes"]) >= {"colcon-build", "ccache", "apt-cache"}
+    mounts = [v for v in volumes if isinstance(v, dict) and v["source"] == "colcon"]
+    assert [m["target"] for m in mounts] == ["/ws/src/build", "/ws/src/install", "/ws/src/log"]
+    # The whole point: one volume, three subpaths — and they must stay distinct.
+    # A Compose that silently drops `subpath` would alias all three (moby#47687).
+    assert [m["volume"]["subpath"] for m in mounts] == ["build", "install", "log"]
+    assert len({m["volume"]["subpath"] for m in mounts}) == 3
+    assert set(compose["volumes"]) == {"colcon", "ardt-ccache", "ardt-apt-cache", "ardt-claude"}
+
+
+def test_the_caches_are_shared_across_repos_and_not_compose_owned() -> None:
+    """Fixed names (no project prefix) plus `external:` — 3 per machine, not 3 per repo."""
+    compose = yaml.safe_load(plan(ArdtConfig()).files[render_module.COMPOSE])
+    for name in ("ardt-ccache", "ardt-apt-cache", "ardt-claude"):
+        # external: compose never removes them, so `down --purge` stays repo-scoped.
+        assert compose["volumes"][name] == {"external": True}
+    # The repo-scoped one is NOT external: compose creates and purges it.
+    assert compose["volumes"]["colcon"] is None
+
+
+def test_the_repo_volume_is_named_as_docker_will_name_it() -> None:
+    """`ardt dev volumes` provisions subpaths by name, so the prefix must match."""
+    built = plan(ArdtConfig())
+    assert built.colcon_volume == "demo-dev_colcon"
+    assert yaml.safe_load(built.files[render_module.COMPOSE])["name"] == "demo-dev"
+
+
+def test_no_colcon_volume_to_provision_when_build_dirs_are_shared() -> None:
+    cfg = ArdtConfig.model_validate({"dev": {"isolate_build_dirs": False}})
+    assert plan(cfg).colcon_volume is None
+
+
+def test_claude_volume_is_dropped_with_claude_code() -> None:
+    cfg = ArdtConfig.model_validate({"dev": {"claude_code": False}})
+    built = plan(cfg)
+    assert "ardt-claude" not in built.shared_volumes
+    assert "ardt-claude" not in yaml.safe_load(built.files[render_module.COMPOSE])["volumes"]
+    assert built.shared_volumes == ("ardt-ccache", "ardt-apt-cache")
 
 
 def test_compose_can_keep_the_build_dirs_in_the_bind_mount() -> None:
