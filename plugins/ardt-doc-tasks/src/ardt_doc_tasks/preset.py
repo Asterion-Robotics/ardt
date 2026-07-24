@@ -9,7 +9,7 @@ A repo's ``conf.py`` is three lines::
 Everything set here is a *default* — ``conf.py`` executes top to bottom, so
 anything assigned after the import wins (swap ``html_theme``, extend
 ``extensions`` / ``autodoc_mock_imports``, …). Updating a theme or an
-extension for every repo is one MR in this package (06 §2).
+extension for every repo is one MR in this package.
 
 Conventions relied on:
 

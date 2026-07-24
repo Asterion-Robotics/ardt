@@ -3,7 +3,7 @@
 A repo's devcontainer is a *rendered artifact*, never repo content: the recipe
 and the editor wiring live here as package data and update with the pinned ardt
 version, exactly as the CI image recipe does in ``ardt-ros-pipelines``
-(ci_tools 02 §7.2). ``ardt dev sync`` writes them into a gitignored
+``ardt dev sync`` writes them into a gitignored
 ``.devcontainer/`` (plus the one editor file VS Code only reads from
 ``.vscode/``), so no repo carries — or reviews, or drifts on — a devcontainer
 file.

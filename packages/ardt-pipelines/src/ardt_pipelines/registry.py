@@ -6,7 +6,7 @@ Plugins expose pipelines by pointing an ``ardt.pipelines`` entry point at a modu
 every :class:`PipelineDef` found in that module is registered.
 
 No Dagger import here: the registry and parameter binding are engine-free so they
-stay unit-testable anywhere (07 §5 AC).
+stay unit-testable anywhere.
 """
 
 from __future__ import annotations

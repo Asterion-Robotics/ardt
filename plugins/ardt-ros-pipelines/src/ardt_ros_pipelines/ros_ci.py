@@ -1,6 +1,6 @@
 """Built-in pipelines.
 
-``ros-ci`` is the interim generic pipeline of 07 §7, restructured around one
+``ros-ci`` is the interim generic pipeline, built around one
 idea: **building the image is the CI run**. The image recipe (owned by
 :mod:`.recipes`, versioned with ardt) runs the ardt tasks as build stages —
 
@@ -159,7 +159,7 @@ async def ros_ci(ctx: Context, dag: dagger.Client, ardt_source: str = "") -> Non
     await build_stage.sync()
 
     # Export the JUnit XMLs (CI renders them) and the rendered Dockerfile
-    # (02 §7.3-4: the audit/`docker build` escape hatch ships with every run).
+    # (the audit/`docker build` escape hatch ships with every run).
     export_dir = ctx.project_root / JUNIT_EXPORT_DIR
     await build_stage.directory(recipes.RESULTS_DIR).export(str(export_dir))
     rendered_path = export_dir / recipes.RENDERED_NAME

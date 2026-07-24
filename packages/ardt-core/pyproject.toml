@@ -19,7 +19,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 
-# The core has zero heavy deps, by rule (01 §2). dagger-io lives only in
+# The core has zero heavy deps, by rule. dagger-io lives only in
 # ardt-pipelines; anything ROS only in ardt-ros-tasks.
 dependencies = [
     "click>=8.1",

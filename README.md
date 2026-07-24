@@ -3,15 +3,13 @@
 > The company-wide developer/CI CLI platform: **one small core, everything else a plugin.**
 > Robotics or not — the core knows nothing about ROS; ROS-ness itself is a plugin.
 
-This repo implements milestones **B0–B1** of the [CI-tools spec](https://…/docs/ci_tools)
-(the `aos_poc/docs/ci_tools` design set): the uv workspace, a fully-typed
-`ardt-core`, and the first task plugin, `ardt-ros-tasks`. The Dagger pipeline plane
-(`ardt-pipelines`), the domain plugin (`ardt-aos`), and the pinned base images come
-in later milestones (B3–B4, T3).
+The uv workspace, a fully-typed `ardt-core`, the task plugins, and an interim
+Dagger pipeline plane. The domain plugin (`ardt-aos`) and the pinned base images
+come later — see [Status](#status).
 
-> **Name note.** The design docs use the working name *turret*; the chosen name is
-> **ardt** — *Asterion Robotics Development Tools*. A greenfield project, first
-> tagged **v0.0.1**. Reserve the PyPI name (spec T0.1) before the first publish.
+> **Name note.** The chosen name is **ardt** — *Asterion Robotics Development
+> Tools*. A greenfield project, first tagged **v0.0.1**. Reserve the PyPI name
+> before the first publish.
 
 ## Versioning
 
@@ -102,7 +100,7 @@ ardt --help    # from anywhere
 > pinned CI shims once ardt is on PyPI), but wrong for a daily driver: it can't
 > see an unpublished workspace, it re-resolves per call, and plugins you
 > `--with`-ed don't persist. `uv tool install` is the "install once, use
-> everywhere" path — the spec's own distribution model (01 §6).
+> everywhere" path, which is how ardt is meant to be distributed.
 
 ## Quick start
 
@@ -144,19 +142,22 @@ PYTHONPATH= uv run pyright packages/ardt-core/src
 PYTHONPATH= uv run pytest --cov=ardt_core --cov-report=term-missing
 ```
 
-## Status vs. the spec
+## Status
 
-- ✅ B0 workspace, bootstrap CI, quality gate
-- ✅ B1 `ardt-core` (cli, plugin loader + `ARDT_PLUGIN_API` guard, context, config,
-  runner, console, `ctx.version` tag policy) — core coverage ≥ 90 %
-- ✅ B2 (partial) `ardt-ros-tasks` `deps`/`build`/`test` — verified on the
+- ✅ **Workspace, bootstrap CI, quality gate**
+- ✅ **`ardt-core`** — cli, plugin loader + `ARDT_PLUGIN_API` guard, context,
+  config, runner, console, `ctx.version` tag policy. Coverage ≥ 90 %
+- ✅ **`ardt-ros-tasks`** `deps`/`build`/`test` — verified on the
   [ardt_ros2_demo](https://github.com/Asterion-Robotics/ardt_ros2_demo) repo, host
-  + jazzy container; a green run on `aos_edge` still to be done
-- ✅ B3 (partial) `ardt-pipelines`: `@pipeline` registry, `ardt pipe list/run`,
-  exact `dagger-io` pin, std helpers, interim `ros-ci` (runs the ardt tasks
-  inside the builder, exports JUnit, publishes on tag) — verified against a real
-  engine. Missing: the persistent-engine runner setup (T2.3), dogfood (T2.4)
-- ⏳ B4 `aos-ros-base` + tool image + dogfood, T3 `ardt-aos` — not yet.
+  and jazzy container. A green run on `aos_edge` is still to be done
+- ✅ **`ardt-dev`** — renders and drives the repo's devcontainer
+- 🚧 **`ardt-pipelines`** — `@pipeline` registry, `ardt pipe list/run`, exact
+  `dagger-io` pin, std helpers, and an interim `ros-ci` (runs the ardt tasks
+  inside the builder, exports JUnit, publishes on tag), verified against a real
+  engine. Missing: the persistent-engine runner setup, and dogfooding ardt's own
+  CI through it
+- ⏳ **`aos-ros-base` + the baked tool image**, and the `ardt-aos` domain plugin
+  — not started
 
 ## License
 

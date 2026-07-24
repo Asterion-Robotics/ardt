@@ -1,13 +1,13 @@
 """CI platform detection and the one normalization table.
 
-Pipelines are parameterized by config + context, *not* by CI env vars (02 §1 rule 2).
+Pipelines are parameterized by config + context, *not* by CI env vars.
 That rule only holds if there is exactly one place where the platforms' wildly
 different variable names collapse into the same handful of fields. This is it.
 
 Everything a pipeline needs about "where am I running and what may I push to"
 arrives as :class:`CIInfo`. Secrets are carried as plain strings here and handed
 to Dagger's secret store at the publish step; they are never interpolated into a
-build container (02 §6).
+build container.
 """
 
 from __future__ import annotations

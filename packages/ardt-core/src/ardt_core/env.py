@@ -1,6 +1,6 @@
 """The only module in ardt allowed to read the process environment.
 
-Rule (07 §5): *no ``os.environ`` access outside the ``ctx.ci`` normalization module*.
+Rule: *no ``os.environ`` access outside the ``ctx.ci`` normalization module*.
 The rule's intent is a single choke point, so that pipelines and tasks can never
 smuggle configuration in through an env var: everything they need arrives via
 ``ctx.ci`` or ``ardt.yaml``. This module is that choke point; :mod:`ardt_core.ci`

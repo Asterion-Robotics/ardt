@@ -125,8 +125,8 @@ dev:
 ## Where this is going
 
 The rendered `Dockerfile` is the interim form of the `ros2-dev` node in
-`platform/base-images` (per ADR-015 a dev image is a child image, so it takes an
-image *name*, never a tag variant suffix). Once that publishes, repos set
+`platform/base-images` (a dev image is a child image, so it takes an image
+*name*, never a tag variant suffix). Once that publishes, repos set
 `dev.image:` and the local build disappears — the rest of the render does not
 change.
 

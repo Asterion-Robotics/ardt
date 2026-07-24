@@ -1,8 +1,8 @@
-"""Enforce the single-choke-point rule (07 §5).
+"""Enforce the single-choke-point rule.
 
 No module may touch ``os.environ`` except :mod:`ardt_core.env` (the choke point
 itself). Pipelines being parameterized by config+context rather than CI env vars
-(02 §1 rule 2) only holds if this stays true, so it is a test, not a convention.
+only holds if this stays true, so it is a test, not a convention.
 """
 
 from __future__ import annotations

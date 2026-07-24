@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from ardt_core.config import ArdtConfig
 
 JUNIT_GLOB = "build/**/test_results/**/*.xml"
-"""Fixed path convention, so pipelines can export JUnit XMLs blindly (07 §5)."""
+"""Fixed path convention, so pipelines can export JUnit XMLs blindly."""
 
 
 class RosConfig(BaseModel):

@@ -16,7 +16,7 @@ a CI job executes — and because it's ordinary versioned Python, running it on
 your laptop is byte-for-byte what CI does. CI YAML shrinks to a shim that picks
 the pipeline name and decides `--publish`.
 
-The one rule that keeps this sane (ci_tools 02): **pipelines orchestrate, tasks
+The one rule that keeps this sane: **pipelines orchestrate, tasks
 build**. A pipeline never re-implements build logic; it starts a container and
 calls `ardt build` in it. And all Dagger imports live in this package — tasks
 and core never see it, so the inner loop works without any engine.

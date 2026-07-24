@@ -2,7 +2,7 @@
 
 These stay `unit`: no real colcon/rosdep runs here. `--dry-run` lets us assert the
 *plan* (which commands, which flags) without an ROS install; the real green-on-
-aos_edge run is the B2 integration acceptance criterion, not a unit test.
+aos_edge run is the integration acceptance criterion, not a unit test.
 """
 
 from __future__ import annotations

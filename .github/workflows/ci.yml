@@ -1,6 +1,6 @@
-# Bootstrap CI (T0.3 / milestone B0). Plain pytest + the quality gate; this is
-# replaced by dogfooding (turret pipe run dogfood) once the pipeline plane lands
-# in B3-B4 (07 §4, §10). Keep it boring until then.
+# Bootstrap CI: plain pytest + the quality gate. This is replaced by dogfooding
+# (`ardt pipe run dogfood`) once the pipeline plane is finished. Keep it boring
+# until then.
 name: ci
 
 on:

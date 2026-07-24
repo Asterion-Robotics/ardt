@@ -19,7 +19,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 
-# The doc toolchain is pinned HERE (06 §2: the tool owns the configs and the
+# The doc toolchain is pinned HERE (the tool owns the configs and the
 # dependency set; repos carry exceptions only). Bumping an extension is one MR
 # in this package, applied to every repo at the next release.
 dependencies = [

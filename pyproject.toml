@@ -87,7 +87,7 @@ source = ["ardt_core"]
 branch = true
 
 [tool.coverage.report]
-# Core coverage gate (07 §9 / §10 B1): ≥ 90 %. Applied when the suite is run with
+# Core coverage gate: ≥ 90 %. Applied when the suite is run with
 # `--cov`; the plain `pytest` default in [tool.pytest.ini_options] stays fast.
 fail_under = 90
 exclude_lines = [

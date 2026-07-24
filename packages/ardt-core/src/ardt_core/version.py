@@ -1,4 +1,4 @@
-"""The single implementation of the tag policy (01 §5, 07 §5).
+"""The single implementation of the tag policy.
 
 Both planes read this: "am I on a tag" and "what do I tag this image" resolve
 identically in a task and in a pipeline because there is one function.
@@ -15,12 +15,11 @@ dirty tree           the above ``+ .dirty``
 not a git repo       ``0.0.0+unknown``
 ===================  ==============================
 
-Spec note: 01 §5 words the same policy as ``dev-<sha>`` / ``local-<sha>-dirty``.
-Those are not valid PEP 440 versions, and these strings become wheel versions and
-image tags, so 07 §5's ``<last-tag>.devN+g<sha>`` form is what is implemented and
-07 §3's "specs win" was raised rather than silently split. Deviating: the dirty
-marker is a local-segment suffix (``+g0a1b2c3.dirty``) instead of a separate
-scheme, because a local segment is exactly where PEP 440 puts "not from a clean
+Why this shape: these strings become wheel versions and image tags, so every
+one of them has to be a valid PEP 440 version — which rules out the more
+obvious ``dev-<sha>`` / ``local-<sha>-dirty`` spellings. The dirty marker is a
+local-segment suffix (``+g0a1b2c3.dirty``) rather than a scheme of its own,
+because a local segment is exactly where PEP 440 puts "not from a clean
 source".
 """
 

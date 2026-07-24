@@ -1,4 +1,4 @@
-"""Shipped-image recipes, owned by the pipeline plugin (ci_tools 02 §7.2/§7.3-4).
+"""Shipped-image recipes, owned by the pipeline plugin.
 
 The Dockerfile for a repo *type* is common to all repos of that type, so it
 lives here as package data and updates by bumping the pinned ardt version —

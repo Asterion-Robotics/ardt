@@ -1,4 +1,4 @@
-"""Shared pipeline helpers (02 §1/§3/§6).
+"""Shared pipeline helpers.
 
 Plugin pipelines build on these instead of raw Dagger calls where possible, so
 most SDK churn lands here and in :mod:`.engine` rather than in every plugin.
@@ -34,7 +34,7 @@ def source_dir(dag: dagger.Client, ctx: Context) -> dagger.Directory:
 
 
 def cache_volume(dag: dagger.Client, ctx: Context, purpose: str) -> dagger.CacheVolume:
-    """Deterministic cache-volume naming: ``<purpose>-<project>`` (02 §1 rule 3)."""
+    """Deterministic cache-volume naming: ``<purpose>-<project>``."""
     return dag.cache_volume(f"{purpose}-{ctx.project}")
 
 
@@ -129,7 +129,7 @@ def git_credentials(
 
 
 def registry_secret(dag: dagger.Client, ctx: Context) -> dagger.Secret:
-    """The registry password as a Dagger secret (scrubbed from logs, 02 §6)."""
+    """The registry password as a Dagger secret (scrubbed from logs)."""
     if ctx.ci.registry_password is None:
         raise ArdtError(
             "no registry credentials available",
@@ -148,8 +148,8 @@ def build_variants(
 ) -> list[dagger.Container]:
     """One container per platform, built from the repo's Dockerfile.
 
-    The Dockerfile defines the artifact; this only fans out the build (02 §7:
-    shipped layers are never assembled in pipeline code).
+    The Dockerfile defines the artifact; this only fans out the build: shipped
+    layers are never assembled in pipeline code.
     """
     args = [dagger.BuildArg(k, v) for k, v in (build_args or {}).items()]
     return [

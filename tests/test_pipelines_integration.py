@@ -1,4 +1,4 @@
-"""The one engine-backed test (07 §5 AC): a trivial pipeline against real Dagger.
+"""The one engine-backed test: a trivial pipeline against real Dagger.
 
 Marked ``integration``: excluded by default, run with ``pytest -m integration``.
 Needs a Docker socket; the SDK auto-provisions the engine on first use, so the

@@ -11,7 +11,7 @@ requires-python = ">=3.11"
 license = "Apache-2.0"
 
 # Depends on ardt-pipelines (which owns the exact dagger-io pin) — never on
-# dagger directly (ci_tools 02 §1 rule 5).
+# dagger directly.
 dependencies = [
     "ardt-core",
     "ardt-pipelines",

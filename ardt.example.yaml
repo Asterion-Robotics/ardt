@@ -14,7 +14,7 @@ project:
 #       git: git+https://code.asterion-robotics.com/aos/ardt-aos.git
 #       version: v1.2.0
 
-# Exceptions to the ardt-shipped lint/format configs (repo hygiene, 06 §2).
+# Exceptions to the ardt-shipped lint/format configs (repo hygiene).
 # check:
 #   ignore: []
 #   clang_format: path/to/.clang-format
@@ -67,5 +67,5 @@ tasks:
 #       branches: [main] # historical versions joining the site (+ working tree)
 #       tags: "v*"
 
-# aos: # recognized once ardt-aos is installed (T3); a warning until then
+# aos: # recognized once ardt-aos is installed; a warning until then
 #   sdk_line: "2.1"

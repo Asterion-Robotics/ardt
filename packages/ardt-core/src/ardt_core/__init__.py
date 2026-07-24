@@ -1,6 +1,6 @@
 """ardt — one small core, everything else a plugin.
 
-Two execution planes, never mixed (01 §1):
+Two execution planes, never mixed:
 
 * **tasks** run in whatever environment invokes them (dev shell, container, CI job);
 * **pipelines** orchestrate environments (containers, registries, services) via Dagger.

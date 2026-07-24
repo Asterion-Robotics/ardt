@@ -1,9 +1,9 @@
 """Connecting to Dagger and executing a pipeline.
 
 All engine mechanics live here so that a ``dagger-io`` API bump lands in one file
-(04 §risks). The SDK auto-provisions the engine when it finds a Docker socket; on
+The SDK auto-provisions the engine when it finds a Docker socket; on
 CI runners the shim points ``_EXPERIMENTAL_DAGGER_RUNNER_HOST`` at the persistent
-engine instead (02 §2) — both are transparent to this code.
+engine instead — both are transparent to this code.
 """
 
 from __future__ import annotations

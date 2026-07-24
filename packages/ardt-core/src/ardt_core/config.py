@@ -46,7 +46,7 @@ class ProjectConfig(BaseModel):
 
 
 class CheckConfig(BaseModel):
-    """The ``check:`` section — exceptions to the ardt-shipped lint configs (06 §2)."""
+    """The ``check:`` section — exceptions to the ardt-shipped lint configs."""
 
     model_config = ConfigDict(extra="forbid")
 
