@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Rendered by `ardt dev sync` (ardt-dev @VERSION@) — machine-owned, gitignored.
+#
+# Two phases, because ardt cannot install itself: pip installs the modules
+# resolved from this repo's `ardt:` pin (the same requirement strings the CI
+# recipe installs into its build stage — read ardt-requirements.txt), then ardt
+# takes over for everything else.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+python3 -m pip install --break-system-packages --quiet \
+  -r .devcontainer/ardt-requirements.txt
+
+exec ardt dev bootstrap

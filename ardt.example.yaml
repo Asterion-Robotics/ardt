@@ -1,0 +1,71 @@
+# ardt.yaml — one file per repo. Sections are namespaced per plugin; unknown
+# sections are errors unless the owning plugin simply is not installed here.
+
+project:
+  name: aos_edge # defaults to the project-root directory name
+
+# Which ardt the pipelines install inside the images they build (core-owned).
+# Pin `version` for reproducible recipes — without it installs track HEAD.
+# ardt:
+#   git: git+https://github.com/Asterion-Robotics/ardt.git # the default
+#   version: v0.3.0 # git rev (tag/branch/sha) every monorepo module installs at
+#   modules:
+#     ardt-aos: # out-of-monorepo module: its own address + pin
+#       git: git+https://code.asterion-robotics.com/aos/ardt-aos.git
+#       version: v1.2.0
+
+# Exceptions to the ardt-shipped lint/format configs (repo hygiene).
+# check:
+#   ignore: []
+#   clang_format: path/to/.clang-format
+
+# ardt-dev — the `dev:` section. Everything here is optional: a ROS 2 repo with
+# no `dev:` section gets the standard environment, and the whole `.devcontainer/`
+# is rendered (and gitignored) by `ardt dev sync`. The dev container's base image
+# defaults to `pipelines.ros_ci.builder` below — that is the parity rule, and
+# `ardt dev doctor` fails when the two drift apart.
+# dev:
+#   profile: ros2 # `ardt dev profiles` lists them
+#   image: registry.example.com/platform/base-images/ros2-dev@sha256:… # skips the local build
+#   base_image: ros:jazzy-ros-base # overrides the ros_ci builder (rarely wanted)
+#   apt_packages: [libeigen3-dev] # extra packages in the dev layer
+#   ardt_modules: [ardt-aos] # extra ardt modules installed in the container
+#   workspace_folder: /ws/src # the CI recipe's path, so CMake caches match
+#   gui: false # headless repo: no display sockets, no host GPU
+#   claude_code: false
+#   isolate_build_dirs: false # share build/ install/ log/ with the host checkout
+#   extensions: [ms-vscode.hexeditor] # extra VS Code extension ids
+#   mounts: ["/mnt/data:/data:ro"] # extra compose volume entries, verbatim
+
+# ardt-ros-tasks — the `tasks.ros:` subsection.
+tasks:
+  ros:
+    distro: jazzy
+    repos_file: aos_edge.repos # imported by `ardt deps` before rosdep runs
+    repos_target: src/external
+    rosdep_skip_keys: # deps never installed (also: `ardt deps --skip-key KEY`)
+      - rti-connext-dds
+    # exclude_packages: [big_sim]  # skipped in rosdep/build/test (`--exclude-pkg`)
+    # install_base: /opt/ros/aos   # colcon --install-base; default ./install
+    build_args:
+      - --cmake-args
+      - -DCMAKE_BUILD_TYPE=RelWithDebInfo
+    symlink_install: true
+
+# ardt-ros-pipelines — the `pipelines.ros_ci:` subsection.
+# pipelines:
+#   ros_ci:
+#     base_image: ros:jazzy-ros-base
+#     platforms: [linux/amd64]
+#     git_host: code.asterion-robotics.com # auth for private `.repos` deps:
+#     git_ssh_port: 5022                   # CI job token, or a local ssh agent
+
+# ardt-doc-pipelines — the `pipelines.docs_ci:` subsection.
+#   docs_ci:
+#     builder: python:3.12-slim # docs toolchain container (never ships)
+#     versions:
+#       branches: [main] # historical versions joining the site (+ working tree)
+#       tags: "v*"
+
+# aos: # recognized once ardt-aos is installed; a warning until then
+#   sdk_line: "2.1"

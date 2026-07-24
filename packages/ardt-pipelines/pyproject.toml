@@ -1,0 +1,37 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ardt-pipelines"
+dynamic = ["version"]
+description = "ardt pipeline plane: the `ardt pipe` command group, pipeline registry, shared Dagger helpers"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+
+# The ONLY package allowed to import dagger (02, the two-plane rule); the pin is
+# exact and bumped by deliberate MR run against the pipeline test suite.
+dependencies = [
+    "ardt-core",
+    "dagger-io==0.21.7",
+]
+
+[project.entry-points."ardt.commands"]
+pipe = "ardt_pipelines.cli:pipe"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ardt_pipelines"]
+
+# The git tag is the only version that exists: no string in this repo states it,
+# so `pyproject.toml`, `__version__` and `ctx.version` cannot drift apart. Bump
+# = `git tag vX.Y.Z`. Every package here is a subdirectory of one repo, hence
+# `root`; `fallback-version` keeps a .git-less source export buildable.
+[tool.hatch.version]
+source = "vcs"
+fallback-version = "0.0.0"
+
+[tool.hatch.version.raw-options]
+root = "../.."
+version_scheme = "no-guess-dev"
+local_scheme = "node-and-date"

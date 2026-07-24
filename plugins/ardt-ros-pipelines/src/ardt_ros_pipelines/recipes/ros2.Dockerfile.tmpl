@@ -1,0 +1,40 @@
+# syntax=docker/dockerfile:1
+# Rendered by `ardt pipe run ros-ci` (ardt-ros-pipelines @VERSION@) — machine-owned.
+# The recipe lives in ardt-ros-pipelines and updates with the pinned ardt version;
+# repos contain NO Dockerfile. A repo needing local image content extends the
+# configured base via @BASE_FILE@ (spliced in below as a stage). Build, test and
+# packaging are ONE recipe — building this image proves the tests pass:
+#   docker build -f <this file> .                  -> shipped runtime image
+#   docker build -f <this file> --target build .   -> build+test stage only
+ARG BUILDER_IMAGE=@BUILDER@
+ARG BASE_IMAGE=@BASE_IMAGE@
+
+# ---- steps 1-4: deps, build, test, artefact staging (never ships) ----
+FROM ${BUILDER_IMAGE} AS build
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      build-essential git python3-pip openssh-client \
+ && rm -rf /var/lib/apt/lists/*
+
+# The same ardt tasks as on a dev machine run the build (two-plane rule).
+@ARDT_INSTALL@
+COPY . /ws/src
+WORKDIR /ws/src
+
+# 1) deps (exclusions come from ardt.yaml: tasks.ros.exclude_packages / rosdep_skip_keys)
+RUN @GIT_MOUNTS@apt-get update && rosdep update --rosdistro ${ROS_DISTRO}@GIT_AUTH@ \
+ && ardt deps \
+ && rm -rf /var/lib/apt/lists/*
+# 2) build (real files, not symlinks: the install base must survive the stage copy)
+RUN ardt build --no-symlink-install --install-base @INSTALL_BASE@
+# 3) test — red tests fail the image build (same install base as the build)
+RUN ardt test --install-base @INSTALL_BASE@
+# 4) stage the JUnit XMLs where the pipeline (or a human) can copy them from
+RUN mkdir -p /results && cd build \
+ && (find . -path '*test_results*' -name '*.xml' -exec cp --parents -t /results {} +)
+@STRIP@@BASE_EXT@
+# ---- step 5: the shipped runtime image ----
+FROM @RUNTIME_FROM@ AS runtime
+
+COPY --from=build @INSTALL_BASE@ @INSTALL_BASE@
+@CMD@

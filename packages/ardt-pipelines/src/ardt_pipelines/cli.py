@@ -1,0 +1,94 @@
+"""The ``ardt pipe`` command group."""
+
+from __future__ import annotations
+
+import click
+
+from ardt_core.cli import pass_ardt
+from ardt_core.context import Context
+from ardt_core.errors import ArdtError
+
+from . import engine
+from .registry import PipelineDef, collect
+
+
+def _pipelines(ctx: Context) -> dict[str, PipelineDef]:
+    modules: dict[str, object] = {}
+    for plugin in ctx.registry.plugins:
+        for entry_name, module in plugin.pipelines.items():
+            modules[f"{plugin.name}:{entry_name}"] = module
+    return collect(modules)
+
+
+@click.group()
+def pipe() -> None:
+    """Run and inspect pipelines (the Dagger plane)."""
+
+
+@pipe.command(name="list")
+@pass_ardt
+def list_command(ctx: Context) -> None:
+    """List registered pipelines and their parameters."""
+    pipelines = _pipelines(ctx)
+    ctx.emit(
+        pipelines=[
+            {
+                "name": d.name,
+                "doc": d.doc,
+                "params": [
+                    {
+                        "name": p.name,
+                        "type": p.annotation,
+                        "default": p.default,
+                        "required": p.required,
+                    }
+                    for p in d.params
+                ],
+            }
+            for d in pipelines.values()
+        ]
+    )
+    if ctx.json_output:
+        return
+    if not pipelines:
+        ctx.console.info("no pipelines registered")
+        return
+    for definition in sorted(pipelines.values(), key=lambda d: d.name):
+        rendered = " ".join(
+            f"{p.name}={'<required>' if p.required else repr(p.default)}" for p in definition.params
+        )
+        summary = definition.doc.splitlines()[0] if definition.doc else ""
+        ctx.console.info(f"{definition.name}  {rendered}".rstrip())
+        if summary:
+            ctx.console.info(f"    {summary}")
+
+
+@pipe.command(name="run")
+@click.argument("name")
+@click.option(
+    "--arg",
+    "args",
+    multiple=True,
+    metavar="KEY=VALUE",
+    help="Set a pipeline parameter (repeatable).",
+)
+@click.option("--publish", is_flag=True, help="Allow the pipeline to push artifacts.")
+@pass_ardt
+def run_command(ctx: Context, name: str, args: tuple[str, ...], publish: bool) -> None:
+    """Run a pipeline by name."""
+    pipelines = _pipelines(ctx)
+    definition = pipelines.get(name)
+    if definition is None:
+        known = ", ".join(sorted(pipelines)) or "(none)"
+        raise ArdtError(f"no pipeline named `{name}`", hint=f"registered: {known}")
+
+    parsed: dict[str, str] = {}
+    for item in args:
+        key, separator, value = item.partition("=")
+        if not separator or not key:
+            raise ArdtError(f"--arg must be KEY=VALUE, got {item!r}")
+        parsed[key] = value
+
+    ctx.publish = publish
+    bound = definition.bind(parsed)
+    engine.run_pipeline(ctx, definition, bound)

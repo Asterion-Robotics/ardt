@@ -1,0 +1,47 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ardt-doc-pipelines"
+dynamic = ["version"]
+description = "ardt docs pipeline: docs-ci builds a versioned site (working tree + tagged releases) for Pages"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+authors = [{ name = "Asterion Robotics" }]
+keywords = ["ci", "cli", "robotics", "sphinx", "dagger", "pages"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
+]
+
+# The doc toolchain itself (sphinx, doxygen…) lives INSIDE the builder
+# container via ardt-doc-tasks — this package only orchestrates (two-plane
+# rule) and therefore depends on the pipeline plane alone.
+dependencies = [
+    "ardt-core",
+    "ardt-pipelines",
+]
+
+[project.entry-points."ardt.pipelines"]
+doc = "ardt_doc_pipelines.docs_ci"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ardt_doc_pipelines"]
+
+# The git tag is the only version that exists: no string in this repo states it,
+# so `pyproject.toml`, `__version__` and `ctx.version` cannot drift apart. Bump
+# = `git tag vX.Y.Z`. Every package here is a subdirectory of one repo, hence
+# `root`; `fallback-version` keeps a .git-less source export buildable.
+[tool.hatch.version]
+source = "vcs"
+fallback-version = "0.0.0"
+
+[tool.hatch.version.raw-options]
+root = "../.."
+version_scheme = "no-guess-dev"
+local_scheme = "node-and-date"

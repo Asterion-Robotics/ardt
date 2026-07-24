@@ -1,0 +1,44 @@
+# Bootstrap CI: plain pytest + the quality gate. This is replaced by dogfooding
+# (`ardt pipe run dogfood`) once the pipeline plane is finished. Keep it boring
+# until then.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # ctx.version reads tags; a shallow clone hides them
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Sync workspace
+        run: uv sync --frozen || uv sync
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Format
+        run: uv run ruff format --check .
+
+      - name: Type-check core (strict)
+        run: uv run pyright packages/ardt-core/src
+
+      - name: Test with coverage gate
+        run: uv run pytest --cov=ardt_core --cov-report=term-missing

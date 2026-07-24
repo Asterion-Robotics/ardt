@@ -1,0 +1,97 @@
+[project]
+name = "ardt-workspace"
+version = "0"
+description = "Development workspace for the ardt CLI platform (not published)"
+requires-python = ">=3.11"
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["packages/*", "plugins/*"]
+
+[tool.uv.sources]
+ardt-core = { workspace = true }
+ardt-ros-tasks = { workspace = true }
+ardt-doc-tasks = { workspace = true }
+ardt-dev = { workspace = true }
+ardt-pipelines = { workspace = true }
+ardt-ros-pipelines = { workspace = true }
+ardt-doc-pipelines = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "ardt-core",
+    "ardt-ros-tasks",
+    "ardt-doc-tasks",
+    "ardt-dev",
+    "ardt-pipelines",
+    "ardt-ros-pipelines",
+    "ardt-doc-pipelines",
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "ruff>=0.6",
+    "pyright>=1.1.380",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = [
+    "packages/ardt-core/src",
+    "plugins/ardt-ros-tasks/src",
+    "plugins/ardt-doc-tasks/src",
+    "plugins/ardt-dev/src",
+    "packages/ardt-pipelines/src",
+    "plugins/ardt-ros-pipelines/src",
+    "plugins/ardt-doc-pipelines/src",
+    "tests",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM", "RUF", "ANN", "PTH"]
+ignore = ["ANN401"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["ANN", "B011"]
+"packages/*/tests/*" = ["ANN", "B011"]
+
+[tool.pyright]
+include = ["packages/ardt-core/src"]
+typeCheckingMode = "strict"
+pythonVersion = "3.11"
+reportMissingTypeStubs = false
+
+[tool.pytest.ini_options]
+# Each package owns its unit tests; the workspace-level tests/ holds only what
+# crosses package boundaries (policy sweeps, engine-backed integration).
+testpaths = [
+    "packages/ardt-core/tests",
+    "plugins/ardt-ros-tasks/tests",
+    "plugins/ardt-doc-tasks/tests",
+    "plugins/ardt-dev/tests",
+    "packages/ardt-pipelines/tests",
+    "plugins/ardt-ros-pipelines/tests",
+    "plugins/ardt-doc-pipelines/tests",
+    "tests",
+]
+markers = [
+    "unit: no docker, runs anywhere",
+    "integration: needs docker or a dagger engine",
+    "e2e: the dogfood pipeline",
+]
+addopts = "-m 'not integration and not e2e' --strict-markers"
+
+[tool.coverage.run]
+source = ["ardt_core"]
+branch = true
+
+[tool.coverage.report]
+# Core coverage gate: ≥ 90 %. Applied when the suite is run with
+# `--cov`; the plain `pytest` default in [tool.pytest.ini_options] stays fast.
+fail_under = 90
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]
