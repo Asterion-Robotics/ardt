@@ -12,7 +12,12 @@ from pydantic import BaseModel, ConfigDict, Field
 from ardt_core.config import ArdtConfig
 
 DEVCONTAINER_DIR = ".devcontainer"
-"""Where the render lands. Fixed by VS Code, not by us."""
+"""Where most of the render lands. Fixed by VS Code, not by us."""
+
+VSCODE_DIR = ".vscode"
+"""The rest of it. Only files VS Code refuses to read from anywhere else land
+here (``c_cpp_properties.json``); everything an extension *can* pick up from
+``devcontainer.json`` stays in :data:`DEVCONTAINER_DIR`."""
 
 
 class DevConfig(BaseModel):

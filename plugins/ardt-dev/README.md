@@ -11,9 +11,18 @@ image recipe does in [ardt-ros-pipelines](../ardt-ros-pipelines/README.md).
 `ardt dev sync` writes them into a **gitignored** `.devcontainer/`, hashes them in
 a manifest, and refuses to clobber anything a human edited.
 
+One exception to "everything under `.devcontainer/`": cpptools reads its C/C++
+configuration only from `.vscode/c_cpp_properties.json`, so the ros2 profile
+renders that file too. It is gitignored **by path**, not by directory, so a repo
+keeping its own `.vscode/launch.json` is unaffected. Unlike the other rendered
+files it carries no comment header: cpptools only gained a JSONC parser in 1.0.0
+([#5885](https://github.com/microsoft/vscode-cpptools/issues/5885)) and VS Code
+still flags comments there
+([#6132](https://github.com/microsoft/vscode-cpptools/issues/6132)).
+
 | Command | Runs | Does |
 |---|---|---|
-| `ardt dev sync` | host | render `.devcontainer/` and add it to `.gitignore` |
+| `ardt dev sync` | host | render `.devcontainer/` + `.vscode/` and add them to `.gitignore` |
 | `ardt dev up` / `shell` / `down` | host | `docker compose` up + postCreate / login shell / stop |
 | `ardt dev doctor` | either | check CI parity, ardt pin, render freshness, host wiring |
 | `ardt dev host-config` | host | re-derive only the host overlay (the `initializeCommand`) |
@@ -69,3 +78,8 @@ The rendered `Dockerfile` is the interim form of the `ros2-dev` node in
 image *name*, never a tag variant suffix). Once that publishes, repos set
 `dev.image:` and the local build disappears — the rest of the render does not
 change.
+
+Whether to make that move, and the three decisions it forces (who owns the
+package list, how the parity check survives, what happens to `dev.apt_packages`),
+are written up in [docs/published-dev-image.md](docs/published-dev-image.md).
+**Open, not decided.**

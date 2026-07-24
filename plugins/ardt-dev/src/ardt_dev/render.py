@@ -1,4 +1,4 @@
-"""Rendering the dev environment into a gitignored ``.devcontainer/``.
+"""Rendering the dev environment into gitignored, machine-owned files.
 
 Two rules shape this module:
 
@@ -6,9 +6,13 @@ Two rules shape this module:
    and gitignored. A hand edit is detected and refused, not silently kept — the
    fix is a template change in ardt-dev or a knob in ``dev:``.
 2. **The structured files are built from data structures**, not string templates
-   (compose and ``devcontainer.json`` are dumped from dicts). Only the Dockerfile
-   is a text template, because that is the artifact a human debugs and the one
-   ``platform/base-images`` will inherit verbatim.
+   (compose, ``devcontainer.json`` and ``c_cpp_properties.json`` are dumped from
+   dicts). Only the Dockerfile is a text template, because that is the artifact a
+   human debugs and the one ``platform/base-images`` will inherit verbatim.
+
+:attr:`Render.files` is keyed by **repo-root-relative path**: nearly everything
+lands in ``.devcontainer/``, but a file an extension can only read from
+``.vscode/`` has to land there, and one manifest covers both.
 """
 
 from __future__ import annotations
@@ -26,22 +30,23 @@ from ardt_core.config import ArdtConfig
 from ardt_core.errors import ArdtError
 
 from . import __version__
-from .config import DEVCONTAINER_DIR, DevConfig, ci_builder, ros_distro
+from .config import DEVCONTAINER_DIR, VSCODE_DIR, DevConfig, ci_builder, ros_distro
 from .host import HostFacts, HostProfile, detect
-from .profiles import DISTRO, Profile, profile
+from .profiles import CXX_STANDARD, DISTRO, Profile, cxx_standard, profile
 
 USER = "ubuntu"
 """uid 1000 in every ubuntu:24.04-derived image, ROS's included — so a Linux
 host's uid 1000 maps straight through and bind-mounted files stay writable."""
 
-MANIFEST = ".ardt-dev.json"
-COMPOSE = "compose.yaml"
-COMPOSE_HOST = "compose.host.yaml"
-DEVCONTAINER = "devcontainer.json"
-POST_CREATE = "postCreate.sh"
-HOST_CONFIG = "host-config.sh"
-REQUIREMENTS = "ardt-requirements.txt"
-DOCKERFILE = "Dockerfile"
+MANIFEST = f"{DEVCONTAINER_DIR}/.ardt-dev.json"
+COMPOSE = f"{DEVCONTAINER_DIR}/compose.yaml"
+COMPOSE_HOST = f"{DEVCONTAINER_DIR}/compose.host.yaml"
+DEVCONTAINER = f"{DEVCONTAINER_DIR}/devcontainer.json"
+POST_CREATE = f"{DEVCONTAINER_DIR}/postCreate.sh"
+HOST_CONFIG = f"{DEVCONTAINER_DIR}/host-config.sh"
+REQUIREMENTS = f"{DEVCONTAINER_DIR}/ardt-requirements.txt"
+DOCKERFILE = f"{DEVCONTAINER_DIR}/Dockerfile"
+CPP_PROPERTIES = f"{VSCODE_DIR}/c_cpp_properties.json"
 
 ARDT_SRC_MOUNT = "/opt/ardt-src"
 """Where a local ardt checkout mounts — the dev twin of the pipeline's
@@ -57,6 +62,7 @@ over to ``ardt dev bootstrap``, so ardt-dev has to be in there with the core."""
 def _unique(*names: str) -> tuple[str, ...]:
     """Order-preserving dedup — a profile may name a base module too."""
     return tuple(dict.fromkeys(names))
+
 
 _HOST_CONFIG_BODY = """\
 #!/usr/bin/env bash
@@ -79,6 +85,7 @@ class Render:
     """The full plan: every file, plus what it was resolved from."""
 
     files: dict[str, str]
+    """Repo-root-relative path -> content."""
     profile: Profile
     base_image: str
     host: HostProfile
@@ -286,12 +293,14 @@ def host_overlay(host: HostProfile) -> str:
 def devcontainer(project: str, dev: DevConfig, prof: Profile) -> str:
     data: dict[str, object] = {
         "name": f"{project} — {prof.name} dev",
-        "dockerComposeFile": [COMPOSE, COMPOSE_HOST],
+        # Resolved relative to devcontainer.json itself, unlike the commands
+        # below, which VS Code runs from the workspace root.
+        "dockerComposeFile": [Path(COMPOSE).name, Path(COMPOSE_HOST).name],
         "service": "dev",
         "workspaceFolder": dev.workspace_folder,
         "remoteUser": USER,
-        "initializeCommand": f"bash {DEVCONTAINER_DIR}/{HOST_CONFIG}",
-        "postCreateCommand": f"bash {DEVCONTAINER_DIR}/{POST_CREATE}",
+        "initializeCommand": f"bash {HOST_CONFIG}",
+        "postCreateCommand": f"bash {POST_CREATE}",
         "customizations": {
             "vscode": {
                 "extensions": [*prof.extensions, *dev.extensions],
@@ -301,10 +310,34 @@ def devcontainer(project: str, dev: DevConfig, prof: Profile) -> str:
     }
     header = (
         f"// Rendered by `ardt dev sync` (ardt-dev {__version__}) — machine-owned, gitignored.\n"
-        "// Editor config ships with the container, so the repo needs no .vscode/.\n"
+        "// Editor config ships with the container; the repo carries no .vscode/ of\n"
+        "// its own (`ardt dev sync` renders the one file that cannot live here).\n"
         "// Change ardt-dev's profile or `dev:` in ardt.yaml, never this file.\n"
     )
     return header + json.dumps(data, indent=2, ensure_ascii=False) + "\n"
+
+
+def _detokenize(value: object, distro: str) -> object:
+    """Resolve the profile tokens through nested profile data."""
+    if isinstance(value, str):
+        return value.replace(DISTRO, distro).replace(CXX_STANDARD, cxx_standard(distro))
+    if isinstance(value, list):
+        return [_detokenize(item, distro) for item in value]  # type: ignore[arg-type]
+    if isinstance(value, dict):
+        return {key: _detokenize(item, distro) for key, item in value.items()}  # type: ignore[union-attr]
+    return value
+
+
+def cpp_properties(prof: Profile, distro: str) -> str:
+    """``.vscode/c_cpp_properties.json`` — the one file cpptools reads from there.
+
+    No comment header, unlike every other rendered file: cpptools only grew a
+    JSONC parser in 1.0.0, and VS Code still flags comments here unless the file
+    is associated as jsonc (microsoft/vscode-cpptools#5885, #6132). Provenance
+    lives in the manifest instead.
+    """
+    entry = _detokenize(dict(prof.cpp_properties or {}), distro)
+    return json.dumps({"configurations": [entry], "version": 4}, indent=4) + "\n"
 
 
 def _slug(name: str) -> str:
@@ -339,6 +372,8 @@ def build(
             + "".join(f"{req}\n" for req in reqs)
         ),
     }
+    if prof.cpp_properties:
+        files[CPP_PROPERTIES] = cpp_properties(prof, distro)
     return Render(
         files=files,
         profile=prof,
@@ -360,9 +395,19 @@ class WriteResult:
     """Files on disk that ardt did not generate, or that were edited by hand."""
 
 
+def _manifest_key(name: str) -> str:
+    """Read a pre-``.vscode/`` manifest, whose keys were bare file names.
+
+    Without this every repo synced by an older ardt-dev would see its whole
+    render reported as hand-edited on the next `ardt dev sync` — the keys, not
+    the contents, changed.
+    """
+    return name if "/" in name else f"{DEVCONTAINER_DIR}/{name}"
+
+
 def load_manifest(root: Path) -> dict[str, str]:
     """The hashes of the last render, or ``{}`` when there is none."""
-    path = root / DEVCONTAINER_DIR / MANIFEST
+    path = root / MANIFEST
     if not path.is_file():
         return {}
     try:
@@ -372,16 +417,15 @@ def load_manifest(root: Path) -> dict[str, str]:
     generated = data.get("generated") if isinstance(data, dict) else None
     if not isinstance(generated, dict):
         return {}
-    return {str(k): str(v) for k, v in generated.items()}  # type: ignore[union-attr]
+    return {_manifest_key(str(k)): str(v) for k, v in generated.items()}  # type: ignore[union-attr]
 
 
 def audit(root: Path, render: Render, *, only: dict[str, str] | None = None) -> WriteResult:
     """Compare a render against the working tree without touching anything."""
     manifest = load_manifest(root)
     result = WriteResult()
-    directory = root / DEVCONTAINER_DIR
     for name, content in (only or render.files).items():
-        path = directory / name
+        path = root / name
         if not path.exists():
             result.written.append(name)
             continue
@@ -408,25 +452,26 @@ def write(
     if result.conflicts and not force:
         listed = ", ".join(sorted(result.conflicts))
         raise ArdtError(
-            f"{DEVCONTAINER_DIR}/ contains file(s) ardt did not generate: {listed}",
+            f"ardt did not generate these file(s): {listed}",
             hint=(
                 "`ardt dev sync --force` overwrites them; "
                 "the supported customization knobs are `dev:` in ardt.yaml"
             ),
         )
 
-    directory = root / DEVCONTAINER_DIR
-    directory.mkdir(parents=True, exist_ok=True)
     to_write = [*result.written, *(result.conflicts if force else [])]
     for name in to_write:
-        path = directory / name
+        path = root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(subset[name], encoding="utf-8")
         if name in render.executable:
             path.chmod(0o755)
 
     manifest = load_manifest(root)
     manifest.update({name: digest(content) for name, content in subset.items()})
-    (directory / MANIFEST).write_text(
+    manifest_path = root / MANIFEST
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text(
         json.dumps(
             {
                 "tool": f"ardt-dev {__version__}",
@@ -447,7 +492,10 @@ def write(
     return result
 
 
-GITIGNORE_ENTRY = f"{DEVCONTAINER_DIR}/"
+GITIGNORE_ENTRIES = (f"{DEVCONTAINER_DIR}/", CPP_PROPERTIES)
+"""What the render occupies. The whole of ``.devcontainer/``, but only the one
+generated file under ``.vscode/`` — a repo may keep its own launch.json there."""
+
 _GITIGNORE_NOTE = "# generated by `ardt dev sync` — machine-owned, never committed"
 
 
@@ -458,17 +506,25 @@ def _gitignore_entries(root: Path) -> set[str]:
     return {line.strip().rstrip("/") for line in path.read_text(encoding="utf-8").splitlines()}
 
 
+def missing_gitignore_entries(root: Path) -> list[str]:
+    """The render paths ``.gitignore`` does not exclude yet."""
+    present = _gitignore_entries(root)
+    return [entry for entry in GITIGNORE_ENTRIES if entry.rstrip("/") not in present]
+
+
 def is_gitignored(root: Path) -> bool:
-    """True when ``.gitignore`` already excludes the render."""
-    return GITIGNORE_ENTRY.rstrip("/") in _gitignore_entries(root)
+    """True when ``.gitignore`` already excludes the whole render."""
+    return not missing_gitignore_entries(root)
 
 
-def ensure_gitignored(root: Path) -> bool:
-    """Add ``.devcontainer/`` to the repo's ``.gitignore``. True when it changed."""
+def ensure_gitignored(root: Path) -> list[str]:
+    """Add the render's paths to the repo's ``.gitignore``. Returns what it added."""
+    missing = missing_gitignore_entries(root)
+    if not missing:
+        return []
     path = root / ".gitignore"
     existing = path.read_text(encoding="utf-8") if path.is_file() else ""
-    if is_gitignored(root):
-        return False
     prefix = "" if existing.endswith("\n") or not existing else "\n"
-    path.write_text(f"{existing}{prefix}\n{_GITIGNORE_NOTE}\n{GITIGNORE_ENTRY}\n", encoding="utf-8")
-    return True
+    added = "".join(f"{entry}\n" for entry in missing)
+    path.write_text(f"{existing}{prefix}\n{_GITIGNORE_NOTE}\n{added}", encoding="utf-8")
+    return missing

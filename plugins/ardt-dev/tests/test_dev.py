@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import io
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -19,8 +20,9 @@ from ardt_core.context import Context
 from ardt_core.errors import ArdtError
 from ardt_core.plugins import Registry
 from ardt_dev import host as host_module
+from ardt_dev import profiles as profiles_module
 from ardt_dev import render as render_module
-from ardt_dev.config import DEVCONTAINER_DIR, ci_builder, dev_config, ros_distro
+from ardt_dev.config import ci_builder, dev_config, ros_distro
 from ardt_dev.host import HostFacts
 from ardt_dev.profiles import ROS2, profile
 
@@ -157,7 +159,7 @@ def test_extra_modules_are_appended() -> None:
 
 
 def test_dockerfile_pins_the_base_and_keeps_apt_usable() -> None:
-    content = plan(ArdtConfig()).files["Dockerfile"]
+    content = plan(ArdtConfig()).files[render_module.DOCKERFILE]
     assert "ARG BASE_IMAGE=ros:jazzy-ros-base" in content
     assert "ros-jazzy-rviz2" in content  # the distro token is resolved
     assert "@DISTRO@" not in content
@@ -170,34 +172,34 @@ def test_the_apt_cache_is_enabled_after_the_installs_not_before() -> None:
     Removed before them, every .deb the dev layer downloads (~1 GB) is baked
     into the image; left in place forever, the apt cache volume never fills.
     """
-    content = plan(ArdtConfig()).files["Dockerfile"]
+    content = plan(ArdtConfig()).files[render_module.DOCKERFILE]
     assert "docker-clean" in content and "Keep-Downloaded-Packages" in content
     assert content.index("apt-get install") < content.index("docker-clean")
 
 
 def test_the_expensive_rqt_metapackage_is_not_pulled_in() -> None:
-    content = plan(ArdtConfig()).files["Dockerfile"]
+    content = plan(ArdtConfig()).files[render_module.DOCKERFILE]
     assert "rqt-common-plugins" not in content  # 398 packages, 1.45 GB
     assert "ros-jazzy-rqt-graph" in content
 
 
 def test_extra_apt_packages_are_labelled_in_the_recipe() -> None:
     cfg = ArdtConfig.model_validate({"dev": {"apt_packages": ["libeigen3-dev"]}})
-    content = cfg and plan(cfg).files["Dockerfile"]
+    content = cfg and plan(cfg).files[render_module.DOCKERFILE]
     assert "`# from dev.apt_packages in ardt.yaml`" in content
     assert "libeigen3-dev" in content
 
 
 def test_claude_code_can_be_left_out() -> None:
     cfg = ArdtConfig.model_validate({"dev": {"claude_code": False}})
-    content = plan(cfg).files["Dockerfile"]
+    content = plan(cfg).files[render_module.DOCKERFILE]
     assert "claude.ai/install.sh" not in content
     assert "CLAUDE_CONFIG_DIR" not in content
-    assert "claude:/home/ubuntu/.claude" not in plan(cfg).files["compose.yaml"]
+    assert "claude:/home/ubuntu/.claude" not in plan(cfg).files[render_module.COMPOSE]
 
 
 def test_compose_isolates_the_colcon_output_dirs() -> None:
-    compose = yaml.safe_load(plan(ArdtConfig()).files["compose.yaml"])
+    compose = yaml.safe_load(plan(ArdtConfig()).files[render_module.COMPOSE])
     volumes = compose["services"]["dev"]["volumes"]
     assert "..:/ws/src:cached" in volumes
     assert "colcon-build:/ws/src/build" in volumes
@@ -206,41 +208,90 @@ def test_compose_isolates_the_colcon_output_dirs() -> None:
 
 def test_compose_can_keep_the_build_dirs_in_the_bind_mount() -> None:
     cfg = ArdtConfig.model_validate({"dev": {"isolate_build_dirs": False}})
-    compose = yaml.safe_load(plan(cfg).files["compose.yaml"])
+    compose = yaml.safe_load(plan(cfg).files[render_module.COMPOSE])
     assert not any("colcon-" in entry for entry in compose["services"]["dev"]["volumes"])
 
 
 def test_published_dev_image_replaces_the_local_build() -> None:
     cfg = ArdtConfig.model_validate({"dev": {"image": "registry/ros2-dev@sha256:abc"}})
-    service = yaml.safe_load(plan(cfg).files["compose.yaml"])["services"]["dev"]
+    service = yaml.safe_load(plan(cfg).files[render_module.COMPOSE])["services"]["dev"]
     assert service["image"] == "registry/ros2-dev@sha256:abc"
     assert "build" not in service
 
 
 def test_host_overlay_is_a_separate_file_and_never_empty() -> None:
-    overlay = yaml.safe_load(plan(ArdtConfig(), facts=MAC).files["compose.host.yaml"])
+    overlay = yaml.safe_load(plan(ArdtConfig(), facts=MAC).files[render_module.COMPOSE_HOST])
     assert overlay["services"]["dev"]["environment"]["ROS_AUTOMATIC_DISCOVERY_RANGE"] == "LOCALHOST"
 
 
 def test_devcontainer_json_carries_the_editor_config_so_repos_need_no_vscode_dir() -> None:
-    text = plan(ArdtConfig()).files["devcontainer.json"]
+    text = plan(ArdtConfig()).files[render_module.DEVCONTAINER]
     data = json.loads("\n".join(line for line in text.splitlines() if not line.startswith("//")))
     assert data["workspaceFolder"] == "/ws/src"
+    # Compose files resolve next to devcontainer.json; the commands, from the root.
     assert data["dockerComposeFile"] == ["compose.yaml", "compose.host.yaml"]
     assert data["initializeCommand"] == "bash .devcontainer/host-config.sh"
+    assert data["postCreateCommand"] == "bash .devcontainer/postCreate.sh"
     assert "llvm-vs-code-extensions.vscode-clangd" in data["customizations"]["vscode"]["extensions"]
+
+
+# --- the .vscode/ half ------------------------------------------------------
+
+
+def test_cpp_properties_is_rendered_at_the_repo_distro() -> None:
+    cfg = ArdtConfig.model_validate({"tasks": {"ros": {"distro": "kilted"}}})
+    text = plan(cfg).files[render_module.CPP_PROPERTIES]
+    # Plain JSON, no comment header: cpptools flags comments here (#5885, #6132).
+    entry = json.loads(text)["configurations"][0]
+    assert entry["name"] == "ROS-kilted"
+    assert entry["includePath"][0] == "/opt/ros/kilted/include/**"
+    assert entry["compileCommands"] == "${workspaceFolder}/build/compile_commands.json"
+    assert "@DISTRO@" not in text and "@CXX_STANDARD@" not in text
+
+
+@pytest.mark.parametrize(
+    ("distro", "standard"),
+    [
+        # Each distro's own "Code style and language versions" page.
+        ("humble", "c++17"),
+        ("jazzy", "c++17"),
+        ("kilted", "c++17"),
+        ("lyrical", "c++20"),
+        ("rolling", "c++20"),
+        # Not in the table: assume a future distro, not a forgotten past one.
+        ("mystery", "c++20"),
+    ],
+)
+def test_cpp_standard_follows_the_distro(distro: str, standard: str) -> None:
+    cfg = ArdtConfig.model_validate({"tasks": {"ros": {"distro": distro}}})
+    entry = json.loads(plan(cfg).files[render_module.CPP_PROPERTIES])["configurations"][0]
+    assert entry["cppStandard"] == standard
+
+
+def test_cpp_properties_points_at_what_compile_commands_writes() -> None:
+    """`ardt dev compile-commands` merges into <root>/build; the two must agree."""
+    entry = json.loads(plan(ArdtConfig()).files[render_module.CPP_PROPERTIES])["configurations"][0]
+    assert entry["compileCommands"].endswith("/build/compile_commands.json")
+
+
+def test_a_profile_without_cpp_renders_no_vscode_file(monkeypatch: pytest.MonkeyPatch) -> None:
+    bare = replace(ROS2, name="bare", cpp_properties=None)
+    monkeypatch.setitem(profiles_module.PROFILES, "bare", bare)
+    cfg = ArdtConfig.model_validate({"dev": {"profile": "bare"}})
+    assert render_module.CPP_PROPERTIES not in plan(cfg).files
+    assert render_module.CPP_PROPERTIES in plan(ArdtConfig()).files
 
 
 def test_workspace_folder_reaches_every_file_that_needs_it() -> None:
     cfg = ArdtConfig.model_validate({"dev": {"workspace_folder": "/opt/ws"}})
     files = plan(cfg).files
-    assert "/opt/ws/install/setup.bash" in files["Dockerfile"]
-    assert "..:/opt/ws:cached" in files["compose.yaml"]
-    assert '"workspaceFolder": "/opt/ws"' in files["devcontainer.json"]
+    assert "/opt/ws/install/setup.bash" in files[render_module.DOCKERFILE]
+    assert "..:/opt/ws:cached" in files[render_module.COMPOSE]
+    assert '"workspaceFolder": "/opt/ws"' in files[render_module.DEVCONTAINER]
 
 
 def test_requirements_file_lists_each_module_once() -> None:
-    text = plan(ArdtConfig()).files["ardt-requirements.txt"]
+    text = plan(ArdtConfig()).files[render_module.REQUIREMENTS]
     lines = [line for line in text.splitlines() if not line.startswith("#")]
     # The profile names ardt-core too; a module is never installed twice.
     assert len(lines) == len({*render_module.BASE_MODULES, *ROS2.ardt_modules})
@@ -257,17 +308,46 @@ def test_unknown_profile_names_the_ones_that_exist() -> None:
 def test_sync_writes_the_render_and_gitignores_it(repo: Path) -> None:
     ctx = context(repo)
     result = render_module.write(repo, plan(ctx.cfg))
-    assert render_module.ensure_gitignored(repo) is True
-    assert (repo / DEVCONTAINER_DIR / "Dockerfile").is_file()
-    assert ".devcontainer/" in (repo / ".gitignore").read_text()
-    assert set(result.written) >= {"Dockerfile", "compose.yaml", "devcontainer.json"}
-    assert (repo / DEVCONTAINER_DIR / "postCreate.sh").stat().st_mode & 0o111
+    assert render_module.ensure_gitignored(repo) == list(render_module.GITIGNORE_ENTRIES)
+    assert (repo / render_module.DOCKERFILE).is_file()
+    # The .vscode/ half lands outside .devcontainer/, and is ignored on its own.
+    assert (repo / render_module.CPP_PROPERTIES).is_file()
+    ignored = (repo / ".gitignore").read_text()
+    assert ".devcontainer/" in ignored and ".vscode/c_cpp_properties.json" in ignored
+    assert set(result.written) >= {
+        render_module.DOCKERFILE,
+        render_module.COMPOSE,
+        render_module.DEVCONTAINER,
+        render_module.CPP_PROPERTIES,
+    }
+    assert (repo / render_module.POST_CREATE).stat().st_mode & 0o111
 
 
-def test_gitignore_entry_is_added_once(repo: Path) -> None:
-    assert render_module.ensure_gitignored(repo) is True
-    assert render_module.ensure_gitignored(repo) is False
+def test_gitignore_entries_are_added_once(repo: Path) -> None:
+    assert render_module.ensure_gitignored(repo) == list(render_module.GITIGNORE_ENTRIES)
+    assert render_module.ensure_gitignored(repo) == []
     assert render_module.is_gitignored(repo)
+
+
+def test_a_partially_ignored_repo_gets_only_what_it_lacks(repo: Path) -> None:
+    """The .vscode/ entry is new; a repo synced by an older ardt-dev has only the first."""
+    (repo / ".gitignore").write_text(".devcontainer/\n")
+    assert render_module.ensure_gitignored(repo) == [render_module.CPP_PROPERTIES]
+    assert (repo / ".gitignore").read_text().count(".devcontainer/") == 1
+
+
+def test_a_pre_vscode_manifest_is_read_not_treated_as_hand_edits(repo: Path) -> None:
+    """Older ardt-dev keyed the manifest by bare file name, not by repo path."""
+    ctx = context(repo)
+    render_module.write(repo, plan(ctx.cfg))
+    path = repo / render_module.MANIFEST
+    data = json.loads(path.read_text())
+    data["generated"] = {Path(k).name: v for k, v in data["generated"].items()}
+    path.write_text(json.dumps(data))
+    # Same files on disk, legacy keys: nothing is a conflict, nothing is stale.
+    state = render_module.audit(repo, plan(ctx.cfg))
+    assert state.conflicts == []
+    assert render_module.DOCKERFILE in state.unchanged
 
 
 def test_a_second_sync_is_a_no_op(repo: Path) -> None:
@@ -275,25 +355,25 @@ def test_a_second_sync_is_a_no_op(repo: Path) -> None:
     render_module.write(repo, plan(ctx.cfg))
     again = render_module.write(repo, plan(ctx.cfg))
     assert again.written == []
-    assert "Dockerfile" in again.unchanged
+    assert render_module.DOCKERFILE in again.unchanged
 
 
 def test_a_hand_edit_is_refused_not_silently_kept(repo: Path) -> None:
     ctx = context(repo)
     render_module.write(repo, plan(ctx.cfg))
-    (repo / DEVCONTAINER_DIR / "Dockerfile").write_text("FROM scratch\n")
+    (repo / render_module.DOCKERFILE).write_text("FROM scratch\n")
     with pytest.raises(ArdtError, match="did not generate"):
         render_module.write(repo, plan(ctx.cfg))
-    assert render_module.audit(repo, plan(ctx.cfg)).conflicts == ["Dockerfile"]
+    assert render_module.audit(repo, plan(ctx.cfg)).conflicts == [render_module.DOCKERFILE]
 
 
 def test_force_overwrites_a_hand_edit(repo: Path) -> None:
     ctx = context(repo)
     render_module.write(repo, plan(ctx.cfg))
-    (repo / DEVCONTAINER_DIR / "Dockerfile").write_text("FROM scratch\n")
+    (repo / render_module.DOCKERFILE).write_text("FROM scratch\n")
     result = render_module.write(repo, plan(ctx.cfg), force=True)
     assert result.conflicts == []
-    assert "FROM scratch" not in (repo / DEVCONTAINER_DIR / "Dockerfile").read_text()
+    assert "FROM scratch" not in (repo / render_module.DOCKERFILE).read_text()
 
 
 def test_a_stale_render_of_ours_refreshes_without_force(repo: Path) -> None:
@@ -302,7 +382,7 @@ def test_a_stale_render_of_ours_refreshes_without_force(repo: Path) -> None:
     # Same content ardt wrote, but from an older tool: still ours to replace.
     stale = plan(ctx.cfg, facts=MAC)
     result = render_module.write(repo, stale)
-    assert "compose.host.yaml" in result.written
+    assert render_module.COMPOSE_HOST in result.written
 
 
 def test_host_config_rewrites_only_the_overlay(repo: Path) -> None:
@@ -311,18 +391,18 @@ def test_host_config_rewrites_only_the_overlay(repo: Path) -> None:
     render_module.write(repo, linux_plan)
     mac_plan = plan(ctx.cfg, facts=MAC)
     result = render_module.write(repo, mac_plan, force=True, only=mac_plan.host_files)
-    assert result.written == ["compose.host.yaml"]
-    overlay = (repo / DEVCONTAINER_DIR / "compose.host.yaml").read_text()
+    assert result.written == [render_module.COMPOSE_HOST]
+    overlay = (repo / render_module.COMPOSE_HOST).read_text()
     assert "LOCALHOST" in overlay
     # The portable half is untouched by a host switch.
-    assert "network_mode" not in (repo / DEVCONTAINER_DIR / "compose.yaml").read_text()
+    assert "network_mode" not in (repo / render_module.COMPOSE).read_text()
 
 
 def test_manifest_records_what_the_render_was_resolved_from(repo: Path) -> None:
     ctx = context(repo)
     render_module.write(repo, plan(ctx.cfg, facts=WSL, ardt_source="../../ardt"))
-    data = json.loads((repo / DEVCONTAINER_DIR / render_module.MANIFEST).read_text())
+    data = json.loads((repo / render_module.MANIFEST).read_text())
     assert data["profile"] == "ros2"
     assert data["host"] == "wsl2"
     assert data["ardt_source"] == "../../ardt"
-    assert data["generated"]["Dockerfile"].startswith("sha256:")
+    assert data["generated"][render_module.DOCKERFILE].startswith("sha256:")

@@ -20,6 +20,31 @@ from ardt_core.errors import ArdtError
 DISTRO = "@DISTRO@"
 """Token replaced with the repo's ROS distro at render time."""
 
+CXX_STANDARD = "@CXX_STANDARD@"
+"""Token replaced with :func:`cxx_standard` for the repo's ROS distro."""
+
+CXX_STANDARDS: dict[str, str] = {
+    "humble": "c++17",
+    "jazzy": "c++17",
+    "kilted": "c++17",
+    "lyrical": "c++20",
+    "rolling": "c++20",
+}
+"""What each distro targets, per its own "Code style and language versions" page
+(``docs.ros.org/en/<distro>/The-ROS2-Project/Contributing/Code-Style-Language-Versions``):
+c++20 from lyrical and rolling on, c++17 before. Note REP 2000's "minimum
+language requirements" tables still say C++17 for rolling — that page is the
+one that tracks the switch, so it is the one quoted here. A line per distro."""
+
+CXX_STANDARD_DEFAULT = "c++20"
+"""For a distro not in the table. The newest entry's value, not the oldest: an
+unknown distro is far likelier to be a future one than a forgotten past one."""
+
+
+def cxx_standard(distro: str) -> str:
+    """The C++ standard editor tooling should assume for ``distro``."""
+    return CXX_STANDARDS.get(distro, CXX_STANDARD_DEFAULT)
+
 
 @dataclass(frozen=True)
 class Profile:
@@ -44,6 +69,12 @@ class Profile:
     extensions: tuple[str, ...]
     settings: dict[str, object] = field(default_factory=dict)
     container_env: dict[str, str] = field(default_factory=dict)
+    cpp_properties: dict[str, object] | None = None
+    """The single ``configurations[]`` entry of ``.vscode/c_cpp_properties.json``,
+    or None for a profile with no C/C++ in it. Strings may carry :data:`DISTRO`.
+
+    Unlike :attr:`settings`, this cannot ride along in ``devcontainer.json``:
+    cpptools only reads its configuration from that path in the workspace."""
 
 
 ROS2 = Profile(
@@ -113,6 +144,18 @@ ROS2 = Profile(
         # CMake >= 3.17 honors this as an env var, so clangd gets a
         # compile_commands.json without touching the repo's build_args.
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+    },
+    cpp_properties={
+        "name": f"ROS-{DISTRO}",
+        "includePath": [f"/opt/ros/{DISTRO}/include/**", "/usr/include/**"],
+        "intelliSenseMode": "gcc-x64",
+        "compilerPath": "/usr/bin/gcc",
+        "cStandard": "gnu11",
+        "cppStandard": CXX_STANDARD,
+        "defines": [],
+        "configurationProvider": "ms-vscode.cmake-tools",
+        # `ardt dev compile-commands` merges colcon's per-package files here.
+        "compileCommands": "${workspaceFolder}/build/compile_commands.json",
     },
 )
 

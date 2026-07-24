@@ -61,7 +61,7 @@ def _relative_source(root: Path, source: Path) -> str:
 
 
 def _remembered_source(ctx: Context) -> str | None:
-    manifest_path = ctx.project_root / DEVCONTAINER_DIR / render_module.MANIFEST
+    manifest_path = ctx.project_root / render_module.MANIFEST
     if not manifest_path.is_file():
         return None
     try:
@@ -86,7 +86,7 @@ def _remembered_source(ctx: Context) -> str | None:
 @click.option("--force", is_flag=True, help="Overwrite files ardt did not generate.")
 @pass_ardt
 def sync(ctx: Context, ardt_source: Path | None, from_pin: bool, force: bool) -> None:
-    """Render `.devcontainer/` (gitignored) from the profile and this repo's config."""
+    """Render `.devcontainer/` + `.vscode/` (gitignored) from the profile and this repo's config."""
     if ardt_source is not None and from_pin:
         raise ArdtError("--ardt-source and --from-pin are mutually exclusive")
 
@@ -100,7 +100,7 @@ def sync(ctx: Context, ardt_source: Path | None, from_pin: bool, force: bool) ->
     if ctx.dry_run:
         ctx.console.info(f"[dry-run] would render {len(plan.files)} files:")
         for name in sorted(plan.files):
-            ctx.console.info(f"  {DEVCONTAINER_DIR}/{name}")
+            ctx.console.info(f"  {name}")
         return
 
     result = render_module.write(ctx.project_root, plan, force=force)
@@ -123,11 +123,11 @@ def sync(ctx: Context, ardt_source: Path | None, from_pin: bool, force: bool) ->
     console.info(f"base image   {plan.base_image}")
     console.info(f"ardt         {plan.ardt_source or 'from the ardt: pin'}")
     for name in sorted(result.written):
-        console.info(f"  wrote     {DEVCONTAINER_DIR}/{name}")
+        console.info(f"  wrote     {name}")
     if result.unchanged:
         console.info(f"  unchanged {len(result.unchanged)} file(s)")
-    if ignored:
-        console.info("  wrote     .gitignore entry")
+    for entry in ignored:
+        console.info(f"  ignored   {entry}")
     for note in plan.host.notes:
         console.warn(note)
     console.success("run `ardt dev up` (or VS Code: Reopen in Container)")
@@ -141,19 +141,15 @@ def host_config(ctx: Context) -> None:
     result = render_module.write(ctx.project_root, plan, force=True, only=plan.host_files)
     ctx.emit(host=plan.host.kind, written=result.written)
     if not ctx.json_output:
-        ctx.console.info(f"host {plan.host.kind}: {DEVCONTAINER_DIR}/{COMPOSE_HOST} up to date")
+        ctx.console.info(f"host {plan.host.kind}: {COMPOSE_HOST} up to date")
         for note in plan.host.notes:
             ctx.console.warn(note)
 
 
 def _compose_argv(ctx: Context) -> list[str]:
-    directory = ctx.project_root / DEVCONTAINER_DIR
     for name in (COMPOSE, COMPOSE_HOST):
-        if not (directory / name).is_file():
-            raise ArdtError(
-                f"{DEVCONTAINER_DIR}/{name} is missing",
-                hint="run `ardt dev sync` first",
-            )
+        if not (ctx.project_root / name).is_file():
+            raise ArdtError(f"{name} is missing", hint="run `ardt dev sync` first")
     ctx.runner.require(
         "docker",
         hint="install Docker Engine, or enable Docker Desktop's WSL integration",
@@ -162,9 +158,9 @@ def _compose_argv(ctx: Context) -> list[str]:
         "docker",
         "compose",
         "-f",
-        str(directory / COMPOSE),
+        str(ctx.project_root / COMPOSE),
         "-f",
-        str(directory / COMPOSE_HOST),
+        str(ctx.project_root / COMPOSE_HOST),
     ]
 
 
@@ -193,7 +189,7 @@ def up(ctx: Context, build: bool, no_bootstrap: bool) -> None:
                 workspace,
                 "dev",
                 "bash",
-                f"{DEVCONTAINER_DIR}/{POST_CREATE}",
+                POST_CREATE,
             ]
         )
 
@@ -335,11 +331,11 @@ def doctor(ctx: Context) -> None:
     else:
         check("ok", "render", f"{len(state.unchanged)} files match this ardt-dev")
 
-    ignored = render_module.is_gitignored(ctx.project_root)
+    missing = render_module.missing_gitignore_entries(ctx.project_root)
     check(
-        "ok" if ignored else "fail",
+        "fail" if missing else "ok",
         "gitignore",
-        f"{DEVCONTAINER_DIR}/ {'ignored' if ignored else 'is NOT ignored'}",
+        f"NOT ignored: {', '.join(missing)}" if missing else "the whole render is ignored",
     )
 
     check("ok", "host", f"{plan.host.kind}, gui {'on' if plan.host.gui else 'off'}")
