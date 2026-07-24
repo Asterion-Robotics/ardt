@@ -10,8 +10,10 @@ rule), which runs this same task per ref.
 
 from __future__ import annotations
 
+from ardt_core.version import installed
+
 ARDT_PLUGIN_API = 1
 ARDT_CONFIG_SECTION = "tasks"
 """Explicit config-section claim: package names group by theme, sections by plane."""
 
-__version__ = "0.0.0"
+__version__ = installed("ardt-doc-tasks")

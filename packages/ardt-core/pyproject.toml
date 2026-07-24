@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ardt-core"
-version = "0.0.0"
+version = "0.0.1"
 description = "ardt — the company-wide CLI platform: one small core, everything else a plugin"
 readme = "README.md"
 requires-python = ">=3.11"

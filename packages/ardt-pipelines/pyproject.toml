@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ardt-pipelines"
-version = "0.0.0"
+version = "0.0.1"
 description = "ardt pipeline plane: the `ardt pipe` command group, pipeline registry, shared Dagger helpers"
 readme = "README.md"
 requires-python = ">=3.11"

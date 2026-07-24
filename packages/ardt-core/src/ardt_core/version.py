@@ -27,6 +27,7 @@ source".
 from __future__ import annotations
 
 import re
+from importlib import metadata
 
 from .git import GitInfo
 
@@ -58,3 +59,18 @@ def compute(git: GitInfo) -> str:
 def is_release(version: str) -> bool:
     """True for an exact-tag version off a clean tree — the only publishable state."""
     return "dev" not in version and "+" not in version
+
+
+def installed(distribution: str) -> str:
+    """The version the build stamped into ``distribution``'s installed metadata.
+
+    Every ardt package's ``__version__`` is this call, so the version is declared
+    once per distribution (in its ``pyproject.toml``) instead of being repeated
+    in a module constant that drifts silently the moment someone bumps one and
+    not the other. :data:`UNKNOWN` when the package is imported from a source
+    tree that was never installed.
+    """
+    try:
+        return metadata.version(distribution)
+    except metadata.PackageNotFoundError:
+        return UNKNOWN

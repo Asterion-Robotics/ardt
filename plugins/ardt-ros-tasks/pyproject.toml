@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ardt-ros-tasks"
-version = "0.0.0"
+version = "0.0.1"
 description = "ardt tasks for ROS 2 workspaces: deps, build, test"
 readme = "README.md"
 requires-python = ">=3.11"

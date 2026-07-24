@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ardt-ros-pipelines"
-version = "0.0.0"
+version = "0.0.1"
 description = "ardt pipelines for ROS 2 repos: the ros-ci pipeline and the ros2 image recipe"
 readme = "README.md"
 requires-python = ">=3.11"

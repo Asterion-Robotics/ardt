@@ -26,8 +26,9 @@ from .errors import (
 from .git import GitInfo
 from .plugins import ARDT_PLUGIN_API, Plugin, Registry
 from .runner import Result, Runner
+from .version import installed
 
-__version__ = "0.0.0"
+__version__ = installed("ardt-core")
 
 __all__ = [
     "ARDT_GIT",

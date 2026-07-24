@@ -27,10 +27,13 @@ import click
 from .context import Context
 from .errors import ArdtError
 from .plugins import Registry, discover
+from .version import installed
+
+__version__ = installed("ardt-core")
+"""Re-exported for `ardt --version` and the `ardt info` envelope; the value is
+the one `ardt_core.__version__` carries, resolved from installed metadata."""
 
 F = TypeVar("F", bound=Callable[..., Any])
-
-__version__ = "0.0.0"
 
 
 @lru_cache(maxsize=1)

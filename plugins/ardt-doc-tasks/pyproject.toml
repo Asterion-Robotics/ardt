@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ardt-doc-tasks"
-version = "0.0.0"
+version = "0.0.1"
 description = "ardt documentation tasks: sphinx + doxygen/breathe + ROS 2 interface autodoc, preset-driven"
 readme = "README.md"
 requires-python = ">=3.11"
