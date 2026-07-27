@@ -85,6 +85,22 @@ class Ros2InterfacesDirective(SphinxDirective):
         )
 
 
+STATIC_DIR = Path(__file__).parent / "static"
+"""Assets this extension ships, copied into every build's ``_static/``."""
+
+VERSION_FLYOUT = "ardt-versions.js"
+"""The version switcher. A script rather than a template override, so it works
+with whatever ``html_theme`` a repo picks; it renders nothing when the site has
+no ``versions.json``, which is every build outside the docs-ci pipeline."""
+
+
+def _register_static(app: Sphinx) -> None:
+    """Add our asset directory late, so a repo's own ``html_static_path`` wins."""
+    app.config.html_static_path.append(str(STATIC_DIR))
+
+
 def setup(app: Sphinx) -> dict[str, Any]:
     app.add_directive("ros2-interfaces", Ros2InterfacesDirective)
+    app.connect("builder-inited", _register_static)
+    app.add_js_file(VERSION_FLYOUT)
     return {"version": __version__, "parallel_read_safe": True, "parallel_write_safe": True}
