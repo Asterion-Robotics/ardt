@@ -2,6 +2,7 @@
 
 [![ci](https://github.com/Asterion-Robotics/ardt/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Asterion-Robotics/ardt/actions/workflows/ci.yml)
 [![version](https://img.shields.io/github/v/tag/Asterion-Robotics/ardt?sort=semver&label=version)](https://github.com/Asterion-Robotics/ardt/tags)
+[![docs](https://img.shields.io/badge/docs-latest-blue)](https://asterion-robotics.github.io/ardt/)
 
 > The open core of Asterion Robotics' development tooling: **one small core, everything else a plugin.** Robotics or not. For instance, the core knows nothing about ROS; ROS-ness itself is a plugin.
 
