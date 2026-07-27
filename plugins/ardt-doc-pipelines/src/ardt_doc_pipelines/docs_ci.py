@@ -199,7 +199,10 @@ async def docs_ci(ctx: Context, dag: dagger.Client, ardt_source: str = "") -> No
         ctx.console.step(f"docs: building `{ref}` from git history")
         checkout = (
             base.with_directory("/repo", repo_with_history)
-            .with_exec(["git", "clone", "-q", "/repo", "/ws"])
+            # --no-hardlinks: a local clone hardlinks the object store by default,
+            # which fails across the container's overlay mount ("hardlink
+            # different from source"). Copying costs a repo-sized read, once.
+            .with_exec(["git", "clone", "-q", "--no-hardlinks", "/repo", "/ws"])
             .with_exec(["git", "-C", "/ws", "checkout", "-q", ref])
         )
         entries.append((site_name(ref), _build_docs(checkout)))
