@@ -115,11 +115,11 @@ def test_non_mapping_section_rejected(tmp_path: Path) -> None:
 
 
 def test_unknown_sections_split_by_reserved(tmp_path: Path) -> None:
-    write(tmp_path, "ardt.yaml", "aos:\n  x: 1\nwibble:\n  y: 2\n")
+    write(tmp_path, "ardt.yaml", "doc:\n  x: 1\nwibble:\n  y: 2\n")
     cfg, _ = config.load(tmp_path)
     fatal, dormant = cfg.unknown_sections(installed=frozenset())
     assert fatal == ["wibble"]
-    assert dormant == ["aos"]
+    assert dormant == ["doc"]
 
 
 def test_installed_plugin_section_is_neither(tmp_path: Path) -> None:

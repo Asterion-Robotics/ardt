@@ -46,7 +46,7 @@ The render itself, the host overlay, the lifecycle hooks, the cache volumes, `de
 - Pros: keeps D2 clean and catches divergence.
 - Cons: two lists maintained forever; the check needs the image pulled. Most work, least payoff.
 
-**Leaning: B**, for a structural reason rather than taste. The future `aos-module` profile wants a dev image rooted on `aos-sdk-builder`, which ADR-015 D4's scope boundary says **is not a base image** (SemVer'd with the SDK release chain, published by the AOS-side pipeline). So there will be two dev image lines, in two repos, on two versioning schemes. Under A that is the same tooling list written twice; under B it is one recipe with a swapped `BASE_IMAGE`, which is exactly D2's "no recipe names its own FROM" rule.
+**Leaning: B**, for a structural reason rather than taste. A future SDK-module profile wants a dev image rooted on the SDK's own builder image, which ADR-015 D4's scope boundary says **is not a base image** (SemVer'd with the SDK release chain, published by the SDK-side pipeline). So there will be two dev image lines, in two repos, on two versioning schemes. Under A that is the same tooling list written twice; under B it is one recipe with a swapped `BASE_IMAGE`, which is exactly D2's "no recipe names its own FROM" rule.
 
 ## Decision 2 — the parity check becomes a provenance check
 

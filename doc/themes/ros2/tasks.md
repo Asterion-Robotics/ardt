@@ -16,12 +16,12 @@ JUnit XMLs land at the fixed convention `build/**/test_results/**/*.xml`, so pip
 tasks:
   ros:
     distro: jazzy
-    repos_file: aos_edge.repos     # imported by `ardt deps` before rosdep runs
+    repos_file: my_robot.repos     # imported by `ardt deps` before rosdep runs
     repos_target: src/external
     rosdep_skip_keys:              # deps never installed (also: `ardt deps --skip-key KEY`)
       - rti-connext-dds
     # exclude_packages: [big_sim]  # skipped in rosdep/build/test (`--exclude-pkg`)
-    # install_base: /opt/ros/aos   # colcon --install-base; default ./install
+    # install_base: /opt/ros/app   # colcon --install-base; default ./install
     build_args:
       - --cmake-args
       - -DCMAKE_BUILD_TYPE=RelWithDebInfo

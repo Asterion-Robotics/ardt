@@ -2,7 +2,7 @@
 # sections are errors unless the owning plugin simply is not installed here.
 
 project:
-  name: aos_edge # defaults to the project-root directory name
+  name: my_robot # defaults to the project-root directory name
 
 # Which ardt the pipelines install inside the images they build (core-owned).
 # Pin `version` for reproducible recipes — without it installs track HEAD.
@@ -10,8 +10,8 @@ project:
 #   git: git+https://github.com/Asterion-Robotics/ardt.git # the default
 #   version: v0.3.0 # git rev (tag/branch/sha) every monorepo module installs at
 #   modules:
-#     ardt-aos: # out-of-monorepo module: its own address + pin
-#       git: git+https://code.asterion-robotics.com/aos/ardt-aos.git
+#     ardt-acme: # out-of-monorepo module: its own address + pin
+#       git: git+https://code.example.com/ardt-acme.git
 #       version: v1.2.0
 
 # Exceptions to the ardt-shipped lint/format configs (repo hygiene).
@@ -29,7 +29,7 @@ project:
 #   image: registry.example.com/platform/base-images/ros2-dev@sha256:… # skips the local build
 #   base_image: ros:jazzy-ros-base # overrides the ros_ci builder (rarely wanted)
 #   apt_packages: [libeigen3-dev] # extra packages in the dev layer
-#   ardt_modules: [ardt-aos] # extra ardt modules installed in the container
+#   ardt_modules: [ardt-acme] # extra ardt modules installed in the container
 #   workspace_folder: /ws/src # the CI recipe's path, so CMake caches match
 #   gui: false # headless repo: no display sockets, no host GPU
 #   claude_code: false
@@ -45,12 +45,12 @@ tasks:
   #                                  # installed via pipelines.docs_ci.pip_packages
   ros:
     distro: jazzy
-    repos_file: aos_edge.repos # imported by `ardt deps` before rosdep runs
+    repos_file: my_robot.repos # imported by `ardt deps` before rosdep runs
     repos_target: src/external
     rosdep_skip_keys: # deps never installed (also: `ardt deps --skip-key KEY`)
       - rti-connext-dds
     # exclude_packages: [big_sim]  # skipped in rosdep/build/test (`--exclude-pkg`)
-    # install_base: /opt/ros/aos   # colcon --install-base; default ./install
+    # install_base: /opt/ros/app   # colcon --install-base; default ./install
     build_args:
       - --cmake-args
       - -DCMAKE_BUILD_TYPE=RelWithDebInfo
@@ -67,12 +67,9 @@ tasks:
 # ardt-doc-pipelines — the `pipelines.docs_ci:` subsection.
 #   docs_ci:
 #     builder: python:3.12-slim # docs toolchain container (never ships)
-#     ardt_modules: [ardt-aos] # ardt modules the docs need importable (autodoc)
+#     ardt_modules: [ardt-acme] # ardt modules the docs need importable (autodoc)
 #     pip_packages: # everything else: a sphinx style, a private doc dependency
 #       - "asterion-sphinx-style @ git+https://github.com/Asterion-Robotics/asterion-sphinx-style.git@v0.1.0"
 #     versions:
 #       branches: [main] # historical versions joining the site (+ working tree)
 #       tags: "v*"
-
-# aos: # recognized once ardt-aos is installed; a warning until then
-#   sdk_line: "2.1"

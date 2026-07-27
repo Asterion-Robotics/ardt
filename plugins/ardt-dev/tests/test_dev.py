@@ -193,8 +193,8 @@ def test_local_checkout_replaces_the_pin_with_container_paths() -> None:
 
 
 def test_extra_modules_are_appended() -> None:
-    cfg = ArdtConfig.model_validate({"dev": {"ardt_modules": ["ardt-aos"]}})
-    assert plan(cfg).requirements[-1].startswith("ardt-aos @ ")
+    cfg = ArdtConfig.model_validate({"dev": {"ardt_modules": ["ardt-acme"]}})
+    assert plan(cfg).requirements[-1].startswith("ardt-acme @ ")
 
 
 # --- the rendered files -----------------------------------------------------

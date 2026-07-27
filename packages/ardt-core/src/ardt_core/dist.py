@@ -30,8 +30,8 @@ The section pins the whole toolchain per repo:
       git: git+https://github.com/Asterion-Robotics/ardt.git  # the default
       version: v0.3.0     # git rev every monorepo module installs at
       modules:
-        ardt-aos:         # out-of-monorepo module: its own address + pin
-          git: git+https://code.example.com/ardt-aos.git
+        ardt-acme:        # out-of-monorepo module: its own address + pin
+          git: git+https://code.example.com/ardt-acme.git
           version: v1.2.0
 
 Each pipeline declares *which* modules its images need (``ardt-core`` +

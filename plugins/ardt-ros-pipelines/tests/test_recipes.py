@@ -151,14 +151,14 @@ class TestBaseExtension:
 class TestInstallBaseAndStrip:
     def test_default_install_base(self, tmp_path: Path) -> None:
         rendered = render(tmp_path)
-        assert "--install-base /opt/ros/aos" in rendered
-        assert "COPY --from=build /opt/ros/aos /opt/ros/aos" in rendered
+        assert "--install-base /opt/ros/app" in rendered
+        assert "COPY --from=build /opt/ros/app /opt/ros/app" in rendered
 
     def test_custom_install_base(self, tmp_path: Path) -> None:
         rendered = render(tmp_path, install_base="/opt/thing")
         assert "--install-base /opt/thing" in rendered
         assert "COPY --from=build /opt/thing /opt/thing" in rendered
-        assert "/opt/ros/aos" not in rendered
+        assert "/opt/ros/app" not in rendered
 
     def test_no_strip_by_default(self, tmp_path: Path) -> None:
         assert "IP protection" not in render(tmp_path)

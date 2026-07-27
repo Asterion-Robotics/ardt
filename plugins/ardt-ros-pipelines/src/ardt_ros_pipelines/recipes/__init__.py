@@ -96,7 +96,7 @@ _GIT_MOUNTS = f"""--mount=type=ssh \\
     --mount=type=secret,id={GIT_TOKEN_SECRET},required=false \\
     """
 
-# The proven aos_edge auth branching, verbatim in mechanism: an SSH agent when
+# The auth branching, proven in production: an SSH agent when
 # BuildKit forwarded one, else the token secret via a credential helper that
 # reads /run/secrets at *use* time (the token itself never lands in a layer),
 # else fail with the two ways to provide credentials.
@@ -188,7 +188,7 @@ def render_ros2(
     cmd: list[str] | None,
     ardt_requirements: Sequence[str],
     local_ardt: bool,
-    install_base: str = "/opt/ros/aos",
+    install_base: str = "/opt/ros/app",
     strip_dev_files: bool = False,
     git_host: str | None = None,
     git_ssh_port: int = 22,

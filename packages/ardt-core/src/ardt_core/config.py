@@ -20,7 +20,7 @@
 ``ardt.yaml`` at the project root, or a ``[tool.ardt]`` table in ``pyproject.toml``
 — same model, the file wins.
 
-Sections are namespaced per plugin (``tasks:``, ``pipelines:``, ``aos:``). Core
+Sections are namespaced per plugin (``tasks:``, ``pipelines:``, ``doc:``). Core
 does not know their shape; a plugin claims its section and parses it into its own
 pydantic model via :meth:`ArdtConfig.section_as`. An unknown section is an error,
 *unless* it belongs to a plugin that simply is not installed here — then it is a
@@ -42,12 +42,13 @@ from .errors import ConfigError
 CONFIG_FILENAMES = ("ardt.yaml", "ardt.yml")
 PYPROJECT = "pyproject.toml"
 
-RESERVED_SECTIONS = frozenset({"tasks", "pipelines", "aos", "doc", "dev", "templates"})
+RESERVED_SECTIONS = frozenset({"tasks", "pipelines", "doc", "dev", "templates"})
 """Section names owned by first-party plugins.
 
-Present here so that a repo configuring ``aos:`` on a machine without ``ardt-aos``
-installed gets a warning, while ``aoss:`` still gets an error. Growing this set is
-a core release; a third-party plugin's section is recognized only when installed.
+Present here so that a repo configuring ``doc:`` on a machine without
+``ardt-doc-tasks`` installed gets a warning, while ``docs:`` still gets an
+error. Growing this set is a core release; a third-party plugin's section is
+recognized only when installed.
 """
 
 ModelT = TypeVar("ModelT", bound=BaseModel)

@@ -10,7 +10,7 @@ Core owns `project:`, `check:` and `ardt:`. Everything else belongs to a plugin,
 
 ```yaml
 project:
-  name: aos_edge          # defaults to the project-root directory name
+  name: my_robot          # defaults to the project-root directory name
 
 ardt:                     # which ardt pipelines install inside the images they build
   git: git+https://github.com/Asterion-Robotics/ardt.git
@@ -35,6 +35,6 @@ dev:                      # ardt-dev
 
 ## Typo-safety without coupling
 
-An unknown section is an **error** — unless it is a name reserved for a first-party plugin that simply is not installed here, in which case it is a **warning**. So `aos:` on a machine without `ardt-aos` is tolerated, while `aoss:` is caught. The reserved set lives in `ardt_core.config`; growing it is a core release, and third-party sections are recognized once their plugin is installed.
+An unknown section is an **error** — unless it is a name reserved for a first-party plugin that simply is not installed here, in which case it is a **warning**. So `doc:` on a machine without `ardt-doc-tasks` is tolerated, while `docs:` is caught. The reserved set lives in `ardt_core.config`; growing it is a core release, and third-party sections are recognized once their plugin is installed.
 
 See [`ardt.example.yaml`](https://github.com/Asterion-Robotics/ardt/blob/main/ardt.example.yaml) for the annotated, exhaustive version, and {py:mod}`ardt_core.config` for the API.

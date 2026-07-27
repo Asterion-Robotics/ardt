@@ -18,8 +18,8 @@
 """ardt-ros-tasks: config parsing and the deps/build/test command shapes.
 
 These stay `unit`: no real colcon/rosdep runs here. `--dry-run` lets us assert the
-*plan* (which commands, which flags) without an ROS install; the real green-on-
-aos_edge run is the integration acceptance criterion, not a unit test.
+*plan* (which commands, which flags) without an ROS install; a green run on a
+real downstream repo is the integration acceptance criterion, not a unit test.
 """
 
 from __future__ import annotations
@@ -140,25 +140,25 @@ def test_rosdep_skip_keys_forwarded(repo: Path) -> None:
 
 
 def test_build_install_base_from_config(repo: Path) -> None:
-    (repo / "ardt.yaml").write_text("tasks:\n  ros:\n    install_base: /opt/ros/aos\n")
+    (repo / "ardt.yaml").write_text("tasks:\n  ros:\n    install_base: /opt/ros/app\n")
     ctx = context(repo, dry_run=True)
     tasks.build(ctx)
-    assert "--install-base /opt/ros/aos" in output(ctx)
-    assert ctx.emitted["install_base"] == "/opt/ros/aos"
+    assert "--install-base /opt/ros/app" in output(ctx)
+    assert ctx.emitted["install_base"] == "/opt/ros/app"
 
 
 def test_build_install_base_cli_overrides_config(repo: Path) -> None:
-    (repo / "ardt.yaml").write_text("tasks:\n  ros:\n    install_base: /opt/ros/aos\n")
+    (repo / "ardt.yaml").write_text("tasks:\n  ros:\n    install_base: /opt/ros/app\n")
     ctx = context(repo, dry_run=True)
     tasks.build(ctx, install_base="/elsewhere")
     assert "--install-base /elsewhere" in output(ctx)
 
 
 def test_test_uses_same_install_base(repo: Path) -> None:
-    (repo / "ardt.yaml").write_text("tasks:\n  ros:\n    install_base: /opt/ros/aos\n")
+    (repo / "ardt.yaml").write_text("tasks:\n  ros:\n    install_base: /opt/ros/app\n")
     ctx = context(repo, dry_run=True)
     tasks.test(ctx)
-    assert "colcon test --install-base /opt/ros/aos" in output(ctx)
+    assert "colcon test --install-base /opt/ros/app" in output(ctx)
 
 
 def test_exclude_packages_skips_build_and_test(repo: Path) -> None:

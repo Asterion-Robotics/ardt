@@ -80,7 +80,7 @@ class RosCiConfig(BaseModel):
     """Optional in-repo base extension: a single-stage Dockerfile starting
     ``FROM ${BASE_IMAGE}`` (kernel modules, vendor drivers…). When present it is
     spliced into the rendered recipe and the runtime image builds on it."""
-    install_base: str = "/opt/ros/aos"
+    install_base: str = "/opt/ros/app"
     """Where the workspace installs inside the image (build, test and the
     runtime copy all use it)."""
     strip_dev_files: bool = False
