@@ -243,9 +243,11 @@ def test_claude_code_can_be_left_out() -> None:
 def test_compose_isolates_the_colcon_output_dirs_in_one_volume() -> None:
     compose = yaml.safe_load(plan(ArdtConfig()).files[render_module.COMPOSE])
     volumes = compose["services"]["dev"]["volumes"]
-    assert "..:/ws/src:cached" in volumes
+    # The repo is one entry under the workspace's src/, and the colcon dirs
+    # are the workspace root's — the canonical /ws tree, same as CI's.
+    assert "..:/ws/src/demo:cached" in volumes
     mounts = [v for v in volumes if isinstance(v, dict) and v["source"] == "colcon"]
-    assert [m["target"] for m in mounts] == ["/ws/src/build", "/ws/src/install", "/ws/src/log"]
+    assert [m["target"] for m in mounts] == ["/ws/build", "/ws/install", "/ws/log"]
     # The whole point: one volume, three subpaths — and they must stay distinct.
     # A Compose that silently drops `subpath` would alias all three (moby#47687).
     assert [m["volume"]["subpath"] for m in mounts] == ["build", "install", "log"]
@@ -304,12 +306,18 @@ def test_host_overlay_is_a_separate_file_and_never_empty() -> None:
 def test_devcontainer_json_carries_the_editor_config_so_repos_need_no_vscode_dir() -> None:
     text = plan(ArdtConfig()).files[render_module.DEVCONTAINER]
     data = json.loads("\n".join(line for line in text.splitlines() if not line.startswith("//")))
-    assert data["workspaceFolder"] == "/ws/src"
-    # Compose files resolve next to devcontainer.json; the commands, from the root.
+    # VS Code opens the workspace root; the repo sits at src/<project> in it.
+    assert data["workspaceFolder"] == "/ws"
+    # Compose files resolve next to devcontainer.json. initializeCommand runs
+    # on the HOST from the repo checkout; postCreateCommand runs in the
+    # container from workspaceFolder, so only the latter needs the src/ prefix.
     assert data["dockerComposeFile"] == ["compose.yaml", "compose.host.yaml"]
     assert data["initializeCommand"] == "bash .devcontainer/host-config.sh"
-    assert data["postCreateCommand"] == "bash .devcontainer/postCreate.sh"
+    assert data["postCreateCommand"] == "bash src/demo/.devcontainer/postCreate.sh"
     assert "llvm-vs-code-extensions.vscode-clangd" in data["customizations"]["vscode"]["extensions"]
+    # The repo's .git is two levels below the opened folder — past VS Code's
+    # default repository scan depth of 1.
+    assert data["customizations"]["vscode"]["settings"]["git.repositoryScanMaxDepth"] == 2
 
 
 # --- the .vscode/ half ------------------------------------------------------
@@ -363,7 +371,7 @@ def test_workspace_folder_reaches_every_file_that_needs_it() -> None:
     cfg = ArdtConfig.model_validate({"dev": {"workspace_folder": "/opt/ws"}})
     files = plan(cfg).files
     assert "/opt/ws/install/setup.bash" in files[render_module.DOCKERFILE]
-    assert "..:/opt/ws:cached" in files[render_module.COMPOSE]
+    assert "..:/opt/ws/src/demo:cached" in files[render_module.COMPOSE]
     assert '"workspaceFolder": "/opt/ws"' in files[render_module.DEVCONTAINER]
 
 
@@ -373,6 +381,15 @@ def test_compose_build_paths_resolve_from_the_devcontainer_dir() -> None:
     to `.devcontainer/.devcontainer/Dockerfile` and broke every first build."""
     service = yaml.safe_load(plan(ArdtConfig()).files[render_module.COMPOSE])["services"]["dev"]
     assert service["build"] == {"context": ".", "dockerfile": "Dockerfile"}
+
+
+def test_the_image_bakes_the_workspace_skeleton_user_owned() -> None:
+    """dockerd creates missing mount parents as root; /ws and /ws/src must not be."""
+    content = plan(ArdtConfig()).files[render_module.DOCKERFILE]
+    assert "mkdir -p /ws/src" in content
+    # The .vscode bridge: VS Code opens /ws, the repo's editor config lives in
+    # src/<project>/.vscode — a relative symlink connects the two.
+    assert "ln -sfn src/demo/.vscode /ws/.vscode" in content
 
 
 def test_requirements_file_lists_each_module_once() -> None:

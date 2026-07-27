@@ -39,6 +39,7 @@ from ardt_core.errors import ArdtError
 from . import host as host_module
 from . import render as render_module
 from .config import DEVCONTAINER_DIR, ci_builder, dev_config, ros_distro
+from .host import HostFacts
 from .profiles import DISTRO, PROFILES, profile
 from .render import (
     COMPOSE,
@@ -51,6 +52,52 @@ from .render import (
 IN_CONTAINER_ENV = "ARDT_DEV_CONTAINER"
 """Set by the rendered image, so a command that only makes sense inside the
 container can say so instead of half-running on someone's laptop."""
+
+
+def _workspace_root(root: Path) -> Path:
+    """The colcon workspace root for a project root — the ``src/<repo>`` rule.
+
+    Derived from where the repo actually sits, not from ``dev.workspace_folder``,
+    so the same rule holds inside the container (``/ws/src/<repo>`` -> ``/ws``)
+    and for a host checkout (its own root)."""
+    if root.parent.name == "src":
+        return root.parent.parent
+    if root.name == "src":
+        return root.parent
+    return root
+
+
+def _require_docker(ctx: Context) -> None:
+    """Fail with a diagnosis, not a stack trace, when docker cannot run.
+
+    Two distinct failures, two distinct hints: no client on PATH at all, and a
+    client with no daemon behind it — the everyday WSL2 trap, where Docker
+    Desktop is stopped or its WSL integration is off for this very distro and
+    every `docker` call dies with a socket error the user has seen ten times
+    without ever reading.
+    """
+    ctx.runner.require(
+        "docker", hint="install Docker Engine, or enable Docker Desktop's WSL integration"
+    )
+    if ctx.dry_run:
+        return
+    probe = ctx.runner.run(
+        ["docker", "info", "--format", "{{.ServerVersion}}"], check=False, quiet=True
+    )
+    if probe.ok:
+        return
+    if HostFacts.probe().wsl_kernel:
+        hint = (
+            "WSL2: start Docker Desktop on Windows and check Settings > Resources > "
+            "WSL integration is enabled for THIS distro — or install Docker Engine "
+            "inside the distro"
+        )
+    else:
+        hint = (
+            "start the daemon (`sudo systemctl start docker`) and check your user "
+            "is in the `docker` group"
+        )
+    raise ArdtError("docker is installed but its daemon is not reachable", hint=hint)
 
 
 @click.group()
@@ -203,9 +250,7 @@ def _ensure_volumes(ctx: Context, plan: Render) -> list[str]:
 @pass_ardt
 def volumes(ctx: Context) -> None:
     """Create the shared caches and the colcon volume's subpaths. Idempotent."""
-    ctx.runner.require(
-        "docker", hint="install Docker Engine, or enable Docker Desktop's WSL integration"
-    )
+    _require_docker(ctx)
     plan = _plan(ctx, ardt_source=_remembered_source(ctx))
     touched = _ensure_volumes(ctx, plan)
     ctx.emit(volumes=touched, shared=list(plan.shared_volumes))
@@ -220,10 +265,7 @@ def _compose_argv(ctx: Context) -> list[str]:
     for name in (COMPOSE, COMPOSE_HOST):
         if not (ctx.project_root / name).is_file():
             raise ArdtError(f"{name} is missing", hint="run `ardt dev sync` first")
-    ctx.runner.require(
-        "docker",
-        hint="install Docker Engine, or enable Docker Desktop's WSL integration",
-    )
+    _require_docker(ctx)
     return [
         "docker",
         "compose",
@@ -234,24 +276,49 @@ def _compose_argv(ctx: Context) -> list[str]:
     ]
 
 
+def _ensure_synced(ctx: Context) -> Render:
+    """Render (or refresh) the environment before driving it.
+
+    `ardt dev up` on a fresh clone must just work: nothing about `sync` needs a
+    human decision, so `up` and `open` run it implicitly — render what is
+    missing or stale, refuse hand-edited files with sync's own message, no-op
+    when everything already matches. Kept out of --dry-run, which must not
+    write.
+    """
+    plan = _plan(ctx, ardt_source=_remembered_source(ctx))
+    if ctx.dry_run:
+        return plan
+    state = render_module.audit(ctx.project_root, plan)
+    if state.written or state.conflicts:
+        result = render_module.write(ctx.project_root, plan)  # refuses hand-edits
+        render_module.ensure_gitignored(ctx.project_root)
+        ctx.console.step(f"synced {len(result.written)} dev file(s) (implicit `ardt dev sync`)")
+        for name in sorted(result.written):
+            ctx.console.detail(f"  wrote {name}")
+    return plan
+
+
 @dev.command()
 @click.option("--build", is_flag=True, help="Rebuild the dev image before starting.")
 @click.option("--no-bootstrap", is_flag=True, help="Start without running postCreate.")
 @pass_ardt
 def up(ctx: Context, build: bool, no_bootstrap: bool) -> None:
-    """Start the dev container and run its create-time bootstrap."""
+    """Start the dev container, rendering and provisioning whatever is missing first."""
+    plan = _ensure_synced(ctx)
     compose = _compose_argv(ctx)
-    workspace = dev_config(ctx.cfg).workspace_folder
+    source = dev_config(ctx.cfg).source_folder(ctx.project)
     if build:
-        ctx.runner.run([*compose, "build"])
+        with ctx.console.section("docker compose build"):
+            ctx.runner.run([*compose, "build"])
     # Before `up`, not after: compose fails on a missing external volume, and
     # the container fails to start on a missing subpath.
-    _ensure_volumes(ctx, _plan(ctx, ardt_source=_remembered_source(ctx)))
-    with ctx.console.section("compose up"):
+    ctx.console.step("provisioning docker volumes (shared caches + this repo's colcon volume)")
+    _ensure_volumes(ctx, plan)
+    with ctx.console.section("compose up — the first run builds the dev image (minutes)"):
         ctx.runner.run([*compose, "up", "-d"])
     if no_bootstrap:
         return
-    with ctx.console.section("postCreate"):
+    with ctx.console.section("postCreate — rosdep + `ardt deps` (minutes on first run)"):
         ctx.runner.run(
             [
                 *compose,
@@ -259,12 +326,13 @@ def up(ctx: Context, build: bool, no_bootstrap: bool) -> None:
                 "-u",
                 USER,
                 "-w",
-                workspace,
+                source,
                 "dev",
                 "bash",
                 POST_CREATE,
             ]
         )
+    ctx.console.success("dev container ready — `ardt dev shell`, or `ardt dev open` for VS Code")
 
 
 def _code_argv(ctx: Context, plan: Render, workspace: str) -> list[str]:
@@ -307,10 +375,10 @@ def _open_editor(ctx: Context, plan: Render, workspace: str) -> str:
 @click.option("--build", is_flag=True, help="Rebuild the dev image before opening.")
 @pass_ardt
 def open_command(ctx: Context, build: bool) -> None:
-    """Open VS Code attached to the dev container."""
+    """Open VS Code attached to the dev container, rendering and starting it if needed."""
+    plan = _ensure_synced(ctx)
     compose = _compose_argv(ctx)
     cfg = dev_config(ctx.cfg)
-    plan = _plan(ctx, ardt_source=_remembered_source(ctx))
 
     if build:
         if cfg.image:
@@ -318,31 +386,34 @@ def open_command(ctx: Context, build: bool) -> None:
                 f"nothing to build: dev.image pins {cfg.image}",
                 hint="drop `dev.image` from ardt.yaml to build the rendered recipe locally",
             )
-        ctx.runner.run([*compose, "build"])
+        with ctx.console.section("docker compose build"):
+            ctx.runner.run([*compose, "build"])
+    ctx.console.step("provisioning docker volumes (shared caches + this repo's colcon volume)")
     _ensure_volumes(ctx, plan)
     # Start it ourselves so --build is deterministic. VS Code still owns
     # postCreate: it runs postCreateCommand the first time it attaches,
     # whoever created the container.
-    with ctx.console.section("compose up"):
+    with ctx.console.section("compose up — the first run builds the dev image (minutes)"):
         ctx.runner.run([*compose, "up", "-d"])
 
     editor = _open_editor(ctx, plan, cfg.workspace_folder)
     ctx.emit(editor=editor, workspace_folder=cfg.workspace_folder)
     if not ctx.json_output:
         ctx.console.success(f"opening {cfg.workspace_folder} in the dev container ({editor})")
+        ctx.console.info("first attach runs postCreate in VS Code (rosdep + `ardt deps` — minutes)")
 
 
 @dev.command()
 @pass_ardt
 def shell(ctx: Context) -> None:
-    """Open a login shell in the running dev container."""
+    """Open a login shell in the running dev container, at the workspace root."""
     argv = [
         *_compose_argv(ctx),
         "exec",
         "-u",
         USER,
         "-w",
-        dev_config(ctx.cfg).workspace_folder,
+        dev_config(ctx.cfg).workspace_folder,  # /ws — build/ and src/ in view
         "dev",
         "bash",
         "-l",
@@ -413,25 +484,30 @@ def _in_container() -> bool:
 def _claim_volume_dirs(ctx: Context) -> None:
     """Named volumes mount root-owned; the workspace user has to own them.
 
-    Only the colcon output dirs: the seeded volumes (ccache, Claude state, the
-    apt cache) keep their image ownership on purpose — apt downloads as ``_apt``
-    and warns loudly if its archive dir belongs to someone else.
+    Only the colcon output dirs — at the *workspace root*, beside ``src/`` —
+    the seeded volumes (ccache, Claude state, the apt cache) keep their image
+    ownership on purpose: apt downloads as ``_apt`` and warns loudly if its
+    archive dir belongs to someone else.
     """
-    targets = [
-        path
-        for path in (ctx.project_root / name for name in ("build", "install", "log"))
-        if path.is_dir() and not os.access(path, os.W_OK)
-    ]
-    if not targets:
+    base = _workspace_root(ctx.project_root)
+    dirs = [base / name for name in ("build", "install", "log") if (base / name).is_dir()]
+    owned = [path for path in dirs if not os.access(path, os.W_OK)]
+    if owned:
+        ctx.runner.run(["sudo", "chown", f"{os.getuid()}:{os.getgid()}", *[str(p) for p in owned]])
+    if ctx.dry_run:
         return
-    ctx.runner.run(["sudo", "chown", f"{os.getuid()}:{os.getgid()}", *[str(p) for p in targets]])
+    for path in dirs:
+        # colcon writes these markers itself on first use; pre-created volume
+        # dirs get them up front so `colcon list` from the workspace root never
+        # rediscovers installed packages as sources.
+        (path / "COLCON_IGNORE").touch(exist_ok=True)
 
 
 @dev.command(name="compile-commands")
 @pass_ardt
 def compile_commands(ctx: Context) -> None:
     """Merge colcon's per-package compile_commands.json into one for clangd."""
-    build_dir = ctx.project_root / "build"
+    build_dir = _workspace_root(ctx.project_root) / "build"
     parts = sorted(build_dir.glob("*/compile_commands.json"))
     if not parts:
         raise ArdtError(
@@ -497,8 +573,22 @@ def doctor(ctx: Context) -> None:
     for note in plan.host.notes:
         check("warn", "host", note)
 
-    if not _in_container() and ctx.runner.which("docker") is None:
-        check("fail", "docker", "not on PATH")
+    if not _in_container():
+        if ctx.runner.which("docker") is None:
+            check("fail", "docker", "not on PATH")
+        else:
+            probe = ctx.runner.run(
+                ["docker", "info", "--format", "{{.ServerVersion}}"], check=False, quiet=True
+            )
+            if probe.ok:
+                check("ok", "docker", f"daemon up (server {probe.tail.strip()})")
+            else:
+                check(
+                    "fail",
+                    "docker",
+                    "client on PATH but the daemon is unreachable "
+                    "(WSL2: Docker Desktop running, WSL integration on for this distro?)",
+                )
 
     ctx.emit(checks=[{"level": lvl, "check": label, "detail": d} for lvl, label, d in checks])
     if not ctx.json_output:

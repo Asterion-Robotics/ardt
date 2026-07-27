@@ -242,13 +242,14 @@ RUN curl -fsSL https://claude.ai/install.sh | bash
 """
 
 
-def dockerfile(prof: Profile, dev: DevConfig, *, base_image: str, distro: str) -> str:
+def dockerfile(prof: Profile, dev: DevConfig, *, project: str, base_image: str, distro: str) -> str:
     return (
         _template(prof.dockerfile)
         .replace("@VERSION@", __version__)
         .replace("@BASE_IMAGE@", base_image)
         .replace("@USER@", USER)
         .replace("@WORKSPACE@", dev.workspace_folder)
+        .replace("@PROJECT@", project)
         .replace("@APT@", _apt_block(prof, dev.apt_packages, distro))
         .replace("@ENV@", _env_block(prof, dev))
         .replace("@CLAUDE@", _CLAUDE_BLOCK if dev.claude_code else "")
@@ -290,7 +291,10 @@ def compose(
     workspace = dev.workspace_folder
     home = f"/home/{USER}"
 
-    volumes: list[object] = [f"..:{workspace}:cached"]
+    # The repo is ONE entry under the workspace's src/ — `.repos` imports land
+    # grouped in src/external/ — and the colcon output dirs are the workspace
+    # root's, exactly the tree the CI recipe builds in.
+    volumes: list[object] = [f"..:{dev.source_folder(ctx_project)}:cached"]
     named: dict[str, object] = {}
     if dev.isolate_build_dirs:
         # One volume, three subpaths — long syntax, since the `src:dst` short
@@ -370,13 +374,15 @@ def devcontainer(project: str, dev: DevConfig, prof: Profile) -> str:
     data: dict[str, object] = {
         "name": f"{project} — {prof.name} dev",
         # Resolved relative to devcontainer.json itself, unlike the commands
-        # below, which VS Code runs from the workspace root.
+        # below: initializeCommand runs on the HOST from the repo checkout,
+        # postCreateCommand runs in the container from workspaceFolder — the
+        # workspace root, of which the repo is src/<project>.
         "dockerComposeFile": [Path(COMPOSE).name, Path(COMPOSE_HOST).name],
         "service": "dev",
         "workspaceFolder": dev.workspace_folder,
         "remoteUser": USER,
         "initializeCommand": f"bash {HOST_CONFIG}",
-        "postCreateCommand": f"bash {POST_CREATE}",
+        "postCreateCommand": f"bash src/{project}/{POST_CREATE}",
         "customizations": {
             "vscode": {
                 "extensions": [*prof.extensions, *dev.extensions],
@@ -442,7 +448,7 @@ def build(
     reqs = requirements(cfg, dev, prof, ardt_source)
 
     files = {
-        DOCKERFILE: dockerfile(prof, dev, base_image=base_image, distro=distro),
+        DOCKERFILE: dockerfile(prof, dev, project=project, base_image=base_image, distro=distro),
         COMPOSE: compose(project, dev, ardt_source=ardt_source, image=dev.image),
         COMPOSE_HOST: host_overlay(host),
         DEVCONTAINER: devcontainer(project, dev, prof),

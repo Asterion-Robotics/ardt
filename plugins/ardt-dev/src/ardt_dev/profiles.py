@@ -167,6 +167,9 @@ ROS2 = Profile(
         "python.defaultInterpreterPath": "/usr/bin/python3",
         "cmake.configureOnOpen": False,
         "files.watcherExclude": {"**/build/**": True, "**/install/**": True, "**/log/**": True},
+        # VS Code opens the workspace root (/ws); the repo's .git sits two
+        # levels down (src/<repo>/.git), one past the default scan depth of 1.
+        "git.repositoryScanMaxDepth": 2,
     },
     container_env={
         # CMake >= 3.17 honors this as an env var, so clangd gets a
