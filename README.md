@@ -25,7 +25,8 @@ Pipelines call tasks *inside* containers; tasks never call pipelines. Core impor
 ardt/
 ├── packages/                # the platform (each package owns its unit tests, <pkg>/tests/)
 │   ├── ardt-core/           # cli, plugin loader, context, config, runner, console, version policy
-│   └── ardt-pipelines/      # the generic Dagger plane: `ardt pipe`, @pipeline registry, std helpers
+│   ├── ardt-pipelines/      # the generic Dagger plane: `ardt pipe`, @pipeline registry, std helpers
+│   └── ardt-cli/            # metapackage: no code, one extra per theme (`uv tool install ardt-cli[ros]`)
 ├── plugins/                 # first-party theme plugins (ardt-<theme>-tasks / -pipelines)
 │   ├── ardt-ros-tasks/      # deps / build / test (colcon, rosdep, vcs) — in-env tasks
 │   ├── ardt-ros-pipelines/  # ROS 2 pipeline plugin: ros-ci + the ros2 image recipe
@@ -43,22 +44,30 @@ Shared test fixtures (`repo`, `console`, CI-env isolation) ship as `ardt_core.te
 `ardt` is a CLI you call from any repo, so install it **once as a uv tool** — a persistent, isolated venv with `ardt` on your PATH; no `uv run` prefix, no project venv needed:
 
 ```bash
-# From a checkout (developers): editable, so source edits apply immediately
-uv tool install --editable ./packages/ardt-core \
-    --with-editable ./plugins/ardt-ros-tasks \
-    --with-editable ./plugins/ardt-dev \
-    --with-editable ./packages/ardt-pipelines \
-    --with-editable ./plugins/ardt-ros-pipelines
-
-# From git (users, until PyPI publication):
-uv tool install "ardt-core @ git+https://github.com/Asterion-Robotics/ardt.git#subdirectory=packages/ardt-core" \
-    --with "ardt-ros-tasks @ git+https://github.com/Asterion-Robotics/ardt.git#subdirectory=plugins/ardt-ros-tasks" \
-    --with "ardt-dev @ git+https://github.com/Asterion-Robotics/ardt.git#subdirectory=plugins/ardt-dev" \
-    --with "ardt-pipelines @ git+https://github.com/Asterion-Robotics/ardt.git#subdirectory=packages/ardt-pipelines" \
-    --with "ardt-ros-pipelines @ git+https://github.com/Asterion-Robotics/ardt.git#subdirectory=plugins/ardt-ros-pipelines"
-
-ardt --help    # from anywhere
+curl -LsSf https://raw.githubusercontent.com/Asterion-Robotics/ardt/main/install.sh | bash
 ```
+
+[`install.sh`](install.sh) is a thin wrapper over `uv tool install`, and worth reading before you pipe it anywhere. `ARDT_REF=v0.1.0` pins a release, `ARDT_MODULES="…"` picks the plugin set. It needs [uv](https://docs.astral.sh/uv/), and says so rather than installing it for you.
+
+Once the distributions are published, `ardt-cli` bundles them — a metapackage with no code of its own, one extra per theme:
+
+```bash
+uv tool install "ardt-cli[ros]"     # also: [doc], [devcontainer], [all]
+```
+
+Developing on ardt itself wants an editable install instead:
+
+```bash
+uv tool install --editable ./packages/ardt-core \
+    --with-editable ./packages/ardt-pipelines \
+    --with-editable ./plugins/ardt-ros-tasks \
+    --with-editable ./plugins/ardt-doc-tasks \
+    --with-editable ./plugins/ardt-dev \
+    --with-editable ./plugins/ardt-ros-pipelines \
+    --with-editable ./plugins/ardt-doc-pipelines
+```
+
+The by-hand git form, and what each plugin adds, are in [Getting started](https://asterion-robotics.github.io/ardt/).
 
 ## Quick start
 
