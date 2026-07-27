@@ -1,5 +1,8 @@
 # ardt
 
+[![ci](https://github.com/Asterion-Robotics/ardt/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Asterion-Robotics/ardt/actions/workflows/ci.yml)
+[![version](https://img.shields.io/github/v/tag/Asterion-Robotics/ardt?sort=semver&label=version)](https://github.com/Asterion-Robotics/ardt/tags)
+
 > The open core of Asterion Robotics' development tooling: **one small core, everything else a plugin.** Robotics or not — the core knows nothing about ROS; ROS-ness itself is a plugin.
 
 Reproducible dev containers, CI that runs the same commands a developer does, versioned docs: these are not our problems, they are every robotics team's. So the core and the general-purpose plugins are public and Apache-2.0, and it is what our own public repos are built with. Our internal processes and domain knowledge stay where they belong — in private plugins (`ardt-aos`) that install alongside, through the same entry points any third-party plugin uses.
