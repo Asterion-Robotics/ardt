@@ -54,5 +54,14 @@ RUN printf '%s\n' \
  && mkdir -p /home/${USERNAME}/.ccache /home/${USERNAME}/.claude \
  && chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}
 
+# The workspace skeleton is baked user-owned: dockerd creates missing mount
+# parents as root, so without this /ws and /ws/src would be unwritable and
+# `vcs import` could not clone next to the repo. The .vscode symlink is what
+# lets VS Code (opening @WORKSPACE@) see the repo's editor config one level
+# down — dangling until the repo mounts, which is harmless.
+RUN mkdir -p @WORKSPACE@/src \
+ && ln -sfn src/@PROJECT@/.vscode @WORKSPACE@/.vscode \
+ && chown -h ${USERNAME}:${USERNAME} @WORKSPACE@ @WORKSPACE@/src @WORKSPACE@/.vscode
+
 USER ${USERNAME}
 @CLAUDE@

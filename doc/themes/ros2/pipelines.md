@@ -41,7 +41,7 @@ All knobs live under `pipelines.ros_ci:`.
 | `builder` | base of the build+test stage (process — never ships) |
 | `base_image` | `FROM` of the **shipped** runtime image |
 | `cmd` | the shipped image's CMD |
-| `install_base` | where the workspace installs in the image (default `/opt/ros/aos`) |
+| `install_base` | where the workspace installs in the image (default `/opt/ros/app`) |
 | `strip_dev_files` | IP protection: strip headers, static libs and CMake/pkg-config exports before the runtime copy |
 | `platforms` | manifest platforms, e.g. `[linux/amd64, linux/arm64]` |
 | `git_host` / `git_ssh_port` | auth for private `.repos` deps: CI job token, or a local ssh agent |

@@ -19,12 +19,48 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from ardt_core.config import ArdtConfig
 
 JUNIT_GLOB = "build/**/test_results/**/*.xml"
-"""Fixed path convention, so pipelines can export JUnit XMLs blindly."""
+"""Fixed path convention (relative to the workspace root), so pipelines can
+export JUnit XMLs blindly."""
+
+
+def workspace_root(project_root: Path) -> Path:
+    """The colcon workspace root for a project root.
+
+    The ``/ws`` convention: a repo living under a directory named ``src``
+    (``/ws/src/<repo>``) sits in a colcon workspace, and colcon runs from the
+    grandparent so ``build/``, ``install/`` and ``log/`` land *beside* ``src/``
+    instead of inside the repo. A repo checked out *as* ``src`` itself gets the
+    parent for the same reason. Any other checkout is its own workspace root,
+    which is plain-repo behavior.
+    """
+    if project_root.parent.name == "src":
+        return project_root.parent.parent
+    if project_root.name == "src":
+        return project_root.parent
+    return project_root
+
+
+def repos_target_path(cfg: RosConfig, project_root: Path) -> Path:
+    """Where ``ardt deps`` imports the ``.repos`` entries.
+
+    An explicit ``tasks.ros.repos_target`` is honored relative to the project
+    root. The default is ``external/`` under the workspace's ``src/``, so every
+    imported repo lands beside this one but visibly grouped
+    (``/ws/src/external/<name>``) — for a plain checkout that degrades to
+    ``<repo>/src/external``, the same shape one level in.
+    """
+    if cfg.repos_target is not None:
+        return project_root / cfg.repos_target
+    ws = workspace_root(project_root)
+    src = project_root / "src" if ws == project_root else ws / "src"
+    return src / "external"
 
 
 class RosConfig(BaseModel):
@@ -38,7 +74,12 @@ class RosConfig(BaseModel):
 
     repos_file: str | None = None
     """A ``.repos`` file imported by ``ardt deps`` before rosdep runs."""
-    repos_target: str = "src"
+    repos_target: str | None = None
+    """Where ``vcs import`` clones, relative to the project root. None resolves
+    to ``external/`` under the workspace's ``src/`` (:func:`repos_target_path`):
+    in a ``/ws`` layout every imported repo lands at ``/ws/src/external/<name>``
+    — in the workspace beside this repo, but grouped so what is yours and what
+    is imported stays legible (and out of the ``src/*`` project lookup)."""
 
     rosdep_skip_keys: list[str] = Field(default_factory=list)
     """rosdep keys never installed (vendored, proprietary, or known-broken deps)."""

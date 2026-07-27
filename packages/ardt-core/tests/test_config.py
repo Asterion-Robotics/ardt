@@ -30,6 +30,7 @@ from ardt_core.errors import ConfigError
 
 def write(root: Path, name: str, text: str) -> Path:
     path = root / name
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text)
     return path
 
@@ -114,11 +115,11 @@ def test_non_mapping_section_rejected(tmp_path: Path) -> None:
 
 
 def test_unknown_sections_split_by_reserved(tmp_path: Path) -> None:
-    write(tmp_path, "ardt.yaml", "aos:\n  x: 1\nwibble:\n  y: 2\n")
+    write(tmp_path, "ardt.yaml", "doc:\n  x: 1\nwibble:\n  y: 2\n")
     cfg, _ = config.load(tmp_path)
     fatal, dormant = cfg.unknown_sections(installed=frozenset())
     assert fatal == ["wibble"]
-    assert dormant == ["aos"]
+    assert dormant == ["doc"]
 
 
 def test_installed_plugin_section_is_neither(tmp_path: Path) -> None:
@@ -145,3 +146,39 @@ def test_find_project_root_by_git(tmp_path: Path) -> None:
 
 def test_find_project_root_falls_back_to_start(tmp_path: Path) -> None:
     assert config.find_project_root(tmp_path) == tmp_path.resolve()
+
+
+def test_find_project_root_resolves_a_colcon_workspace(tmp_path: Path) -> None:
+    """/ws layout: the project is src/<repo>, findable from the workspace root."""
+    write(tmp_path, "src/my_repo/ardt.yaml", "{}\n")
+    (tmp_path / "build").mkdir()
+    repo = (tmp_path / "src" / "my_repo").resolve()
+    assert config.find_project_root(tmp_path) == repo
+    assert config.find_project_root(tmp_path / "src") == repo
+    assert config.find_project_root(tmp_path / "build") == repo
+    # From inside the project the plain walk-up wins before the convention.
+    nested = tmp_path / "src" / "my_repo" / "pkg"
+    nested.mkdir()
+    assert config.find_project_root(nested) == repo
+
+
+def test_find_project_root_accepts_a_repo_checked_out_as_src(tmp_path: Path) -> None:
+    write(tmp_path, "src/ardt.yaml", "{}\n")
+    assert config.find_project_root(tmp_path) == (tmp_path / "src").resolve()
+
+
+def test_find_project_root_refuses_to_guess_between_projects(tmp_path: Path) -> None:
+    """Two configs under src/ (an imported dep can carry one) is ambiguous from outside."""
+    write(tmp_path, "src/a/ardt.yaml", "{}\n")
+    write(tmp_path, "src/b/ardt.yaml", "{}\n")
+    with pytest.raises(ConfigError, match="several projects"):
+        config.find_project_root(tmp_path)
+    # Inside one of them there is nothing to guess.
+    assert config.find_project_root(tmp_path / "src" / "a") == (tmp_path / "src" / "a").resolve()
+
+
+def test_find_project_root_ignores_external_deps_one_level_down(tmp_path: Path) -> None:
+    """`ardt deps` imports into src/external/<name>; those never join the lookup."""
+    write(tmp_path, "src/my_repo/ardt.yaml", "{}\n")
+    write(tmp_path, "src/external/dep/ardt.yaml", "{}\n")
+    assert config.find_project_root(tmp_path) == (tmp_path / "src" / "my_repo").resolve()

@@ -61,9 +61,9 @@ def test_unknown_section_is_fatal(repo: Path) -> None:
 
 
 def test_dormant_known_section_only_warns(repo: Path) -> None:
-    (repo / "ardt.yaml").write_text("aos:\n  sdk_line: '2.1'\n")
-    ctx = build(repo)  # aos plugin not installed -> warning, not error
-    assert ctx.cfg.section("aos") == {"sdk_line": "2.1"}
+    (repo / "ardt.yaml").write_text("doc:\n  source_dir: doc\n")
+    ctx = build(repo)  # doc plugin not installed -> warning, not error
+    assert ctx.cfg.section("doc") == {"source_dir": "doc"}
 
 
 def test_emit_accumulates_into_the_envelope(repo: Path) -> None:

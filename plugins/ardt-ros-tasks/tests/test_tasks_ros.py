@@ -18,8 +18,8 @@
 """ardt-ros-tasks: config parsing and the deps/build/test command shapes.
 
 These stay `unit`: no real colcon/rosdep runs here. `--dry-run` lets us assert the
-*plan* (which commands, which flags) without an ROS install; the real green-on-
-aos_edge run is the integration acceptance criterion, not a unit test.
+*plan* (which commands, which flags) without an ROS install; a green run on a
+real downstream repo is the integration acceptance criterion, not a unit test.
 """
 
 from __future__ import annotations
@@ -27,10 +27,11 @@ from __future__ import annotations
 import io
 from pathlib import Path
 
+from ardt_core.config import ArdtConfig
 from ardt_core.context import Context
 from ardt_core.plugins import Registry
 from ardt_ros_tasks import tasks
-from ardt_ros_tasks.config import JUNIT_GLOB, ros_config
+from ardt_ros_tasks.config import JUNIT_GLOB, repos_target_path, ros_config, workspace_root
 
 
 def context(root: Path, **kwargs: object) -> Context:
@@ -45,8 +46,6 @@ def output(ctx: Context) -> str:
 
 
 def test_ros_config_defaults() -> None:
-    from ardt_core.config import ArdtConfig
-
     cfg = ros_config(ArdtConfig())
     assert cfg.distro == "jazzy"
     assert cfg.symlink_install is True
@@ -141,25 +140,25 @@ def test_rosdep_skip_keys_forwarded(repo: Path) -> None:
 
 
 def test_build_install_base_from_config(repo: Path) -> None:
-    (repo / "ardt.yaml").write_text("tasks:\n  ros:\n    install_base: /opt/ros/aos\n")
+    (repo / "ardt.yaml").write_text("tasks:\n  ros:\n    install_base: /opt/ros/app\n")
     ctx = context(repo, dry_run=True)
     tasks.build(ctx)
-    assert "--install-base /opt/ros/aos" in output(ctx)
-    assert ctx.emitted["install_base"] == "/opt/ros/aos"
+    assert "--install-base /opt/ros/app" in output(ctx)
+    assert ctx.emitted["install_base"] == "/opt/ros/app"
 
 
 def test_build_install_base_cli_overrides_config(repo: Path) -> None:
-    (repo / "ardt.yaml").write_text("tasks:\n  ros:\n    install_base: /opt/ros/aos\n")
+    (repo / "ardt.yaml").write_text("tasks:\n  ros:\n    install_base: /opt/ros/app\n")
     ctx = context(repo, dry_run=True)
     tasks.build(ctx, install_base="/elsewhere")
     assert "--install-base /elsewhere" in output(ctx)
 
 
 def test_test_uses_same_install_base(repo: Path) -> None:
-    (repo / "ardt.yaml").write_text("tasks:\n  ros:\n    install_base: /opt/ros/aos\n")
+    (repo / "ardt.yaml").write_text("tasks:\n  ros:\n    install_base: /opt/ros/app\n")
     ctx = context(repo, dry_run=True)
     tasks.test(ctx)
-    assert "colcon test --install-base /opt/ros/aos" in output(ctx)
+    assert "colcon test --install-base /opt/ros/app" in output(ctx)
 
 
 def test_exclude_packages_skips_build_and_test(repo: Path) -> None:
@@ -189,3 +188,45 @@ def test_deps_skip_keys_merge_config_and_cli(repo: Path) -> None:
     text = output(ctx)
     assert "--skip-keys" in text
     assert "gazebo rti-connext-dds" in text
+
+
+# --- the /ws workspace convention ---------------------------------------------
+
+
+def test_workspace_root_of_a_plain_checkout_is_the_repo(tmp_path: Path) -> None:
+    assert workspace_root(tmp_path / "repo") == tmp_path / "repo"
+
+
+def test_workspace_root_of_a_ws_layout_is_the_grandparent(tmp_path: Path) -> None:
+    assert workspace_root(tmp_path / "ws" / "src" / "repo") == tmp_path / "ws"
+    # A repo checked out AS src/ gets the parent for the same reason.
+    assert workspace_root(tmp_path / "ws" / "src") == tmp_path / "ws"
+
+
+def test_repos_import_lands_in_src_external_of_the_workspace(tmp_path: Path) -> None:
+    cfg = ros_config(ArdtConfig())
+    assert repos_target_path(cfg, tmp_path / "ws" / "src" / "repo") == (
+        tmp_path / "ws" / "src" / "external"
+    )
+    # Plain checkout: same shape, one level in.
+    assert repos_target_path(cfg, tmp_path / "repo") == tmp_path / "repo" / "src" / "external"
+
+
+def test_repos_target_override_stays_project_relative(tmp_path: Path) -> None:
+    cfg = ros_config(ArdtConfig.model_validate({"tasks": {"ros": {"repos_target": "deps"}}}))
+    assert repos_target_path(cfg, tmp_path / "ws" / "src" / "repo") == (
+        tmp_path / "ws" / "src" / "repo" / "deps"
+    )
+
+
+def test_colcon_runs_from_the_workspace_root(tmp_path: Path) -> None:
+    """In a /ws layout the build/install/log bases must land beside src/."""
+    project = tmp_path / "ws" / "src" / "repo"
+    project.mkdir(parents=True)
+    (project / "ardt.yaml").write_text("{}\n")
+    ctx = context(project, dry_run=True)
+    assert ctx.project_root == project
+    tasks.build(ctx)
+    # The dry-run plan prints the command; the cwd is the runner's business —
+    # assert it directly on the call the task makes.
+    assert tasks._ws(ctx) == tmp_path / "ws"

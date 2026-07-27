@@ -96,20 +96,20 @@ class TestRequirement:
 
     def test_external_module_installs_from_its_repo_root(self) -> None:
         section = dist.DistConfig(
-            version="v1.2.0",  # pins the monorepo — must NOT leak onto ardt-aos
-            modules={"ardt-aos": dist.ModulePin(git="git+https://x.example.com/ardt-aos.git")},
+            version="v1.2.0",  # pins the monorepo — must NOT leak onto ardt-acme
+            modules={"ardt-acme": dist.ModulePin(git="git+https://x.example.com/ardt-acme.git")},
         )
-        assert section.requirement("ardt-aos") == (
-            "ardt-aos @ git+https://x.example.com/ardt-aos.git"
+        assert section.requirement("ardt-acme") == (
+            "ardt-acme @ git+https://x.example.com/ardt-acme.git"
         )
 
     def test_external_module_with_pin_and_subdirectory(self) -> None:
         pin = dist.ModulePin(
-            git="git+https://x.example.com/mono.git", version="v3", subdirectory="pkgs/ardt-aos"
+            git="git+https://x.example.com/mono.git", version="v3", subdirectory="pkgs/ardt-acme"
         )
-        section = dist.DistConfig(modules={"ardt-aos": pin})
-        assert section.requirement("ardt-aos") == (
-            "ardt-aos @ git+https://x.example.com/mono.git@v3#subdirectory=pkgs/ardt-aos"
+        section = dist.DistConfig(modules={"ardt-acme": pin})
+        assert section.requirement("ardt-acme") == (
+            "ardt-acme @ git+https://x.example.com/mono.git@v3#subdirectory=pkgs/ardt-acme"
         )
 
     def test_requirements_preserve_module_order(self) -> None:

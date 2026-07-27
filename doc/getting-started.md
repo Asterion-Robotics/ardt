@@ -1,5 +1,21 @@
 # Getting started
 
+## The five-minute path
+
+```bash
+# 1. install ardt (uv is the only prerequisite — see below)
+curl -LsSf https://raw.githubusercontent.com/Asterion-Robotics/ardt/main/install.sh | bash
+
+# 2. in a ROS 2 repo that has an ardt.yaml
+ardt dev open        # dev container built, started, VS Code attached
+
+# 3. inside the container
+ardt build
+ardt test
+```
+
+The first `ardt dev open` takes minutes (image build + rosdep); after that, seconds. If anything fails, `ardt dev doctor` names the culprit — including the classic WSL2 one, Docker Desktop's WSL integration being off for your distro. The rest of this page is install variants; the [devcontainer quickstart](themes/devcontainer/quickstart.md) explains what `dev open` set up.
+
 ## Install
 
 `ardt` is a CLI you call from any repo, so install it **once as a uv tool**: a persistent, isolated venv with `ardt` on your `PATH`. No `uv run` prefix, no project venv.

@@ -23,7 +23,7 @@ editor extensions make the language work. It is deliberately *data*: ardt-dev
 imports no ROS package and no pipeline plugin, so a laptop install stays tiny.
 
 Adding a profile is adding an entry to :data:`PROFILES` (plus a Dockerfile
-template). When a domain plugin needs its own (``aos-module``: SDK builder base,
+template). When a domain plugin needs its own (say, an SDK builder base and a
 plugin export layout), the same table is what an ``ardt.dev_profiles`` entry
 point would populate — that indirection is not worth building for one profile.
 """
@@ -167,6 +167,9 @@ ROS2 = Profile(
         "python.defaultInterpreterPath": "/usr/bin/python3",
         "cmake.configureOnOpen": False,
         "files.watcherExclude": {"**/build/**": True, "**/install/**": True, "**/log/**": True},
+        # VS Code opens the workspace root (/ws); the repo's .git sits two
+        # levels down (src/<repo>/.git), one past the default scan depth of 1.
+        "git.repositoryScanMaxDepth": 2,
     },
     container_env={
         # CMake >= 3.17 honors this as an env var, so clangd gets a

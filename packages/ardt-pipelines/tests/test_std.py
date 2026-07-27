@@ -56,36 +56,36 @@ def _ci(project_path: str | None = None, registry: str | None = REGISTRY) -> CII
 class TestImageRef:
     def test_ci_ref_is_namespaced_by_the_project_path(self, repo: Path) -> None:
         """GitLab only accepts pushes under $CI_REGISTRY_IMAGE = registry/<group>/<project>."""
-        ctx = _context(repo, _ci("aos-edge-poc/aos_edge"))
-        assert std.image_ref(ctx) == f"{REGISTRY}/aos-edge-poc/aos_edge:{ctx.version}"
+        ctx = _context(repo, _ci("example-group/my_robot"))
+        assert std.image_ref(ctx) == f"{REGISTRY}/example-group/my_robot:{ctx.version}"
 
     def test_name_appends_a_sub_image(self, repo: Path) -> None:
-        ctx = _context(repo, _ci("aos-edge-poc/aos_edge"))
-        assert std.image_ref(ctx, "slim") == f"{REGISTRY}/aos-edge-poc/aos_edge/slim:{ctx.version}"
+        ctx = _context(repo, _ci("example-group/my_robot"))
+        assert std.image_ref(ctx, "slim") == f"{REGISTRY}/example-group/my_robot/slim:{ctx.version}"
 
     def test_repository_path_is_lowercased(self, repo: Path) -> None:
         """Registries reject uppercase repository paths; GitLab lowercases its own."""
-        ctx = _context(repo, _ci("AOS-Edge-POC/AOS_Edge"))
-        assert std.image_ref(ctx).startswith(f"{REGISTRY}/aos-edge-poc/aos_edge:")
+        ctx = _context(repo, _ci("Example-Group/My_Robot"))
+        assert std.image_ref(ctx).startswith(f"{REGISTRY}/example-group/my_robot:")
 
     @pytest.mark.parametrize(
         "remote",
         [
-            "https://code.example.com/aos-edge-poc/aos_edge.git",
-            "ssh://git@code.example.com:5022/aos-edge-poc/aos_edge.git",
-            "git@code.example.com:aos-edge-poc/aos_edge.git",
+            "https://code.example.com/example-group/my_robot.git",
+            "ssh://git@code.example.com:5022/example-group/my_robot.git",
+            "git@code.example.com:example-group/my_robot.git",
         ],
     )
     def test_local_ref_derives_from_the_git_remote(self, repo: Path, remote: str) -> None:
         """The same full name locally as on CI — the parity rule."""
         git("remote", "add", "origin", remote, cwd=repo)
         ctx = _context(repo, _ci())
-        assert std.image_ref(ctx) == f"{REGISTRY}/aos-edge-poc/aos_edge:{ctx.version}"
+        assert std.image_ref(ctx) == f"{REGISTRY}/example-group/my_robot:{ctx.version}"
 
     def test_ci_project_path_wins_over_the_remote(self, repo: Path) -> None:
         git("remote", "add", "origin", "https://code.example.com/other/place.git", cwd=repo)
-        ctx = _context(repo, _ci("aos-edge-poc/aos_edge"))
-        assert std.image_ref(ctx) == f"{REGISTRY}/aos-edge-poc/aos_edge:{ctx.version}"
+        ctx = _context(repo, _ci("example-group/my_robot"))
+        assert std.image_ref(ctx) == f"{REGISTRY}/example-group/my_robot:{ctx.version}"
 
     def test_unresolvable_path_is_a_clean_error(self, repo: Path) -> None:
         """No flat fallback: a ref outside the project namespace could never push."""

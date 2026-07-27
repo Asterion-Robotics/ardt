@@ -1,18 +1,18 @@
 # Devcontainer
 
-`ardt dev` renders the container a repo is developed in, then drives it. In-environment and engine-free: it writes files and shells out to `docker compose`, and never imports Dagger or a ROS package.
+`ardt dev` renders the container a repo is developed in, then drives it. The everyday surface is one command — `ardt dev open` (or `up` on a headless machine) does whatever is missing: render, volumes, image build, start. [From clone to open container](quickstart.md) is the walkthrough; the table below is the full surface, mostly for debugging one step at a time.
 
 **Repos own no devcontainer.** The recipe and the editor wiring live in `ardt-dev` as package data. `ardt dev sync` writes them into a **gitignored** `.devcontainer/`, hashes them in a manifest, and refuses to clobber anything a human edited.
 
-New to it? [From clone to open container](quickstart.md) is the two-command path; the table below is the full surface.
+The container is a canonical colcon workspace: the repo at `/ws/src/<project>`, `.repos` imports at `/ws/src/external/`, colcon output at `/ws/{build,install,log}` — the same tree the CI recipe builds in ([parity](parity.md)).
 
 | Command | Runs | Does |
 |---|---|---|
-| `ardt dev sync` | host | render `.devcontainer/` + `.vscode/` and add them to `.gitignore` |
-| `ardt dev up` / `shell` / `down` | host | `docker compose` up + postCreate / login shell / stop |
-| `ardt dev open` | host | start the container and open VS Code inside it (`--build` rebuilds first) |
-| `ardt dev volumes` | host | create the shared caches and the colcon subpaths (idempotent) |
-| `ardt dev doctor` | either | check CI parity, ardt pin, render freshness, host wiring |
+| `ardt dev open` | host | everything needed, then VS Code attached to `/ws` (`--build` rebuilds first) |
+| `ardt dev up` / `shell` / `down` | host | everything needed + postCreate / login shell at `/ws` / stop |
+| `ardt dev sync` | host | render `.devcontainer/` + `.vscode/` (also implicit in `up`/`open`) |
+| `ardt dev volumes` | host | create the shared caches and the colcon subpaths (also implicit) |
+| `ardt dev doctor` | either | check docker + daemon, CI parity, ardt pin, render freshness, host wiring |
 | `ardt dev host-config` | host | re-derive only the host overlay (the `initializeCommand`) |
 | `ardt dev bootstrap` | container | claim the volume dirs, then the profile's create steps |
 | `ardt dev compile-commands` | container | merge colcon's per-package files for clangd |

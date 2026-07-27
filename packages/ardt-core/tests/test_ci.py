@@ -41,7 +41,7 @@ def test_gitlab_tag_build(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CI_REGISTRY_USER", "gitlab-ci-token")
     monkeypatch.setenv("CI_REGISTRY_PASSWORD", "secret")
     monkeypatch.setenv("CI_JOB_TOKEN", "jobtoken")
-    monkeypatch.setenv("CI_PROJECT_PATH", "aos/infra/ardt")
+    monkeypatch.setenv("CI_PROJECT_PATH", "example-group/infra/ardt")
 
     info = ci.detect()
     assert info.platform is Platform.GITLAB
@@ -50,7 +50,7 @@ def test_gitlab_tag_build(monkeypatch: pytest.MonkeyPatch) -> None:
     assert info.ref == "v2.0.0"
     assert info.registry == "registry.example.com"
     assert info.registry_password == "secret"
-    assert info.project_path == "aos/infra/ardt"
+    assert info.project_path == "example-group/infra/ardt"
 
 
 def test_gitlab_default_branch(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -101,7 +101,7 @@ def test_local_reads_credentials_file(monkeypatch: pytest.MonkeyPatch, tmp_path:
     (home / ".config" / "ardt").mkdir(parents=True)
     (home / ".config" / "ardt" / "credentials.yaml").write_text(
         "registry: registry.example.com\nregistry_user: me\nregistry_password: pw\n"
-        "project_path: aos-edge-poc/aos_edge\n"
+        "project_path: example-group/my_robot\n"
     )
     monkeypatch.setenv("HOME", str(home))
 
@@ -109,7 +109,7 @@ def test_local_reads_credentials_file(monkeypatch: pytest.MonkeyPatch, tmp_path:
     assert info.platform is Platform.LOCAL
     assert info.registry == "registry.example.com"
     assert info.registry_password == "pw"
-    assert info.project_path == "aos-edge-poc/aos_edge"
+    assert info.project_path == "example-group/my_robot"
 
 
 def test_local_carries_the_ssh_agent_socket(monkeypatch: pytest.MonkeyPatch) -> None:

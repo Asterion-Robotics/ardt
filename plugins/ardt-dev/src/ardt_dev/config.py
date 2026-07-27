@@ -59,9 +59,17 @@ class DevConfig(BaseModel):
     ardt_modules: list[str] = Field(default_factory=list)
     """Extra ardt modules installed in the container, on top of the profile's."""
 
-    workspace_folder: str = "/ws/src"
-    """Where the repo mounts. Matches the CI recipe's build stage, so CMake
-    paths, ``compile_commands.json`` and stack traces read the same in both."""
+    workspace_folder: str = "/ws"
+    """The colcon workspace root: what VS Code opens, where colcon runs, where
+    ``build/``/``install/``/``log/`` land. The repo itself mounts two levels
+    down at ``<workspace_folder>/src/<project>`` (:meth:`source_folder`),
+    matching the CI recipe's ``COPY . /ws/src/<project>`` — so CMake paths,
+    ``compile_commands.json`` and stack traces read the same in both, and
+    ``.repos`` imports become the repo's siblings under ``src/``."""
+
+    def source_folder(self, project: str) -> str:
+        """Where the repo mounts: one entry under the workspace's ``src/``."""
+        return f"{self.workspace_folder}/src/{project}"
 
     gui: bool = True
     """Wire the host's display through (rviz2/rqt). Off for headless repos."""

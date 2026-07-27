@@ -37,7 +37,18 @@ from ardt_core.context import Context
 from ardt_core.errors import ArdtError
 from ardt_core.runner import Result
 
-from .config import RosConfig, ros_config
+from .config import RosConfig, repos_target_path, ros_config, workspace_root
+
+
+def _ws(ctx: Context) -> Path:
+    """Where colcon runs: the workspace root, not necessarily the project root.
+
+    In the ``/ws`` layout (container and CI both) the repo is ``/ws/src`` and
+    colcon must run from ``/ws`` so its default ``build``/``install``/``log``
+    bases land beside the sources. For a plain checkout the two coincide and
+    nothing changes.
+    """
+    return workspace_root(ctx.project_root)
 
 
 def _ros_setup(cfg: RosConfig) -> Path:
@@ -80,7 +91,7 @@ def deps(
                 f"repos file {cfg.repos_file} does not exist",
                 hint="fix `tasks.ros.repos_file` in ardt.yaml, or pass --skip-vcs",
             )
-        target = ctx.project_root / cfg.repos_target
+        target = repos_target_path(cfg, ctx.project_root)
         with ctx.console.section(f"vcs import {cfg.repos_file}"):
             ctx.runner.require("vcs", hint="pip install vcstool")
             if not ctx.dry_run:
@@ -108,7 +119,7 @@ def deps(
         script = f"rosdep install --from-paths $({listing}) --ignore-src -r -y"
         if keys:
             script += f" --skip-keys {shlex.quote(' '.join(keys))}"
-        ctx.runner.run(_sourced(ctx, cfg, script))
+        ctx.runner.run(_sourced(ctx, cfg, script), cwd=_ws(ctx))
 
 
 def build(
@@ -120,7 +131,7 @@ def build(
     symlink: bool | None = None,
     install_base: str | None = None,
 ) -> None:
-    """``colcon build`` in the project root.
+    """``colcon build`` in the workspace root.
 
     ``symlink`` and ``install_base`` override their ``tasks.ros`` config values
     when given — image builds need real files in a fixed install base, dev
@@ -145,7 +156,7 @@ def build(
 
     with ctx.console.section("colcon build"):
         ctx.runner.require("colcon", hint="apt install python3-colcon-common-extensions")
-        ctx.runner.run(_in_ros_env(ctx, cfg, command))
+        ctx.runner.run(_in_ros_env(ctx, cfg, command), cwd=_ws(ctx))
     ctx.emit(build_ok=True, install_base=base or "install")
 
 
@@ -178,12 +189,13 @@ def test(
     with ctx.console.section("colcon test"):
         ctx.runner.require("colcon", hint="apt install python3-colcon-common-extensions")
         # Let the summary below produce the diagnosis, rather than a bare exit code.
-        test_run: Result = ctx.runner.run(_in_ros_env(ctx, cfg, command), check=False)
+        test_run: Result = ctx.runner.run(_in_ros_env(ctx, cfg, command), check=False, cwd=_ws(ctx))
 
     with ctx.console.section("test results"):
         summary = ctx.runner.run(
             _in_ros_env(ctx, cfg, ["colcon", "test-result", "--all", "--verbose"]),
             check=False,
+            cwd=_ws(ctx),
         )
 
     ctx.emit(junit_glob="build/**/test_results/**/*.xml", tests_ok=summary.ok and test_run.ok)

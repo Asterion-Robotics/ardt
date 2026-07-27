@@ -20,7 +20,7 @@
 ``ardt.yaml`` at the project root, or a ``[tool.ardt]`` table in ``pyproject.toml``
 — same model, the file wins.
 
-Sections are namespaced per plugin (``tasks:``, ``pipelines:``, ``aos:``). Core
+Sections are namespaced per plugin (``tasks:``, ``pipelines:``, ``doc:``). Core
 does not know their shape; a plugin claims its section and parses it into its own
 pydantic model via :meth:`ArdtConfig.section_as`. An unknown section is an error,
 *unless* it belongs to a plugin that simply is not installed here — then it is a
@@ -42,12 +42,13 @@ from .errors import ConfigError
 CONFIG_FILENAMES = ("ardt.yaml", "ardt.yml")
 PYPROJECT = "pyproject.toml"
 
-RESERVED_SECTIONS = frozenset({"tasks", "pipelines", "aos", "doc", "dev", "templates"})
+RESERVED_SECTIONS = frozenset({"tasks", "pipelines", "doc", "dev", "templates"})
 """Section names owned by first-party plugins.
 
-Present here so that a repo configuring ``aos:`` on a machine without ``ardt-aos``
-installed gets a warning, while ``aoss:`` still gets an error. Growing this set is
-a core release; a third-party plugin's section is recognized only when installed.
+Present here so that a repo configuring ``doc:`` on a machine without
+``ardt-doc-tasks`` installed gets a warning, while ``docs:`` still gets an
+error. Growing this set is a core release; a third-party plugin's section is
+recognized only when installed.
 """
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
@@ -119,13 +120,51 @@ class ConfigSource(BaseModel):
     """One of ``ardt.yaml``, ``ardt.yml``, ``pyproject.toml``, ``defaults``."""
 
 
+def _config_file_in(directory: Path) -> bool:
+    return any((directory / filename).is_file() for filename in CONFIG_FILENAMES)
+
+
+def _workspace_projects(src: Path) -> list[Path]:
+    """The projects living one level under a workspace's ``src/`` dir."""
+    if not src.is_dir():
+        return []
+    return sorted(child for child in src.iterdir() if child.is_dir() and _config_file_in(child))
+
+
 def find_project_root(start: Path) -> Path:
-    """Walk up from ``start`` to the first directory holding a config file or ``.git``."""
+    """Walk up from ``start`` to the first directory holding a config file or ``.git``.
+
+    One convention on top of the walk, for the colcon workspace layout
+    (``/ws/src/<repo>`` is the project, ``/ws/{build,install,log}`` the colcon
+    output): a directory whose ``src/`` holds a project *is* a workspace root,
+    and the project root is that ``src/<repo>``. It is what lets ``ardt build``
+    run from ``/ws`` in a container or ``~/ws`` on a host, without a
+    ``--project-root`` flag. Only :data:`CONFIG_FILENAMES` count as project
+    markers here — a bare ``src/*/pyproject.toml`` is too common to mean "ardt
+    project" on its own — and the convention is checked before ``.git`` because
+    a config file is the stronger signal.
+
+    Several projects under one ``src/`` (imported ``.repos`` deps can carry
+    their own ``ardt.yaml``) is ambiguous from outside them and raises; running
+    from *inside* a project resolves to that project before this rule is ever
+    consulted.
+    """
     start = start.resolve()
     for directory in (start, *start.parents):
-        for filename in CONFIG_FILENAMES:
-            if (directory / filename).is_file():
-                return directory
+        if _config_file_in(directory):
+            return directory
+        src = directory if directory.name == "src" else directory / "src"
+        if src is not directory and _config_file_in(src):
+            return src  # a repo checked out as `src` itself
+        projects = _workspace_projects(src)
+        if len(projects) == 1:
+            return projects[0]
+        if len(projects) > 1:
+            listed = ", ".join(p.name for p in projects)
+            raise ConfigError(
+                f"several projects under {src}: {listed}",
+                hint="run ardt from inside the one you mean",
+            )
         if (directory / ".git").exists():
             return directory
     return start

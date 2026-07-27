@@ -37,6 +37,7 @@ def render(tmp_path: Path, **overrides: object) -> str:
     kwargs: dict = {
         "builder": "ros:jazzy-ros-base",
         "base_image": "base:1",
+        "project": "demo",
         "project_root": tmp_path,
         "base_dockerfile": "base.Dockerfile",
         "cmd": None,
@@ -45,6 +46,14 @@ def render(tmp_path: Path, **overrides: object) -> str:
     }
     kwargs.update(overrides)
     return recipes.render_ros2(**kwargs)
+
+
+def test_the_workspace_is_canonical_and_the_workdir_is_the_repo(tmp_path: Path) -> None:
+    """Repo at /ws/src/<project>, tasks anchored there, results staged from /ws/build."""
+    rendered = render(tmp_path, project="my_repo")
+    assert "COPY . /ws/src/my_repo" in rendered
+    assert "WORKDIR /ws/src/my_repo" in rendered
+    assert "cd /ws/build" in rendered
 
 
 def test_no_placeholders_survive(tmp_path: Path) -> None:
@@ -142,14 +151,14 @@ class TestBaseExtension:
 class TestInstallBaseAndStrip:
     def test_default_install_base(self, tmp_path: Path) -> None:
         rendered = render(tmp_path)
-        assert "--install-base /opt/ros/aos" in rendered
-        assert "COPY --from=build /opt/ros/aos /opt/ros/aos" in rendered
+        assert "--install-base /opt/ros/app" in rendered
+        assert "COPY --from=build /opt/ros/app /opt/ros/app" in rendered
 
     def test_custom_install_base(self, tmp_path: Path) -> None:
         rendered = render(tmp_path, install_base="/opt/thing")
         assert "--install-base /opt/thing" in rendered
         assert "COPY --from=build /opt/thing /opt/thing" in rendered
-        assert "/opt/ros/aos" not in rendered
+        assert "/opt/ros/app" not in rendered
 
     def test_no_strip_by_default(self, tmp_path: Path) -> None:
         assert "IP protection" not in render(tmp_path)

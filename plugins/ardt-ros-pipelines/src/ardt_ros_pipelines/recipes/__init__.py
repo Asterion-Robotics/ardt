@@ -96,7 +96,7 @@ _GIT_MOUNTS = f"""--mount=type=ssh \\
     --mount=type=secret,id={GIT_TOKEN_SECRET},required=false \\
     """
 
-# The proven aos_edge auth branching, verbatim in mechanism: an SSH agent when
+# The auth branching, proven in production: an SSH agent when
 # BuildKit forwarded one, else the token secret via a credential helper that
 # reads /run/secrets at *use* time (the token itself never lands in a layer),
 # else fail with the two ways to provide credentials.
@@ -182,12 +182,13 @@ def render_ros2(
     *,
     builder: str,
     base_image: str,
+    project: str,
     project_root: Path,
     base_dockerfile: str,
     cmd: list[str] | None,
     ardt_requirements: Sequence[str],
     local_ardt: bool,
-    install_base: str = "/opt/ros/aos",
+    install_base: str = "/opt/ros/app",
     strip_dev_files: bool = False,
     git_host: str | None = None,
     git_ssh_port: int = 22,
@@ -195,6 +196,9 @@ def render_ros2(
 ) -> str:
     """Render the ROS 2 workspace recipe for one repo.
 
+    ``project`` names the repo's directory under ``/ws/src`` — the same name
+    the dev container mounts it at, which is what keeps every source path
+    identical between the two.
     ``ardt_requirements`` (from :meth:`ardt_core.dist.DistConfig.requirements`
     for :data:`ARDT_MODULES`) is how ardt installs into the build stage;
     ``local_ardt`` replaces it with the injected-checkout install.
@@ -232,6 +236,7 @@ def render_ros2(
     return (
         _template("ros2.Dockerfile.tmpl")
         .replace("@VERSION@", __version__)
+        .replace("@PROJECT@", project)
         .replace("@BUILDER@", builder)
         .replace("@BASE_IMAGE@", base_image)
         .replace("@BASE_FILE@", base_dockerfile)

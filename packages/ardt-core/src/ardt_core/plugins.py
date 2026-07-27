@@ -25,10 +25,9 @@ A plugin provides any subset of three entry-point groups:
 ``ardt.templates``    scaffold sets for ``ardt new``
 ===================  ==========================================================
 
-Every plugin distribution declares ``ARDT_PLUGIN_API`` on its root package. The
-guard is the same one the AOS SDK applies to BT plugins: an incompatible or
-undeclared API version is **refused loudly and skipped whole** — never
-half-loaded, never a traceback, and never fatal to the rest of the CLI.
+Every plugin distribution declares ``ARDT_PLUGIN_API`` on its root package: an
+incompatible or undeclared API version is **refused loudly and skipped whole**
+— never half-loaded, never a traceback, and never fatal to the rest of the CLI.
 
 A root package may also declare ``ARDT_CONFIG_SECTION`` — the ``ardt.yaml``
 section it claims. Without it the section is derived from the distribution
