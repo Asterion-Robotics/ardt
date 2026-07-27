@@ -1,14 +1,8 @@
 # ardt-ros-pipelines
 
-The pipeline plugin for **ROS 2 workspace repos**: the `ros-ci` pipeline and the
-`ros2` image recipe it renders. Builds on [ardt-pipelines](../ardt-pipelines)
-(the generic Dagger plane) and registers through the standard `ardt.pipelines`
-entry point — the machinery does not special-case it.
+The pipeline plugin for **ROS 2 workspace repos**: the `ros-ci` pipeline and the `ros2` image recipe it renders. Builds on [ardt-pipelines](../ardt-pipelines) (the generic Dagger plane) and registers through the standard `ardt.pipelines` entry point — the machinery does not special-case it.
 
-**Repos own no Dockerfile.** The image recipe for this repo type lives here
-(`recipes/ros2.Dockerfile.tmpl`) and updates by bumping the pinned ardt version
-— never by editing files across repos. The recipe runs the ardt tasks as build
-stages, so *building the image is the CI run*:
+**Repos own no Dockerfile.** The image recipe for this repo type lives here (`recipes/ros2.Dockerfile.tmpl`) and updates by bumping the pinned ardt version — never by editing files across repos. The recipe runs the ardt tasks as build stages, so *building the image is the CI run*:
 
 ```
 ardt pipe run ros-ci
@@ -43,7 +37,4 @@ Per-repo knobs, all in `ardt.yaml` (`pipelines.ros_ci:`):
 | `strip_dev_files` | IP protection: strip headers, static libs and CMake/pkg-config exports before the runtime copy |
 | `base.Dockerfile` (file) | the only local Docker file a repo may carry: a single-stage base extension (`FROM ${BASE_IMAGE}` + layers below the app — drivers, kernel modules); spliced into the rendered recipe |
 
-Until the baked `ardt-ci` tool image exists, the recipe pip-installs the
-ardt *task plane* (never the pipeline plane) into the build stage from
-`ardt_source` — the public git repo by default, or a local checkout for
-development: `ardt pipe run ros-ci --arg ardt_source=/path/to/ardt`.
+Until the baked `ardt-ci` tool image exists, the recipe pip-installs the ardt *task plane* (never the pipeline plane) into the build stage from `ardt_source` — the public git repo by default, or a local checkout for development: `ardt pipe run ros-ci --arg ardt_source=/path/to/ardt`.

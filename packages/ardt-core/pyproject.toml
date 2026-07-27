@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "ardt-core"
 dynamic = ["version"]
-description = "ardt — the company-wide CLI platform: one small core, everything else a plugin"
+description = "ardt — the open core of Asterion Robotics' dev/CI tooling: one small core, everything else a plugin"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
