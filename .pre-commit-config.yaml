@@ -19,7 +19,7 @@ repos:
   # a blank license-file line as `#`, which does not match the header committed
   # across this tree, so it fails to recognize it and prepends a second copy.
   # The SPDX line is the part machines actually read; formatting stays human's.
-  # `.license-header.txt` is the canonical text to paste into a new file.
+  # Any existing source file is the template for a new one.
   - repo: local
     hooks:
       - id: license-header
