@@ -82,8 +82,6 @@ ardt info --json           # machine-readable envelope on stdout (diagnostics on
 
 One file per repo — `ardt.yaml` (or a `[tool.ardt]` table in `pyproject.toml`; the file wins). Sections are namespaced per plugin. See [ardt.example.yaml](ardt.example.yaml).
 
-
-
 ## Versioning
 
 **The git tag is the only version that exists.** No file in this repo states one: every `pyproject.toml` is `dynamic = ["version"]` via `hatch-vcs`, and every package's `__version__` reads its installed metadata. So a release is one command and there is nothing to keep in sync:
