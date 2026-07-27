@@ -118,4 +118,3 @@ The only mandatory package: the CLI, the plugin loader, the context, the config,
    :undoc-members:
    :show-inheritance:
 ```
-

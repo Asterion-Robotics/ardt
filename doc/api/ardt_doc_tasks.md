@@ -64,4 +64,3 @@ The documentation task plane: the sphinx preset, the doxygen front, the ROS 2 in
    :undoc-members:
    :show-inheritance:
 ```
-

@@ -28,4 +28,3 @@ The ROS 2 task plane: `ardt deps` / `build` / `test` over vcs, rosdep and colcon
    :undoc-members:
    :show-inheritance:
 ```
-

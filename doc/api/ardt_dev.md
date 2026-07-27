@@ -46,4 +46,3 @@ The devcontainer theme: renders `.devcontainer/` from package data, then drives 
    :undoc-members:
    :show-inheritance:
 ```
-

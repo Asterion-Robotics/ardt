@@ -46,4 +46,3 @@ The generic Dagger plane: the `@pipeline` registry and parameter binding, the `a
    :undoc-members:
    :show-inheritance:
 ```
-

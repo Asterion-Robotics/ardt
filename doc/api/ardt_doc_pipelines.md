@@ -10,4 +10,3 @@ The documentation pipeline plane: `docs-ci`, the versioned site builder.
    :undoc-members:
    :show-inheritance:
 ```
-
