@@ -16,7 +16,7 @@ pipelines:
     # The house style: a plain sphinx extension, so no ardt distribution can
     # declare it. doc/conf.py adds it to `extensions`.
     pip_packages:
-      - "asterion-sphinx-style @ git+https://github.com/Asterion-Robotics/asterion_sphinx_style.git@main"
+      - "asterion-sphinx-style>=0.1.0"
     versions:
       # Every release joins the site, each built from git history with its own
       # doc/ and conf.py. `ardt doc build` fails hard on a ref that carries no

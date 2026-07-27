@@ -22,7 +22,7 @@ pipelines:
 
 The builder installs the ardt **task** plane only (`ardt-core` + `ardt-doc-tasks`) from the repo's `ardt:` pin, then runs `ardt doc build` per ref. A repo whose docs autodoc a Python API must therefore make that API installable in the builder: `ardt_modules:` names the ardt modules the documentation needs, typically a plugin repo autodoccing itself, resolved through the same `ardt:` pin (out-of-monorepo modules included).
 
-`pip_packages:` covers what no ardt distribution can declare, a sphinx **style** package above all. They are PEP 508 strings, so an index release (`x==1.2.0`) and a direct reference (`x @ git+https://…@v1.2.0`) both work and publishing is optional — the builder already installs ardt itself from a git URL by default.
+`pip_packages:` covers what no ardt distribution can declare, a sphinx **style** package above all. They are PEP 508 strings, so an index release (`x>=1.2`) and a direct reference (`x @ git+https://…@v1.2.0`) both work, and an unpublished package is still reachable — the builder already installs ardt itself from a git URL by default.
 
 ## Styles
 
@@ -36,6 +36,17 @@ html_logo = "_static/my-logo.png"                         # optional; wins over 
 ```
 
 Rebind rather than `extensions.append(...)`: the star-import binds the preset's *own* list, so appending mutates it in place.
+
+```yaml
+pipelines:
+  docs_ci:
+    pip_packages:
+      - "asterion-sphinx-style>=0.1.0"
+```
+
+That covers the containerized build. A developer needs the same package in the environment `ardt` itself runs from, or a local `ardt doc build` renders unstyled — one more `--with asterion-sphinx-style` on the `uv tool install` line.
+
+A lower bound rather than `==` is deliberate: a house style is meant to move with the brand, not to be bumped by hand in every repo. Each *resolved* release is still immutable, since an index forbids re-uploading a version — which a git tag does not.
 
 Three rules make a style safe to use, because docs-ci rebuilds *every* version of a site with the *currently installed* one:
 
