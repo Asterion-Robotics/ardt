@@ -65,7 +65,7 @@ def _git_install(requirements: Sequence[str]) -> str:
 
 
 def _local_install() -> str:
-    paths = " ".join(f"/opt/ardt-src/{dist.subdirectory(m)}" for m in ARDT_MODULES)
+    paths = " ".join(dist.local_requirement(m, "/opt/ardt-src") for m in ARDT_MODULES)
     return (
         "# dev mode: ardt injected from a local checkout instead of the configured git\n"
         f"COPY {LOCAL_ARDT_DIR} /opt/ardt-src\n"

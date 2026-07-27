@@ -12,6 +12,8 @@ One page per distribution, one section per module. The pages autodoc the **insta
 
 Public surface: everything documented here is importable by plugins. {py:class}`~ardt_core.context.Context`, {py:mod}`ardt_core.config` and {py:mod}`ardt_core.testing` are the three a plugin author touches first.
 
+{py:mod}`ardt_core.testing` is the one module with a dependency the core install deliberately omits: it ships pytest fixtures, so reach for it as `ardt-core[testing]`.
+
 ```{toctree}
 :maxdepth: 1
 

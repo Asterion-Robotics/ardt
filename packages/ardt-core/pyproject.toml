@@ -28,6 +28,13 @@ dependencies = [
     "rich>=13.0",
 ]
 
+# `ardt_core.testing` ships the shared pytest fixtures plugin authors build their
+# suites on, so it imports pytest at module scope. Declaring that as an extra
+# keeps the runtime install lean while making the dependency real for anyone who
+# imports the module — a test suite, or sphinx autodoc executing it.
+[project.optional-dependencies]
+testing = ["pytest>=8.0"]
+
 [project.scripts]
 ardt = "ardt_core.cli:main"
 
