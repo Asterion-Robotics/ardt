@@ -2,8 +2,8 @@
 
 pipelines:
   docs_ci:
-    # doc/conf.py autodocs the *installed* distributions and imports all seven
-    # eagerly, so the builder needs the whole workspace, not just the task plane.
+    # doc/conf.py autodocs the *installed* distributions and imports all seven,
+    # so the builder needs the whole workspace, not just the task plane.
     # `[testing]` because autodoc executes what it documents and
     # `ardt_core.testing` imports pytest at module scope.
     ardt_modules:
@@ -13,6 +13,10 @@ pipelines:
       - ardt-ros-tasks
       - ardt-ros-pipelines
       - ardt-doc-pipelines
+    # The house style: a plain sphinx extension, so no ardt distribution can
+    # declare it. doc/conf.py adds it to `extensions`.
+    pip_packages:
+      - "asterion-sphinx-style @ git+https://github.com/Asterion-Robotics/asterion_sphinx_style.git@main"
     versions:
       # Every release joins the site, each built from git history with its own
       # doc/ and conf.py. `ardt doc build` fails hard on a ref that carries no

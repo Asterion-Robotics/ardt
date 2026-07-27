@@ -37,6 +37,11 @@ from ardt_doc_tasks.preset import *  # noqa: F403
 project = "ardt"
 author = "Asterion Robotics"
 
+# The house style: a plain sphinx extension, pinned for the docs builder in
+# `pipelines.docs_ci.pip_packages`. Rebound rather than appended — the star
+# import above binds the preset's own list, so `.append()` would mutate it.
+extensions = [*extensions, "asterion_sphinx_style"]  # noqa: F405
+
 # --- autodoc/pydantic ordering hazard -------------------------------------
 #
 # Sphinx's autodoc merges a class's *source-level* annotations into the live
