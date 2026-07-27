@@ -39,6 +39,10 @@ project:
 
 # ardt-ros-tasks — the `tasks.ros:` subsection.
 tasks:
+  # ardt-doc-tasks — the `tasks.doc:` subsection.
+  # doc:
+  #   style: [asterion_sphinx_style] # house style; a plain sphinx extension,
+  #                                  # installed via pipelines.docs_ci.pip_packages
   ros:
     distro: jazzy
     repos_file: aos_edge.repos # imported by `ardt deps` before rosdep runs

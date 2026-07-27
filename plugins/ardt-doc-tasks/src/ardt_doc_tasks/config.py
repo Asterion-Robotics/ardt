@@ -25,6 +25,13 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from ardt_core.config import ArdtConfig
 
+STYLE_ENV = "ARDT_DOC_STYLE"
+"""Environment variable carrying ``tasks.doc.style`` into the sphinx process.
+
+The contract between the doc task, the doc pipeline and the preset: whoever sets
+it wins, so a builder can impose one style on every version of a site while a
+plain ``ardt doc build`` still honours the repo's own config."""
+
 DOC_OUTPUT = "build/doc"
 """Fixed output convention: html at ``build/doc/html``, doxygen XML at
 ``build/doc/doxygen/xml``. The preset finds the XML by this path (relative to
@@ -51,6 +58,16 @@ class DocConfig(BaseModel):
     strict: bool = True
     """Warnings are errors (``sphinx -W --keep-going``) — the doc equivalent of
     a red test."""
+
+    style: list[str] = Field(default_factory=list)
+    """Sphinx extensions providing the repo's house style, appended to the
+    preset's ``extensions``.
+
+    Declared here rather than in ``conf.py`` so a style can *float*: the doc
+    pipeline forwards this to the builder, where it applies to every version of
+    the site, including releases whose own ``conf.py`` predates the style. The
+    package itself is a plain sphinx extension and installs through
+    ``pipelines.docs_ci.pip_packages`` (and alongside ``ardt`` locally)."""
 
 
 class TasksSection(BaseModel):

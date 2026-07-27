@@ -23,9 +23,12 @@ import contextlib
 import io
 from pathlib import Path
 
+import pytest
+
 from ardt_core.config import ArdtConfig
-from ardt_doc_tasks import doxygen
-from ardt_doc_tasks.config import doc_config
+from ardt_core.context import Context
+from ardt_doc_tasks import config, doxygen, tasks
+from ardt_doc_tasks.config import DocConfig, doc_config
 
 CONF = "from ardt_doc_tasks.preset import *  # noqa: F403\n\nproject = 'demo'\n"
 
@@ -125,3 +128,25 @@ class TestRealSphinxBuild:
         html = index.read_text(encoding="utf-8")
         assert "Ping" in html and "stamp" in html
         assert '"html_dir": "build/doc/html"' in out
+
+
+class TestStyleEnv:
+    """`tasks.doc.style` reaches sphinx by environment, so a builder can impose
+    one style on refs whose own config predates it."""
+
+    def test_absent_when_no_style_is_configured(self, repo: Path) -> None:
+        ctx = Context.build(cwd=repo)
+        cfg = doc_config(ctx.cfg)
+        assert tasks._style_env(ctx, cfg) == {config.STYLE_ENV: ""}
+
+    def test_carries_the_configured_styles(self, repo: Path) -> None:
+        ctx = Context.build(cwd=repo)
+        cfg = DocConfig.model_validate({"style": ["a_style", "b_style"]})
+        assert tasks._style_env(ctx, cfg) == {config.STYLE_ENV: "a_style b_style"}
+
+    def test_an_inherited_value_wins(self, repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        # The pipeline sets it on the builder; the ref's own config must not win.
+        monkeypatch.setenv(config.STYLE_ENV, "imposed_style")
+        ctx = Context.build(cwd=repo)
+        cfg = DocConfig.model_validate({"style": ["local_style"]})
+        assert tasks._style_env(ctx, cfg) == {}
