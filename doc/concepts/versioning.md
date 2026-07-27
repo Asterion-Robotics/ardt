@@ -2,6 +2,12 @@
 
 **The git tag is the only version that exists.** No file in the repo states one: every `pyproject.toml` is `dynamic = ["version"]` via `hatch-vcs`, and every package's `__version__` reads its installed metadata. A release is one command, and there is nothing to keep in sync.
 
+```{image} versioning-sources.svg
+:alt: The git tag is the only version; hatch-vcs, ctx.version and git describe each derive from it.
+:width: 100%
+:align: center
+```
+
 ```bash
 git tag v0.1.0 && git push --tags
 ```

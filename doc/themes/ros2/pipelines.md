@@ -4,6 +4,12 @@
 
 **Repos own no Dockerfile.** The recipe for this repo type (`recipes/ros2.Dockerfile.tmpl`) lives in the plugin and updates by bumping the pinned ardt version. Because the recipe runs the ardt tasks as build stages, *building the image is the CI run*:
 
+```{image} ros-ci-stages.svg
+:alt: The build target runs ardt deps, build and test as image stages and exports reports; the runtime target ships the install base.
+:width: 100%
+:align: center
+```
+
 ```text
 ardt pipe run ros-ci
 │
