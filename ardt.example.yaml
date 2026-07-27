@@ -64,6 +64,8 @@ tasks:
 #   docs_ci:
 #     builder: python:3.12-slim # docs toolchain container (never ships)
 #     ardt_modules: [ardt-aos] # ardt modules the docs need importable (autodoc)
+#     pip_packages: # everything else: a sphinx style, a private doc dependency
+#       - "asterion-sphinx-style @ git+https://github.com/Asterion-Robotics/asterion-sphinx-style.git@v0.1.0"
 #     versions:
 #       branches: [main] # historical versions joining the site (+ working tree)
 #       tags: "v*"
