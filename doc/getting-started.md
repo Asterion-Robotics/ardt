@@ -4,13 +4,21 @@
 
 `ardt` is a CLI you call from any repo, so install it **once as a uv tool**: a persistent, isolated venv with `ardt` on your `PATH`. No `uv run` prefix, no project venv.
 
-The one-liner does that for you, and needs [uv](https://docs.astral.sh/uv/) already installed:
+The one-liner does that for you. [uv](https://docs.astral.sh/uv/) is the only prerequisite:
 
 ```bash
 curl -LsSf https://raw.githubusercontent.com/Asterion-Robotics/ardt/main/install.sh | bash
 ```
 
-`ARDT_REF=v0.1.0` pins a release rather than tracking the default branch, and `ARDT_MODULES="…"` picks the plugin set. The script is short and worth reading before piping it anywhere.
+ardt's installer deliberately will not install uv for you: chaining installers hides what you are trusting. `ARDT_REF=v0.1.0` pins a release rather than tracking the default branch, and `ARDT_MODULES="…"` picks the plugin set. The script is short and worth reading before piping it anywhere.
+
+:::{admonition} To install uv
+:class: note
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+:::
 
 ### From the index
 

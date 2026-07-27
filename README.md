@@ -6,112 +6,58 @@
 
 > The open core of Asterion Robotics' development tooling: **one small core, everything else a plugin.** Robotics or not. For instance, the core knows nothing about ROS; ROS-ness itself is a plugin.
 
-Reproducible dev containers, CI that runs the same commands a developer does, versioned docs: these are not our problems, they are every robotics team's. So the core and the general-purpose plugins are public and Apache-2.0, and it is what our own public repos are built with. Our internal processes and domain knowledge stay where they belong — in private plugins (`ardt-aos`) that install alongside, through the same entry points any third-party plugin uses.
+One CLI for the three things every robotics repo needs: a dev container, CI that runs the same commands a developer does, and versioned docs. Tasks run wherever you invoke them; pipelines run those same tasks *inside* containers, so a green CI run means the commands you type locally passed.
 
-This workspace contains a fully-typed `ardt-core`, common task plugins (ROS2, docs, devcontainer), and a default Dagger pipeline plane. Business logic plugins and pinned base images can be added from external sources.
+**[Documentation](https://asterion-robotics.github.io/ardt/)**: concepts, configuration, and what each plugin adds.
 
-## The two-plane model
-
-| Plane | What it is | Where it runs | Package |
-|---|---|---|---|
-| **tasks** | `ardt build` / `test` / `deps` … | wherever invoked — dev shell, devcontainer, CI container | `ardt-<theme>-tasks` |
-| **pipelines** | `ardt pipe run <name>` | orchestrate containers/registries/services via Dagger | `ardt-pipelines` + `ardt-<theme>-pipelines` |
-
-Pipelines call tasks *inside* containers; tasks never call pipelines. Core imports neither ROS nor Dagger, so installing it never drags in an engine.
-
-## Layout
-
-```
-ardt/
-├── packages/                # the platform (each package owns its unit tests, <pkg>/tests/)
-│   ├── ardt-core/           # cli, plugin loader, context, config, runner, console, version policy
-│   ├── ardt-pipelines/      # the generic Dagger plane: `ardt pipe`, @pipeline registry, std helpers
-│   └── ardt-cli/            # metapackage: no code, one extra per theme (`uv tool install ardt-cli[ros]`)
-├── plugins/                 # first-party theme plugins (ardt-<theme>-tasks / -pipelines)
-│   ├── ardt-ros-tasks/      # deps / build / test (colcon, rosdep, vcs) — in-env tasks
-│   ├── ardt-ros-pipelines/  # ROS 2 pipeline plugin: ros-ci + the ros2 image recipe
-│   ├── ardt-doc-tasks/      # doc build (sphinx preset + doxygen/breathe + ros2-interfaces)
-│   ├── ardt-dev/            # `ardt dev`: renders + drives the repo's devcontainer (gitignored)
-│   └── ardt-doc-pipelines/  # docs-ci: versioned site (working tree + tags) -> public/
-├── tests/                # cross-package only: policy sweeps + docker-marked integration
-└── .github/workflows/    # bootstrap CI (lint + format + pyright strict + coverage gate)
-```
-
-Shared test fixtures (`repo`, `console`, CI-env isolation) ship as `ardt_core.testing` — third-party plugins get them the same way our own packages do.
-
-## Installation
-
-`ardt` is a CLI you call from any repo, so install it **once as a uv tool** — a persistent, isolated venv with `ardt` on your PATH; no `uv run` prefix, no project venv needed:
+## Install
 
 ```bash
 curl -LsSf https://raw.githubusercontent.com/Asterion-Robotics/ardt/main/install.sh | bash
 ```
 
-[`install.sh`](install.sh) is a thin wrapper over `uv tool install`, and worth reading before you pipe it anywhere. `ARDT_REF=v0.1.0` pins a release, `ARDT_MODULES="…"` picks the plugin set. It needs [uv](https://docs.astral.sh/uv/), and says so rather than installing it for you.
+[uv](https://docs.astral.sh/uv/) is the only prerequisite, and ardt's installer will not install it for you: chaining installers hides what you are trusting. `ARDT_REF=v0.1.0` pins a release, `ARDT_MODULES="…"` picks the plugin set. [`install.sh`](install.sh) is short, and worth reading before you pipe it anywhere.
 
-Once the distributions are published, `ardt-cli` bundles them — a metapackage with no code of its own, one extra per theme:
+> [!NOTE]
+> To install uv:
+> ```bash
+> curl -LsSf https://astral.sh/uv/install.sh | sh
+> ```
 
-```bash
-uv tool install "ardt-cli[ros]"     # also: [doc], [devcontainer], [all]
-```
+Other routes — a published release, a fork, an editable checkout — are under *Getting started* in the [documentation](https://asterion-robotics.github.io/ardt/).
 
-Developing on ardt itself wants an editable install instead:
-
-```bash
-uv tool install --editable ./packages/ardt-core \
-    --with-editable ./packages/ardt-pipelines \
-    --with-editable ./plugins/ardt-ros-tasks \
-    --with-editable ./plugins/ardt-doc-tasks \
-    --with-editable ./plugins/ardt-dev \
-    --with-editable ./plugins/ardt-ros-pipelines \
-    --with-editable ./plugins/ardt-doc-pipelines
-```
-
-The by-hand git form, and what each plugin adds, are in [Getting started](https://asterion-robotics.github.io/ardt/).
-
-## Quick start
+## ROS 2
 
 ```bash
-ardt info                  # dump the resolved context
-ardt plugins               # what's loaded, from where, at which API version
-ardt build --dry-run       # print the plan; run nothing
-ardt pipe list             # registered pipelines
-ardt pipe run ros-ci       # containerized build+test via Dagger (needs docker)
-ardt dev sync              # render the repo's devcontainer (gitignored) — then `ardt dev up`
-ardt info --json           # machine-readable envelope on stdout (diagnostics on stderr)
+ardt deps                  # vcs import, then rosdep
+ardt build                 # colcon, with the repo's build args
+ardt test                  # colcon test, summarized
+
+ardt pipe run ros-ci       # the same three, as image build stages
 ```
 
-> **Local dev on a machine with ROS sourced:** a sourced ROS overlay puts `/opt/ros/<distro>` on `PYTHONPATH`, whose pytest plugins can break collection. Run the test suite with `PYTHONPATH= uv run pytest`. CI containers have no ROS, so this only bites local runs.
+The pipeline needs Docker and nothing else: no Dockerfile in your repo, no colcon on your host.
 
-## Two conventions every command honors
-
-- `--dry-run` — print the plan, execute nothing. Core-injected into every command, including plugin-provided ones.
-- `--json` — a machine-readable result envelope on **stdout**; all human output and diagnostics stay on **stderr**, so `ardt <cmd> --json | jq` always works.
-
-## Configuration
-
-One file per repo — `ardt.yaml` (or a `[tool.ardt]` table in `pyproject.toml`; the file wins). Sections are namespaced per plugin. See [ardt.example.yaml](ardt.example.yaml).
-
-## Versioning
-
-**The git tag is the only version that exists.** No file in this repo states one: every `pyproject.toml` is `dynamic = ["version"]` via `hatch-vcs`, and every package's `__version__` reads its installed metadata. So a release is one command and there is nothing to keep in sync:
+## Documentation
 
 ```bash
-git tag v0.1.0 && git push --tags
+ardt doc build             # sphinx, plus doxygen for C++; warnings are errors
+
+ardt pipe run docs-ci      # every version of the site into public/
 ```
 
-Reading it back:
+`docs-ci` builds the working tree plus every configured branch and tag, each from its own history, into one Pages-ready site with a version switcher.
 
-| Where | Command | Source |
-|---|---|---|
-| the working tree | `ardt info` | `ctx.version` → `git describe` |
-| the installed CLI | `ardt --version` | metadata stamped at build time |
-| the tag itself | `git describe --tags --dirty` | git |
+## Dev container
 
-Two formats meet here and agree **on a clean tag** — the only publishable state, which is what `is_release()` gates on. Off-tag they differ cosmetically: `hatch-vcs` emits `0.1.0.post1.dev3+g0a1b2c3`, `ctx.version` emits `0.1.0.dev3+g0a1b2c3`. Both are PEP 440 and both name the same commit.
+```bash
+ardt dev sync              # render .devcontainer/ (gitignored, machine-owned)
+ardt dev up                # start it
+ardt dev open              # attach VS Code
+```
 
-A checkout without `.git` (GitHub's "Download ZIP") builds as `0.0.0` via `fallback-version` rather than failing. `pip install git+…` is unaffected: pip clones, so the tags are there.
+The container's base image *is* the CI builder, so what you debug in is what builds. `ardt dev doctor` fails if the two drift.
 
 ## License
 
-Apache-2.0. See [LICENSE](LICENSE).
+Apache-2.0. See [LICENSE](LICENSE). The internal plugins that carry Asterion's own processes install alongside these, through the same entry points any third-party plugin uses.
