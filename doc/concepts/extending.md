@@ -48,3 +48,27 @@ A theme is a page directory plus an API page:
 2. `doc/api/<package>.md`, added to the toctree in [`doc/api/index.md`](../api/index.md).
 
 Nothing else: the preset supplies the toolchain, and `ardt doc build` picks up whatever is in the tree.
+
+## Working on ardt itself
+
+The monorepo is a uv workspace. Every distribution owns its unit tests; `tests/` at the root holds only what crosses package boundaries:
+
+```
+ardt/
+├── packages/                # the platform
+│   ├── ardt-core/           # cli, plugin loader, context, config, runner, console, version policy
+│   ├── ardt-pipelines/      # the generic Dagger plane: `ardt pipe`, @pipeline registry, std helpers
+│   └── ardt-cli/            # metapackage: no code, one extra per theme
+├── plugins/                 # first-party theme plugins (ardt-<theme>-tasks / -pipelines)
+│   ├── ardt-ros-tasks/      # deps / build / test (colcon, rosdep, vcs) — in-env tasks
+│   ├── ardt-ros-pipelines/  # ros-ci + the ros2 image recipe
+│   ├── ardt-doc-tasks/      # doc build (sphinx preset + doxygen/breathe + ros2-interfaces)
+│   ├── ardt-doc-pipelines/  # docs-ci: versioned site (working tree + tags) -> public/
+│   └── ardt-dev/            # `ardt dev`: renders and drives the repo's devcontainer
+├── tests/                   # cross-package only: policy sweeps + docker-marked integration
+└── .github/workflows/       # lint, tests, the versioned docs site, PyPI publication
+```
+
+:::{warning}
+On a machine with ROS sourced, `/opt/ros/<distro>` is on `PYTHONPATH`, and its pytest plugins can break collection. Run the suite as `PYTHONPATH= uv run pytest`. CI containers have no ROS, so this only bites locally.
+:::
