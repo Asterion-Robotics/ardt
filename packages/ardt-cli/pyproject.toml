@@ -1,0 +1,41 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ardt-cli"
+dynamic = ["version"]
+description = "ardt: the CLI plus its first-party plugins, in one install"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+authors = [{ name = "Thibault Poignonec", email = "t.poignonec@asterion-robotics.com" }]
+
+# A metapackage: no code, only dependencies. The base is the CLI and the generic
+# pipeline plane, which every repo uses. Everything else is an extra, so
+# installing ardt never drags in a toolchain the repo will not use: sphinx and
+# breathe for `doc`, colcon for `ros`, docker compose for `devcontainer`.
+dependencies = [
+    "ardt-core",
+    "ardt-pipelines",
+]
+
+# `devcontainer`, not `dev`: an extra called `dev` conventionally means "tooling
+# to develop *this package*", which is the opposite of what it installs.
+[project.optional-dependencies]
+devcontainer = ["ardt-dev"]
+ros = ["ardt-ros-tasks", "ardt-ros-pipelines"]
+doc = ["ardt-doc-tasks", "ardt-doc-pipelines"]
+all = ["ardt-cli[devcontainer,doc,ros]"]
+
+[tool.hatch.build.targets.wheel]
+bypass-selection = true # nothing to package; the dependencies are the payload
+
+[tool.hatch.version]
+source = "vcs"
+fallback-version = "0.0.0"
+
+[tool.hatch.version.raw-options]
+root = "../.."
+version_scheme = "no-guess-dev"
+local_scheme = "node-and-date"

@@ -50,7 +50,7 @@ from pydantic import BaseModel, ConfigDict, Field
 ARDT_GIT = "git+https://github.com/Asterion-Robotics/ardt.git"
 """The ardt monorepo — the default source of every first-party module."""
 
-_PACKAGES = frozenset({"ardt-core", "ardt-pipelines"})
+_PACKAGES = frozenset({"ardt-cli", "ardt-core", "ardt-pipelines"})
 """Monorepo modules living under ``packages/``; everything else is a plugin."""
 
 

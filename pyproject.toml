@@ -11,6 +11,7 @@ package = false
 members = ["packages/*", "plugins/*"]
 
 [tool.uv.sources]
+ardt-cli = { workspace = true }
 ardt-core = { workspace = true }
 ardt-ros-tasks = { workspace = true }
 ardt-doc-tasks = { workspace = true }
@@ -21,6 +22,7 @@ ardt-doc-pipelines = { workspace = true }
 
 [dependency-groups]
 dev = [
+    "ardt-cli",
     "ardt-core",
     "ardt-ros-tasks",
     "ardt-doc-tasks",

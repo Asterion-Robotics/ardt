@@ -8,6 +8,7 @@ resolution-markers = [
 
 [manifest]
 members = [
+    "ardt-cli",
     "ardt-core",
     "ardt-dev",
     "ardt-doc-pipelines",
@@ -60,6 +61,47 @@ sdist = { url = "https://files.pythonhosted.org/packages/61/cc/a381afa6efea9f496
 wheels = [
     { url = "https://files.pythonhosted.org/packages/da/35/f2287558c17e29fafc8ef3daf819bb9834061cfa43bff8014f7df7f63bdc/anyio-4.14.2-py3-none-any.whl", hash = "sha256:9f505dda5ac9f0c8309b5e8bd445a8c2bf7246f3ce950121e45ea15bc41d1494", size = 125813, upload-time = "2026-07-12T20:29:05.763Z" },
 ]
+
+[[package]]
+name = "ardt-cli"
+source = { editable = "packages/ardt-cli" }
+dependencies = [
+    { name = "ardt-core" },
+    { name = "ardt-dev" },
+    { name = "ardt-pipelines" },
+]
+
+[package.optional-dependencies]
+all = [
+    { name = "ardt-doc-pipelines" },
+    { name = "ardt-doc-tasks" },
+    { name = "ardt-ros-pipelines" },
+    { name = "ardt-ros-tasks" },
+]
+doc = [
+    { name = "ardt-doc-pipelines" },
+    { name = "ardt-doc-tasks" },
+]
+ros = [
+    { name = "ardt-ros-pipelines" },
+    { name = "ardt-ros-tasks" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "ardt-core", editable = "packages/ardt-core" },
+    { name = "ardt-dev", editable = "plugins/ardt-dev" },
+    { name = "ardt-doc-pipelines", marker = "extra == 'all'", editable = "plugins/ardt-doc-pipelines" },
+    { name = "ardt-doc-pipelines", marker = "extra == 'doc'", editable = "plugins/ardt-doc-pipelines" },
+    { name = "ardt-doc-tasks", marker = "extra == 'all'", editable = "plugins/ardt-doc-tasks" },
+    { name = "ardt-doc-tasks", marker = "extra == 'doc'", editable = "plugins/ardt-doc-tasks" },
+    { name = "ardt-pipelines", editable = "packages/ardt-pipelines" },
+    { name = "ardt-ros-pipelines", marker = "extra == 'all'", editable = "plugins/ardt-ros-pipelines" },
+    { name = "ardt-ros-pipelines", marker = "extra == 'ros'", editable = "plugins/ardt-ros-pipelines" },
+    { name = "ardt-ros-tasks", marker = "extra == 'all'", editable = "plugins/ardt-ros-tasks" },
+    { name = "ardt-ros-tasks", marker = "extra == 'ros'", editable = "plugins/ardt-ros-tasks" },
+]
+provides-extras = ["all", "doc", "ros"]
 
 [[package]]
 name = "ardt-core"
@@ -180,6 +222,7 @@ source = { virtual = "." }
 
 [package.dev-dependencies]
 dev = [
+    { name = "ardt-cli" },
     { name = "ardt-core" },
     { name = "ardt-dev" },
     { name = "ardt-doc-pipelines" },
@@ -198,6 +241,7 @@ dev = [
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "ardt-cli", editable = "packages/ardt-cli" },
     { name = "ardt-core", editable = "packages/ardt-core" },
     { name = "ardt-dev", editable = "plugins/ardt-dev" },
     { name = "ardt-doc-pipelines", editable = "plugins/ardt-doc-pipelines" },

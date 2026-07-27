@@ -30,6 +30,8 @@ class TestSubdirectory:
     def test_platform_packages(self) -> None:
         assert dist.subdirectory("ardt-core") == "packages/ardt-core"
         assert dist.subdirectory("ardt-pipelines") == "packages/ardt-pipelines"
+        # The metapackage ships no code, but it is still a monorepo package.
+        assert dist.subdirectory("ardt-cli") == "packages/ardt-cli"
 
     def test_everything_else_is_a_plugin(self) -> None:
         assert dist.subdirectory("ardt-ros-tasks") == "plugins/ardt-ros-tasks"
