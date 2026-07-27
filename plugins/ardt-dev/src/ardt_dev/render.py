@@ -321,7 +321,11 @@ def compose(
     if image:
         service["image"] = image
     else:
-        service["build"] = {"context": ".", "dockerfile": DOCKERFILE}
+        # Both paths resolve relative to the compose file's own directory
+        # (.devcontainer/), and `dockerfile` relative to `context` on top of
+        # that — `dockerfile: .devcontainer/Dockerfile` here would resolve to
+        # `.devcontainer/.devcontainer/Dockerfile` and fail every build.
+        service["build"] = {"context": ".", "dockerfile": Path(DOCKERFILE).name}
     service.update(
         {
             "init": True,

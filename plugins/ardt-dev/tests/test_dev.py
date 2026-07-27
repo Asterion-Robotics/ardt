@@ -367,6 +367,14 @@ def test_workspace_folder_reaches_every_file_that_needs_it() -> None:
     assert '"workspaceFolder": "/opt/ws"' in files[render_module.DEVCONTAINER]
 
 
+def test_compose_build_paths_resolve_from_the_devcontainer_dir() -> None:
+    """Regression: compose resolves `context` against its own directory and
+    `dockerfile` against the context — `.devcontainer/Dockerfile` here composed
+    to `.devcontainer/.devcontainer/Dockerfile` and broke every first build."""
+    service = yaml.safe_load(plan(ArdtConfig()).files[render_module.COMPOSE])["services"]["dev"]
+    assert service["build"] == {"context": ".", "dockerfile": "Dockerfile"}
+
+
 def test_requirements_file_lists_each_module_once() -> None:
     text = plan(ArdtConfig()).files[render_module.REQUIREMENTS]
     lines = [line for line in text.splitlines() if not line.startswith("#")]
