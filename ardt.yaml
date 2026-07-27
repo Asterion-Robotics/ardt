@@ -1,5 +1,12 @@
 # ardt.yaml — ardt configuring ardt. See ardt.example.yaml for the full surface.
 
+tasks:
+  doc:
+    # The house style. Declared here, not in doc/conf.py, so the doc pipeline can
+    # impose it on every version of the site: a release cut before the style
+    # existed has no way to ask for it from its own config.
+    style: [asterion_sphinx_style]
+
 pipelines:
   docs_ci:
     # doc/conf.py autodocs the *installed* distributions and imports all seven,

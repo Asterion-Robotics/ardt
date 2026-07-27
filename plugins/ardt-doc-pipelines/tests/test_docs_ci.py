@@ -88,6 +88,25 @@ class TestBuilderModules:
         assert docs_ci.builder_modules(cfg) == ("ardt-core[testing]", "ardt-doc-tasks")
 
 
+class TestStyleForwarding:
+    """The pipeline reads `tasks.doc` without depending on ardt-doc-tasks."""
+
+    def test_no_style_configured(self) -> None:
+        section = ArdtConfig().section_as("tasks", docs_ci.TasksSection)
+        assert section.doc.style == []
+
+    def test_reads_the_task_planes_section(self) -> None:
+        cfg = ArdtConfig.model_validate(
+            {"tasks": {"doc": {"style": ["asterion_sphinx_style"], "strict": False}}}
+        )
+        section = cfg.section_as("tasks", docs_ci.TasksSection)
+        # `strict` belongs to ardt-doc-tasks; extra="allow" keeps it from erroring.
+        assert section.doc.style == ["asterion_sphinx_style"]
+
+    def test_the_env_name_is_the_contract_with_the_task_plane(self) -> None:
+        assert docs_ci.STYLE_ENV == "ARDT_DOC_STYLE"
+
+
 class TestVersionSelection:
     def _ctx(self, repo: Path) -> Context:
         return Context.build(cwd=repo)

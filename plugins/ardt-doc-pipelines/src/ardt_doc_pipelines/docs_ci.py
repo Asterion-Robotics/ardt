@@ -59,6 +59,12 @@ repo whose docs autodoc more of the toolchain adds them via
 SITE_DIR = "public"
 """Export directory — GitLab Pages' artifact convention."""
 
+STYLE_ENV = "ARDT_DOC_STYLE"
+"""The contract with the doc *task* plane, carried as a name rather than an
+import: this package deliberately does not depend on ``ardt-doc-tasks`` (it
+installs it into the builder, it never runs it). ``ardt_doc_tasks.config``
+declares the same constant, and its preset reads it."""
+
 REPO_EXCLUDES = tuple(e for e in std.SOURCE_EXCLUDES if e != ".git")
 """Historical builds need the git history the normal source context excludes."""
 
@@ -102,6 +108,23 @@ class DocsCiConfig(BaseModel):
     default: str | None = None
     """Version the root redirect targets; None means the working-tree version."""
     versions: VersionsConfig = Field(default_factory=VersionsConfig)
+
+
+class DocTaskConfig(BaseModel):
+    """The sliver of ``tasks.doc:`` this pipeline forwards. ``extra="allow"``
+    because the section belongs to ``ardt-doc-tasks``, which owns its shape."""
+
+    model_config = ConfigDict(extra="allow")
+
+    style: list[str] = Field(default_factory=list)
+
+
+class TasksSection(BaseModel):
+    """``tasks:`` — read, never claimed; the task plugins own it."""
+
+    model_config = ConfigDict(extra="allow")
+
+    doc: DocTaskConfig = Field(default_factory=DocTaskConfig)
 
 
 class PipelinesSection(BaseModel):
@@ -217,6 +240,17 @@ def _builder(
         container = container.with_exec(
             ["pip", "install", "--no-cache-dir", *section.requirements(modules)]
         )
+    # The working tree's style, imposed on every ref this container builds.
+    #
+    # Without it a style only reaches refs whose own conf.py names it, so a
+    # release cut before the style existed renders unthemed forever. Set here, it
+    # behaves like the rest of the toolchain: the site restyles whole on the next
+    # run. `tasks.doc` is the task plane's section, read directly rather than
+    # duplicated into `pipelines.docs_ci`.
+    styles = ctx.cfg.section_as("tasks", TasksSection).doc.style
+    if styles:
+        container = container.with_env_variable(STYLE_ENV, " ".join(styles))
+
     # Mounted/cloned repos belong to a different uid inside the container.
     return container.with_exec(
         [

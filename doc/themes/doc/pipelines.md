@@ -32,25 +32,24 @@ The builder installs the ardt **task** plane only (`ardt-core` + `ardt-doc-tasks
 
 ## Styles
 
-A style is a plain sphinx extension, not an ardt plugin: nothing in it imports ardt, and it works in any sphinx project. A repo opts in from its `conf.py`, and pins the package in `pip_packages:` so the builder has it:
-
-```python
-from ardt_doc_tasks.preset import *                       # toolchain
-extensions = [*extensions, "asterion_sphinx_style"]       # presentation
-project = "my_project"
-html_logo = "_static/my-logo.png"                         # optional; wins over the style's
-```
-
-Rebind rather than `extensions.append(...)`: the star-import binds the preset's *own* list, so appending mutates it in place.
+A style is a plain sphinx extension, not an ardt plugin: nothing in it imports ardt, and it works in any sphinx project. A repo names it in `tasks.doc.style` and pins the package in `pip_packages:` so the builder has it:
 
 ```yaml
+tasks:
+  doc:
+    style: [asterion_sphinx_style]     # what to apply
 pipelines:
   docs_ci:
-    pip_packages:
-      - "asterion-sphinx-style>=0.1.0"
+    pip_packages: ["asterion-sphinx-style>=0.1.0"]   # where it comes from
 ```
 
-That covers the containerized build. A developer needs the same package in the environment `ardt` itself runs from, or a local `ardt doc build` renders unstyled — one more `--with asterion-sphinx-style` on the `uv tool install` line.
+Two lines because they answer different questions, and the second cannot be derived from the first: an import name is not a distribution name, and the builder has to install the package before anything can ask it what it provides.
+
+`conf.py` stays at the three-line preset contract. The style is deliberately *not* declared there: the pipeline forwards `tasks.doc.style` into the builder as an environment variable the preset reads, so it applies to **every** version of the site, including releases whose own `conf.py` predates the style. A style declared in `conf.py` could only ever reach refs that already knew about it.
+
+That also means a style release restyles the whole archive on the next rebuild, which is the intent (`ardt --version` docs from 2026 should not look like 2026 forever) and the reason the rules below matter.
+
+A developer needs the same package in the environment `ardt` itself runs from, or a local `ardt doc build` renders unstyled — one more `--with asterion-sphinx-style` on the `uv tool install` line.
 
 A lower bound rather than `==` is deliberate: a house style is meant to move with the brand, not to be bumped by hand in every repo. Each *resolved* release is still immutable, since an index forbids re-uploading a version — which a git tag does not.
 
