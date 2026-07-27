@@ -49,12 +49,10 @@ ardt pipe run docs-ci      # every version of the site into public/
 ## Dev container
 
 ```bash
-ardt dev sync              # render .devcontainer/ (gitignored, machine-owned)
-ardt dev up                # start it
-ardt dev open              # attach VS Code
+ardt dev open              # everything: render, volumes, build, start, attach VS Code
 ```
 
-The container's base image *is* the CI builder, so what you debug in is what builds. `ardt dev doctor` fails if the two drift.
+One command does whatever is missing (`ardt dev up` is the editor-less variant; `sync`, `volumes`, `shell`, `down` exist for driving the steps by hand). Inside, the container is a canonical colcon workspace — repo at `/ws/src/<name>`, colcon output at `/ws/{build,install,log}`, never inside your checkout — and its base image *is* the CI builder, so what you debug in is what builds. `ardt dev doctor` fails if the two drift.
 
 ## License
 

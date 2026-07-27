@@ -1,69 +1,71 @@
 # From clone to open container
 
-The everyday path is two commands. The rest of the command table exists for the days something needs inspecting.
-
-**Before you start:** Docker (Docker Engine on Linux/WSL2, or Docker Desktop with WSL integration enabled), `ardt` installed with the `ardt-dev` plugin, and VS Code with the Dev Containers extension if you want step 3 to open an editor.
-
-## 1. Clone
+One command. Everything it needs (rendering, volumes, the image build) happens on the way.
 
 ```bash
 git clone <repo> && cd <repo>
+ardt dev open            # VS Code attached to the dev container
 ```
 
-Nothing is committed for you to configure: the repo carries no `.devcontainer/`.
-
-## 2. Render it
+No editor, or a headless machine? Same thing in the terminal:
 
 ```bash
-ardt dev sync
+ardt dev up              # start the container + run its bootstrap
+ardt dev shell           # a login shell inside it
 ```
 
-Writes `.devcontainer/` and `.vscode/c_cpp_properties.json` from the profile and this repo's config, and adds them to `.gitignore`. It prints the profile, the host it detected, and the base image it resolved — that base image is `pipelines.ros_ci.builder`, which is what makes the container match CI.
+The **first** run is slow: it builds the dev image (minutes) and runs `postCreate` (rosdep + `ardt deps`, more minutes). Every run after that takes seconds. Progress is printed step by step; if something stalls, start with `ardt dev doctor`.
 
-Re-run it after changing the `dev:` section or bumping the ardt pin. It refuses to clobber a file a human edited (`--force` overrides).
+## What you get
 
-## 3. Open it
+The container is a canonical colcon workspace at `/ws`. Your repo is one entry under `src/`; `.repos` dependencies land beside it; colcon output lands beside `src/`, **never inside your checkout**:
 
-```bash
-ardt dev open          # add --build to rebuild the image first
+```text
+/ws                      <- VS Code opens here; terminals start here
+├── src/
+│   ├── <your repo>/     <- your checkout, bind-mounted
+│   └── external/        <- `.repos` imports (ardt deps)
+├── build/               \
+├── install/              > container-local volumes, invisible on your host
+└── log/                 /
 ```
 
-Creates the volumes, starts the container, and attaches VS Code to `/ws/src`. The **first** run builds the dev image (minutes) and VS Code runs `postCreate` on first attach, which is `ardt dev bootstrap`: claim the volume directories, then the profile's create steps (`ardt deps`).
+CI builds in the *same tree* (see [parity](parity.md)), so every path in a stack trace or `compile_commands.json` reads the same in both.
 
-No editor, or a headless machine? Use the terminal path instead:
+Inside, the ordinary commands apply, from anywhere in the workspace:
 
 ```bash
-ardt dev up            # start + run postCreate here rather than in VS Code
-ardt dev shell         # a login shell in the running container
+ardt build                  # colcon build, bases at /ws
+ardt test                   # colcon test + summary
+ardt dev compile-commands   # merge per-package compile_commands.json for clangd
 ```
 
-:::{note}
-There is no separate `ardt dev volumes` step: `up` and `open` both call it, and so does the devcontainer's `initializeCommand`. Run it by hand only when debugging a mount.
-:::
-
-## 4. Work in it
-
-Inside the container the ordinary tasks apply, against the same config CI uses:
+## Stopping, cleaning
 
 ```bash
-ardt build
-ardt test
-ardt dev compile-commands   # merge colcon's per-package files for clangd
-```
-
-## 5. Stop it
-
-```bash
-ardt dev down               # volumes survive; --purge drops this repo's build tree
+ardt dev down               # stop; volumes survive
+ardt dev down --purge       # also drop this repo's build/install/log volume
 ```
 
 ## When something looks wrong
 
 ```bash
-ardt dev doctor             # CI parity, ardt pin, render freshness, host wiring
+ardt dev doctor
 ```
 
-`doctor` is the first thing to run after a confusing failure: it is what catches the dev container and the CI image having drifted apart, and it warns when `ardt.version` is unpinned.
+One pass checks: docker present *and its daemon reachable* (the usual WSL2 trap: Docker Desktop stopped, or its WSL integration off for this distro), CI parity, the ardt pin, render freshness, and the host wiring.
+
+## Prerequisites
+
+- **Docker** — Docker Engine on Linux/WSL2, or Docker Desktop with WSL integration enabled for your distro.
+- **ardt** with the `ardt-dev` plugin ([getting started](../../getting-started.md)).
+- **VS Code + the Dev Containers extension**, only if you want `ardt dev open` to attach an editor.
+
+## Details, for the days you need them
+
+`ardt dev up` and `open` run the pre-steps themselves: render `.devcontainer/` when missing or stale (`ardt dev sync`), create the shared cache volumes and the colcon volume (`ardt dev volumes`), then start the container. Each step is idempotent, and each can be run by hand when debugging — see the [command table](index.md).
+
+Everything rendered is **gitignored and machine-owned**: the repo carries no `.devcontainer/`. Change the `dev:` section of `ardt.yaml` and re-run, never the rendered files; hand edits are detected and refused.
 
 ## Hacking on ardt itself
 
@@ -72,4 +74,4 @@ ardt dev sync --ardt-source /path/to/ardt   # mount a checkout, install from it
 ardt dev sync --from-pin                    # go back to the repo's ardt: pin
 ```
 
-The choice is remembered across `sync` runs, so `--ardt-source` is given once, not every time.
+The choice is remembered across runs, so `--ardt-source` is given once, not every time.

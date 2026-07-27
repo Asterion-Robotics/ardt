@@ -1,6 +1,17 @@
 # Concepts
 
-ardt is a click CLI with a plugin loader and a typed context, and nothing else. `ardt-core` depends on `click`, `pydantic`, `pyyaml` and `rich` — installing it never drags in ROS or a container engine.
+Six words carry all of ardt. Everything else in these pages is detail:
+
+| Word | Meaning |
+|---|---|
+| **task** | a command that runs where you type it — `ardt build` is colcon build, here |
+| **pipeline** | the same tasks run *inside* containers — `ardt pipe run ros-ci` is CI |
+| **plugin** | a Python package adding tasks or pipelines; every command past `ardt info` is one |
+| **theme** | a family of plugins for one concern (ROS 2, docs, devcontainer) |
+| **profile** | a dev-container flavor a repo picks (`ros2` is the only one today) |
+| **render** | files ardt generates, gitignored and machine-owned — never edited, always re-derived |
+
+ardt itself is a click CLI with a plugin loader and a typed context, and nothing else. `ardt-core` depends on `click`, `pydantic`, `pyyaml` and `rich` — installing it never drags in ROS or a container engine.
 
 Everything a developer actually runs arrives as a **plugin**, discovered through Python entry points and guarded by a plugin API version. A plugin contributes one of two things, and the difference between them is the central idea of the platform.
 
