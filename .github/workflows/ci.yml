@@ -17,6 +17,33 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # The same hooks a developer gets from `pre-commit install`, so the config is
+  # binding rather than advisory. Once, not per-python: none of these hooks is
+  # interpreter-dependent, and ruff's version comes from the pin in the config.
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+
+      - name: Sync workspace
+        run: uv sync --frozen || uv sync
+
+      # Hook repos are cloned and installed on first use; keyed on the config so
+      # the cache invalidates exactly when a `rev:` changes.
+      - name: Cache hook environments
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+
+      - name: Run pre-commit
+        run: uv run pre-commit run --all-files --show-diff-on-failure
+
   check:
     runs-on: ubuntu-latest
     strategy:

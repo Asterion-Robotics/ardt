@@ -1,0 +1,47 @@
+# Run locally with `pre-commit install`, or one-off with
+# `pre-commit run --files <paths>`. CI runs the same hooks over every file, so a
+# hook that passes here passes there.
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-merge-conflict
+      - id: check-toml
+      - id: check-yaml
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      # uv.lock is generated; reformatting it would fight `uv lock`.
+      - id: mixed-line-ending
+        args: [--fix=lf]
+
+  # Checks, deliberately rather than rewrites. Lucas-C's `insert-license` renders
+  # a blank license-file line as `#`, which does not match the header committed
+  # across this tree, so it fails to recognize it and prepends a second copy.
+  # The SPDX line is the part machines actually read; formatting stays human's.
+  # Any existing source file is the template for a new one.
+  - repo: local
+    hooks:
+      - id: license-header
+        name: check Apache-2.0 SPDX header
+        entry: >-
+          bash -c 'rc=0; for f in "$@"; do
+          grep -q "^# SPDX-License-Identifier: Apache-2.0$" "$f" ||
+          { echo "missing SPDX header: $f"; rc=1; }; done; exit $rc' --
+        language: system
+        files: \.py$
+
+  # Pinned deliberately, and it must track the `ruff` dev-dependency in
+  # pyproject.toml: two ruff versions disagreeing is a green commit that fails
+  # CI, which is worse than no hook at all.
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.22
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+
+exclude: |
+  (?x)^(
+    uv\.lock
+  )$

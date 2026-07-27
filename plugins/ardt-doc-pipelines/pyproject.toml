@@ -9,7 +9,7 @@ description = "ardt docs pipeline: docs-ci builds a versioned site (working tree
 readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
-authors = [{ name = "Asterion Robotics" }]
+authors = [{ name = "Thibault Poignonec", email = "t.poignonec@asterion-robotics.com" }]
 keywords = ["ci", "cli", "robotics", "sphinx", "dagger", "pages"]
 classifiers = [
     "Development Status :: 3 - Alpha",

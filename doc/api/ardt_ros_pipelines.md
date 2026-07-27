@@ -10,4 +10,3 @@ The ROS 2 pipeline plane: the `ros-ci` pipeline and the `ros2` image recipe it r
    :undoc-members:
    :show-inheritance:
 ```
-

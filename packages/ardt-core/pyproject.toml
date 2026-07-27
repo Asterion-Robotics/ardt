@@ -9,8 +9,8 @@ description = "ardt — the open core of Asterion Robotics' dev/CI tooling: one 
 readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
-authors = [{ name = "Asterion Robotics" }]
-keywords = ["ci", "cli", "robotics", "ros", "dagger"]
+authors = [{ name = "Thibault Poignonec", email = "t.poignonec@asterion-robotics.com" }]
+keywords = ["ci", "cli", "robotics", "ros2", "dagger"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Programming Language :: Python :: 3.11",
