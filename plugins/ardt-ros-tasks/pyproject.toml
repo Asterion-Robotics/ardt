@@ -9,6 +9,7 @@ description = "ardt tasks for ROS 2 workspaces: deps, build, test"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
+authors = [{ name = "Thibault Poignonec", email = "t.poignonec@asterion-robotics.com" }]
 
 # In-environment tasks: they wrap colcon/rosdep/vcs, they never vendor them.
 # Nothing here may import dagger (02, the two-plane rule).

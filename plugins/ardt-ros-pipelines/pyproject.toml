@@ -9,6 +9,7 @@ description = "ardt pipelines for ROS 2 repos: the ros-ci pipeline and the ros2 
 readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
+authors = [{ name = "Thibault Poignonec", email = "t.poignonec@asterion-robotics.com" }]
 
 # Depends on ardt-pipelines (which owns the exact dagger-io pin) — never on
 # dagger directly.

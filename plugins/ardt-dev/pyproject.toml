@@ -9,6 +9,7 @@ description = "ardt dev environments: render and drive the devcontainer a repo b
 readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
+authors = [{ name = "Thibault Poignonec", email = "t.poignonec@asterion-robotics.com" }]
 
 # Task-plane plugin: it renders files and shells out to docker compose. Nothing
 # here may import dagger (02, the two-plane rule) or any ROS package — profile

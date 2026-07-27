@@ -9,6 +9,7 @@ description = "ardt pipeline plane: the `ardt pipe` command group, pipeline regi
 readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
+authors = [{ name = "Thibault Poignonec", email = "t.poignonec@asterion-robotics.com" }]
 
 # The ONLY package allowed to import dagger (02, the two-plane rule); the pin is
 # exact and bumped by deliberate MR run against the pipeline test suite.
