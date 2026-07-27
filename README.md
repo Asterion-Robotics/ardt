@@ -13,16 +13,14 @@ One CLI for the three things every robotics repo needs: a dev container, CI that
 ## Install
 
 ```bash
+# If needed, install uv beforehand
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Install ARDT tools
 curl -LsSf https://raw.githubusercontent.com/Asterion-Robotics/ardt/main/install.sh | bash
 ```
 
 [uv](https://docs.astral.sh/uv/) is the only prerequisite, and ardt's installer will not install it for you: chaining installers hides what you are trusting. `ARDT_REF=v0.1.0` pins a release, `ARDT_MODULES="…"` picks the plugin set. [`install.sh`](install.sh) is short, and worth reading before you pipe it anywhere.
-
-> [!NOTE]
-> To install uv:
-> ```bash
-> curl -LsSf https://astral.sh/uv/install.sh | sh
-> ```
 
 Other routes — a published release, a fork, an editable checkout — are under *Getting started* in the [documentation](https://asterion-robotics.github.io/ardt/).
 
