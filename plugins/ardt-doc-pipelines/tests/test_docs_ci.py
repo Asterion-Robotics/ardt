@@ -109,7 +109,7 @@ class TestSiteScaffolding:
     def test_versions_json_puts_default_first(self) -> None:
         data = json.loads(docs_ci.versions_json(["main", "v1.0.0"], "v1.0.0"))
         assert [entry["name"] for entry in data] == ["v1.0.0", "main"]
-        assert data[0]["url"] == "/v1.0.0/"
+        assert data[0]["url"] == "v1.0.0/"  # relative: the site may live under a path prefix
 
     def test_redirect_targets_the_default(self) -> None:
         html = docs_ci.redirect_html("main")

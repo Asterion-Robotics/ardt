@@ -136,9 +136,14 @@ def historical_refs(ctx: Context, cfg: DocsCiConfig) -> list[str]:
 
 
 def versions_json(names: list[str], default: str) -> str:
-    """The switcher data: one entry per built version, default first."""
+    """The switcher data: one entry per built version, default first.
+
+    ``url`` is relative to this file, which sits at the site root. A root-absolute
+    ``/<name>/`` would assume the site *is* the domain root — true for GitLab
+    Pages, false for a GitHub project site served under ``/<repo>/``.
+    """
     ordered = [default, *[n for n in names if n != default]]
-    entries = [{"name": n, "version": n, "url": f"/{n}/"} for n in ordered]
+    entries = [{"name": n, "version": n, "url": f"{n}/"} for n in ordered]
     return json.dumps(entries, indent=2) + "\n"
 
 
