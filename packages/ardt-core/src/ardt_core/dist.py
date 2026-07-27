@@ -37,10 +37,32 @@ _PACKAGES = frozenset({"ardt-core", "ardt-pipelines"})
 """Monorepo modules living under ``packages/``; everything else is a plugin."""
 
 
+def base_name(module: str) -> str:
+    """A requirement's distribution name, extras stripped (``a[b]`` -> ``a``)."""
+    return module.partition("[")[0]
+
+
+def extras(module: str) -> str:
+    """A requirement's bracketed extras, or ``""`` (``a[b]`` -> ``[b]``)."""
+    _, bracket, rest = module.partition("[")
+    return f"{bracket}{rest}" if bracket else ""
+
+
 def subdirectory(module: str) -> str:
     """A first-party module's path inside the monorepo (platform vs plugin)."""
-    root = "packages" if module in _PACKAGES else "plugins"
-    return f"{root}/{module}"
+    name = base_name(module)
+    root = "packages" if name in _PACKAGES else "plugins"
+    return f"{root}/{name}"
+
+
+def local_requirement(module: str, root: str) -> str:
+    """The pip argument installing ``module`` from a monorepo checkout at ``root``.
+
+    The counterpart of :meth:`DistConfig.requirement` for images that mount the
+    source instead of cloning it. Extras stay on the path, where pip wants them
+    (``/src/packages/ardt-core[testing]``); the *directory* never carries them.
+    """
+    return f"{root}/{subdirectory(module)}{extras(module)}"
 
 
 class ModulePin(BaseModel):
@@ -73,8 +95,12 @@ class DistConfig(BaseModel):
     """Per-module overrides, keyed by distribution name."""
 
     def requirement(self, module: str) -> str:
-        """The PEP 508 requirement string installing ``module`` in an image."""
-        pin = self.modules.get(module, ModulePin())
+        """The PEP 508 requirement string installing ``module`` in an image.
+
+        ``module`` may carry extras; they ride along in the name field, which is
+        exactly where PEP 508 puts them, and the pin is looked up without them.
+        """
+        pin = self.modules.get(base_name(module), ModulePin())
         if pin.git is None:
             source = self.git
             version = pin.version or self.version

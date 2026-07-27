@@ -1,22 +1,16 @@
 # ardt
 
-> The company-wide developer/CI CLI platform: **one small core, everything else a plugin.**
-> Robotics or not — the core knows nothing about ROS; ROS-ness itself is a plugin.
+> The open core of Asterion Robotics' development tooling: **one small core, everything else a plugin.** Robotics or not — the core knows nothing about ROS; ROS-ness itself is a plugin.
 
-The uv workspace, a fully-typed `ardt-core`, the task plugins, and an interim
-Dagger pipeline plane. The domain plugin (`ardt-aos`) and the pinned base images
-come later — see [Status](#status).
+Reproducible dev containers, CI that runs the same commands a developer does, versioned docs: these are not our problems, they are every robotics team's. So the core and the general-purpose plugins are public and Apache-2.0, and it is what our own public repos are built with. Our internal processes and domain knowledge stay where they belong — in private plugins (`ardt-aos`) that install alongside, through the same entry points any third-party plugin uses.
 
-> **Name note.** The chosen name is **ardt** — *Asterion Robotics Development
-> Tools*. A greenfield project, first tagged **v0.0.1**. Reserve the PyPI name
-> before the first publish.
+The uv workspace, a fully-typed `ardt-core`, the task plugins, and an interim Dagger pipeline plane. The domain plugin (`ardt-aos`) and the pinned base images come later — see [Status](#status).
+
+> **Name note.** The chosen name is **ardt** — *Asterion Robotics Development Tools*. A greenfield project, first tagged **v0.0.1**. Reserve the PyPI name before the first publish.
 
 ## Versioning
 
-**The git tag is the only version that exists.** No file in this repo states one:
-every `pyproject.toml` is `dynamic = ["version"]` via `hatch-vcs`, and every
-package's `__version__` reads its installed metadata. So a release is one command
-and there is nothing to keep in sync:
+**The git tag is the only version that exists.** No file in this repo states one: every `pyproject.toml` is `dynamic = ["version"]` via `hatch-vcs`, and every package's `__version__` reads its installed metadata. So a release is one command and there is nothing to keep in sync:
 
 ```bash
 git tag v0.1.0 && git push --tags
@@ -30,14 +24,9 @@ Reading it back:
 | the installed CLI | `ardt --version` | metadata stamped at build time |
 | the tag itself | `git describe --tags --dirty` | git |
 
-Two formats meet here and agree **on a clean tag** — the only publishable state,
-which is what `is_release()` gates on. Off-tag they differ cosmetically:
-`hatch-vcs` emits `0.1.0.post1.dev3+g0a1b2c3`, `ctx.version` emits
-`0.1.0.dev3+g0a1b2c3`. Both are PEP 440 and both name the same commit.
+Two formats meet here and agree **on a clean tag** — the only publishable state, which is what `is_release()` gates on. Off-tag they differ cosmetically: `hatch-vcs` emits `0.1.0.post1.dev3+g0a1b2c3`, `ctx.version` emits `0.1.0.dev3+g0a1b2c3`. Both are PEP 440 and both name the same commit.
 
-A checkout without `.git` (GitHub's "Download ZIP") builds as `0.0.0` via
-`fallback-version` rather than failing. `pip install git+…` is unaffected: pip
-clones, so the tags are there.
+A checkout without `.git` (GitHub's "Download ZIP") builds as `0.0.0` via `fallback-version` rather than failing. `pip install git+…` is unaffected: pip clones, so the tags are there.
 
 ## The two-plane model
 
@@ -46,8 +35,7 @@ clones, so the tags are there.
 | **tasks** | `ardt build` / `test` / `deps` … | wherever invoked — dev shell, devcontainer, CI container | `ardt-<theme>-tasks` |
 | **pipelines** | `ardt pipe run <name>` | orchestrate containers/registries/services via Dagger | `ardt-pipelines` + `ardt-<theme>-pipelines` |
 
-Pipelines call tasks *inside* containers; tasks never call pipelines. Core imports
-neither ROS nor Dagger, so installing it never drags in an engine.
+Pipelines call tasks *inside* containers; tasks never call pipelines. Core imports neither ROS nor Dagger, so installing it never drags in an engine.
 
 ## Layout
 
@@ -66,15 +54,11 @@ ardt/
 └── .github/workflows/    # bootstrap CI (lint + format + pyright strict + coverage gate)
 ```
 
-Shared test fixtures (`repo`, `console`, CI-env isolation) ship as
-`ardt_core.testing` — third-party plugins get them the same way our own
-packages do.
+Shared test fixtures (`repo`, `console`, CI-env isolation) ship as `ardt_core.testing` — third-party plugins get them the same way our own packages do.
 
 ## Installation
 
-`ardt` is a CLI you call from any repo, so install it **once as a uv tool** — a
-persistent, isolated venv with `ardt` on your PATH; no `uv run` prefix, no
-project venv needed:
+`ardt` is a CLI you call from any repo, so install it **once as a uv tool** — a persistent, isolated venv with `ardt` on your PATH; no `uv run` prefix, no project venv needed:
 
 ```bash
 # From a checkout (developers): editable, so source edits apply immediately
@@ -94,13 +78,7 @@ uv tool install "ardt-core @ git+https://github.com/Asterion-Robotics/ardt.git#s
 ardt --help    # from anywhere
 ```
 
-> **Why not `uvx`?** `uvx ardt` is *run-without-install*: it resolves the package
-> from PyPI into a temporary environment on every invocation. That's the right
-> tool for one-off runs of published CLIs (and `uvx ardt@1.2` will be great for
-> pinned CI shims once ardt is on PyPI), but wrong for a daily driver: it can't
-> see an unpublished workspace, it re-resolves per call, and plugins you
-> `--with`-ed don't persist. `uv tool install` is the "install once, use
-> everywhere" path, which is how ardt is meant to be distributed.
+> **Why not `uvx`?** `uvx ardt` is *run-without-install*: it resolves the package from PyPI into a temporary environment on every invocation. That's the right tool for one-off runs of published CLIs (and `uvx ardt@1.2` will be great for pinned CI shims once ardt is on PyPI), but wrong for a daily driver: it can't see an unpublished workspace, it re-resolves per call, and plugins you `--with`-ed don't persist. `uv tool install` is the "install once, use everywhere" path, which is how ardt is meant to be distributed.
 
 ## Quick start
 
@@ -114,27 +92,20 @@ ardt dev sync              # render the repo's devcontainer (gitignored) — the
 ardt info --json           # machine-readable envelope on stdout (diagnostics on stderr)
 ```
 
-> **Local dev on a machine with ROS sourced:** a sourced ROS overlay puts
-> `/opt/ros/<distro>` on `PYTHONPATH`, whose pytest plugins can break collection.
-> Run the test suite with `PYTHONPATH= uv run pytest`. CI containers have no ROS,
-> so this only bites local runs.
+> **Local dev on a machine with ROS sourced:** a sourced ROS overlay puts `/opt/ros/<distro>` on `PYTHONPATH`, whose pytest plugins can break collection. Run the test suite with `PYTHONPATH= uv run pytest`. CI containers have no ROS, so this only bites local runs.
 
 ## Two conventions every command honors
 
-- `--dry-run` — print the plan, execute nothing. Core-injected into every command,
-  including plugin-provided ones.
-- `--json` — a machine-readable result envelope on **stdout**; all human output and
-  diagnostics stay on **stderr**, so `ardt <cmd> --json | jq` always works.
+- `--dry-run` — print the plan, execute nothing. Core-injected into every command, including plugin-provided ones.
+- `--json` — a machine-readable result envelope on **stdout**; all human output and diagnostics stay on **stderr**, so `ardt <cmd> --json | jq` always works.
 
 ## Configuration
 
-One file per repo — `ardt.yaml` (or a `[tool.ardt]` table in `pyproject.toml`; the
-file wins). Sections are namespaced per plugin. See [ardt.example.yaml](ardt.example.yaml).
+One file per repo — `ardt.yaml` (or a `[tool.ardt]` table in `pyproject.toml`; the file wins). Sections are namespaced per plugin. See [ardt.example.yaml](ardt.example.yaml).
 
 ## Quality bar
 
-Python ≥ 3.11, uv for everything, ruff (lint + format), **pyright strict on
-`ardt-core`**, pytest with a **≥ 90 % coverage gate on core**. All enforced in CI:
+Python ≥ 3.11, uv for everything, ruff (lint + format), **pyright strict on `ardt-core`**, pytest with a **≥ 90 % coverage gate on core**. All enforced in CI:
 
 ```bash
 PYTHONPATH= uv run ruff check . && uv run ruff format --check .
@@ -145,19 +116,11 @@ PYTHONPATH= uv run pytest --cov=ardt_core --cov-report=term-missing
 ## Status
 
 - ✅ **Workspace, bootstrap CI, quality gate**
-- ✅ **`ardt-core`** — cli, plugin loader + `ARDT_PLUGIN_API` guard, context,
-  config, runner, console, `ctx.version` tag policy. Coverage ≥ 90 %
-- ✅ **`ardt-ros-tasks`** `deps`/`build`/`test` — verified on the
-  [ardt_ros2_demo](https://github.com/Asterion-Robotics/ardt_ros2_demo) repo, host
-  and jazzy container. A green run on `aos_edge` is still to be done
+- ✅ **`ardt-core`** — cli, plugin loader + `ARDT_PLUGIN_API` guard, context, config, runner, console, `ctx.version` tag policy. Coverage ≥ 90 %
+- ✅ **`ardt-ros-tasks`** `deps`/`build`/`test` — verified on the [ardt_ros2_demo](https://github.com/Asterion-Robotics/ardt_ros2_demo) repo, host and jazzy container. A green run on `aos_edge` is still to be done
 - ✅ **`ardt-dev`** — renders and drives the repo's devcontainer
-- 🚧 **`ardt-pipelines`** — `@pipeline` registry, `ardt pipe list/run`, exact
-  `dagger-io` pin, std helpers, and an interim `ros-ci` (runs the ardt tasks
-  inside the builder, exports JUnit, publishes on tag), verified against a real
-  engine. Missing: the persistent-engine runner setup, and dogfooding ardt's own
-  CI through it
-- ⏳ **`aos-ros-base` + the baked tool image**, and the `ardt-aos` domain plugin
-  — not started
+- 🚧 **`ardt-pipelines`** — `@pipeline` registry, `ardt pipe list/run`, exact `dagger-io` pin, std helpers, and an interim `ros-ci` (runs the ardt tasks inside the builder, exports JUnit, publishes on tag), verified against a real engine. Missing: the persistent-engine runner setup, and dogfooding ardt's own CI through it
+- ⏳ **`aos-ros-base` + the baked tool image**, and the `ardt-aos` domain plugin — not started
 
 ## License
 

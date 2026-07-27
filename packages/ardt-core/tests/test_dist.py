@@ -18,6 +18,31 @@ class TestSubdirectory:
         assert dist.subdirectory("ardt-ros-tasks") == "plugins/ardt-ros-tasks"
         assert dist.subdirectory("ardt-doc-tasks") == "plugins/ardt-doc-tasks"
 
+    def test_extras_never_reach_the_path(self) -> None:
+        assert dist.subdirectory("ardt-core[testing]") == "packages/ardt-core"
+
+
+class TestExtras:
+    def test_split_a_requirement(self) -> None:
+        assert dist.base_name("ardt-core[testing]") == "ardt-core"
+        assert dist.extras("ardt-core[testing]") == "[testing]"
+
+    def test_a_bare_module_has_none(self) -> None:
+        assert dist.base_name("ardt-core") == "ardt-core"
+        assert dist.extras("ardt-core") == ""
+
+
+class TestLocalRequirement:
+    def test_mounted_checkout_path(self) -> None:
+        assert dist.local_requirement("ardt-core", "/opt/ardt-src") == (
+            "/opt/ardt-src/packages/ardt-core"
+        )
+
+    def test_extras_ride_on_the_path_where_pip_wants_them(self) -> None:
+        assert dist.local_requirement("ardt-core[testing]", "/opt/ardt-src") == (
+            "/opt/ardt-src/packages/ardt-core[testing]"
+        )
+
 
 class TestRequirement:
     def test_default_tracks_monorepo_head(self) -> None:
@@ -37,6 +62,14 @@ class TestRequirement:
         )
         assert "@v9#" in section.requirement("ardt-ros-tasks")
         assert "@v1.2.0#" in section.requirement("ardt-core")
+
+    def test_extras_stay_in_the_name_field_and_do_not_defeat_the_pin(self) -> None:
+        section = dist.DistConfig(
+            version="v1.2.0", modules={"ardt-core": dist.ModulePin(version="v9")}
+        )
+        assert section.requirement("ardt-core[testing]") == (
+            f"ardt-core[testing] @ {dist.ARDT_GIT}@v9#subdirectory=packages/ardt-core"
+        )
 
     def test_custom_monorepo_address(self) -> None:
         section = dist.DistConfig(git="git+https://mirror.example.com/ardt.git")

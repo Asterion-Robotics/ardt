@@ -1,4 +1,4 @@
-"""The three tasks, as library functions. The CLI in :mod:`.cli` is a thin front.
+"""The three tasks, as library functions. The CLI in :mod:`ardt_ros_tasks.cli` is a thin front.
 
 ``deps`` (vcs import + rosdep install), ``build`` (colcon build), ``test``
 (colcon test + a test-result summary). They wrap the standard ROS 2 tooling and

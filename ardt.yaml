@@ -1,0 +1,22 @@
+# ardt.yaml — ardt configuring ardt. See ardt.example.yaml for the full surface.
+
+pipelines:
+  docs_ci:
+    # doc/conf.py autodocs the *installed* distributions and imports all seven
+    # eagerly, so the builder needs the whole workspace, not just the task plane.
+    # `[testing]` because autodoc executes what it documents and
+    # `ardt_core.testing` imports pytest at module scope.
+    ardt_modules:
+      - ardt-core[testing]
+      - ardt-pipelines
+      - ardt-dev
+      - ardt-ros-tasks
+      - ardt-ros-pipelines
+      - ardt-doc-pipelines
+    versions:
+      # Historical versions joining the site, each built from git history with
+      # its own doc/ and conf.py. Empty until a ref other than this branch has
+      # a doc/ tree: `ardt doc build` fails hard on a ref that has none, and one
+      # failing ref fails the whole site. Add `branches: [main]` once the docs
+      # land on main, then a `tags:` glob once a tag ships them.
+      branches: []

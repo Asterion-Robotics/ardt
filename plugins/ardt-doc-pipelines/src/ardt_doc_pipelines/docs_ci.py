@@ -35,7 +35,9 @@ from ardt_pipelines import pipeline, std
 
 ARDT_MODULES = ("ardt-core", "ardt-doc-tasks")
 """The ardt modules the docs builder needs (it runs ``ardt doc build``). Where
-they install from is the repo's ``ardt:`` section (:mod:`ardt_core.dist`)."""
+they install from is the repo's ``ardt:`` section (:mod:`ardt_core.dist`). A
+repo whose docs autodoc more of the toolchain adds them via
+``pipelines.docs_ci.ardt_modules``."""
 
 SITE_DIR = "public"
 """Export directory — GitLab Pages' artifact convention."""
@@ -65,6 +67,12 @@ class DocsCiConfig(BaseModel):
     """Image the docs build in (process — never ships)."""
     apt_packages: list[str] = Field(default_factory=lambda: ["git", "doxygen", "graphviz"])
     """Installed into the builder; empty for a prebuilt builder image."""
+    ardt_modules: list[str] = Field(default_factory=list)
+    """ardt modules the documentation needs importable, on top of
+    :data:`ARDT_MODULES` — typically a plugin repo autodoccing itself. Sphinx
+    documents the *installed* packages, and where each one installs from is the
+    repo's ``ardt:`` section (:mod:`ardt_core.dist`), out-of-monorepo pins
+    included."""
     default: str | None = None
     """Version the root redirect targets; None means the working-tree version."""
     versions: VersionsConfig = Field(default_factory=VersionsConfig)
@@ -128,10 +136,24 @@ def redirect_html(target: str) -> str:
     )
 
 
+def builder_modules(cfg: DocsCiConfig) -> tuple[str, ...]:
+    """The modules installed in the builder.
+
+    Deduped on distribution name with ``ardt_modules`` winning, so naming a base
+    module *with extras* (``ardt-core[testing]``, which the shared pytest
+    fixtures need) refines that install instead of adding a second one.
+    """
+    merged = {dist.base_name(m): m for m in ARDT_MODULES}
+    for module in cfg.ardt_modules:
+        merged[dist.base_name(module)] = module
+    return tuple(merged.values())
+
+
 def _builder(
     ctx: Context, dag: dagger.Client, cfg: DocsCiConfig, ardt_source: str
 ) -> dagger.Container:
     """The container the docs build in: toolchain + ardt-doc-tasks installed."""
+    modules = builder_modules(cfg)
     container = dag.container().from_(cfg.builder)
     if cfg.apt_packages:
         packages = " ".join(cfg.apt_packages)
@@ -150,7 +172,7 @@ def _builder(
                 "pip",
                 "install",
                 "--no-cache-dir",
-                *(f"/opt/ardt-src/{dist.subdirectory(m)}" for m in ARDT_MODULES),
+                *(dist.local_requirement(m, "/opt/ardt-src") for m in modules),
             ]
         )
     else:
@@ -158,7 +180,7 @@ def _builder(
         if ardt_source:
             section = section.model_copy(update={"git": ardt_source})
         container = container.with_exec(
-            ["pip", "install", "--no-cache-dir", *section.requirements(ARDT_MODULES)]
+            ["pip", "install", "--no-cache-dir", *section.requirements(modules)]
         )
     # Mounted/cloned repos belong to a different uid inside the container.
     return container.with_exec(
@@ -199,7 +221,10 @@ async def docs_ci(ctx: Context, dag: dagger.Client, ardt_source: str = "") -> No
         ctx.console.step(f"docs: building `{ref}` from git history")
         checkout = (
             base.with_directory("/repo", repo_with_history)
-            .with_exec(["git", "clone", "-q", "/repo", "/ws"])
+            # --no-hardlinks: a local clone hardlinks the object store by default,
+            # which fails across the container's overlay mount ("hardlink
+            # different from source"). Copying costs a repo-sized read, once.
+            .with_exec(["git", "clone", "-q", "--no-hardlinks", "/repo", "/ws"])
             .with_exec(["git", "-C", "/ws", "checkout", "-q", ref])
         )
         entries.append((site_name(ref), _build_docs(checkout)))

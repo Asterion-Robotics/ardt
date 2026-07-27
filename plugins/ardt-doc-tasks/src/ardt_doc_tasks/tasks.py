@@ -1,4 +1,4 @@
-"""The doc task as a library function. The CLI in :mod:`.cli` is a thin front.
+"""The doc task as a library function. The CLI in :mod:`ardt_doc_tasks.cli` is a thin front.
 
 ``build`` runs Doxygen (when the repo has C/C++ and it is not switched off)
 and then sphinx — one version, from the working tree, into the fixed

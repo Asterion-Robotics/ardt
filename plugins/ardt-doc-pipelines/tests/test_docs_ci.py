@@ -42,6 +42,24 @@ class TestConfig:
         assert cfg.versions.tags == "v*"
 
 
+class TestBuilderModules:
+    def test_defaults_to_the_task_plane_only(self) -> None:
+        assert docs_ci.builder_modules(docs_ci.DocsCiConfig()) == docs_ci.ARDT_MODULES
+
+    def test_extra_modules_append_after_the_base_set(self) -> None:
+        cfg = docs_ci.DocsCiConfig.model_validate({"ardt_modules": ["ardt-pipelines", "ardt-dev"]})
+        assert docs_ci.builder_modules(cfg) == (*docs_ci.ARDT_MODULES, "ardt-pipelines", "ardt-dev")
+
+    def test_naming_a_base_module_does_not_duplicate_it(self) -> None:
+        cfg = docs_ci.DocsCiConfig.model_validate({"ardt_modules": ["ardt-core"]})
+        assert docs_ci.builder_modules(cfg) == docs_ci.ARDT_MODULES
+
+    def test_extras_refine_a_base_module_in_place(self) -> None:
+        cfg = docs_ci.DocsCiConfig.model_validate({"ardt_modules": ["ardt-core[testing]"]})
+        # one ardt-core, keeping its position -- not two competing installs.
+        assert docs_ci.builder_modules(cfg) == ("ardt-core[testing]", "ardt-doc-tasks")
+
+
 class TestVersionSelection:
     def _ctx(self, repo: Path) -> Context:
         return Context.build(cwd=repo)

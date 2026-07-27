@@ -1,0 +1,40 @@
+# Configuration
+
+One file per repo: `ardt.yaml` at the project root, or a `[tool.ardt]` table in `pyproject.toml` — same model, the file wins. **Nothing in it is required**: a repo with no config gets defaults everywhere.
+
+The project root is found by walking up from the working directory to the first `ardt.yaml` / `ardt.yml`, or failing that the first `.git`.
+
+## Namespaced sections
+
+Core owns `project:`, `check:` and `ardt:`. Everything else belongs to a plugin, which claims its section and parses it into its own pydantic model — core never knows their shape.
+
+```yaml
+project:
+  name: aos_edge          # defaults to the project-root directory name
+
+ardt:                     # which ardt pipelines install inside the images they build
+  git: git+https://github.com/Asterion-Robotics/ardt.git
+  version: v0.3.0         # pin it: a recipe is reproducible only when its ardt is
+
+tasks:
+  ros:                    # ardt-ros-tasks
+    distro: jazzy
+  doc:                    # ardt-doc-tasks
+    strict: true
+
+pipelines:
+  ros_ci:                 # ardt-ros-pipelines
+    base_image: ros:jazzy-ros-base
+  docs_ci:                # ardt-doc-pipelines
+    versions:
+      branches: [main]
+
+dev:                      # ardt-dev
+  profile: ros2
+```
+
+## Typo-safety without coupling
+
+An unknown section is an **error** — unless it is a name reserved for a first-party plugin that simply is not installed here, in which case it is a **warning**. So `aos:` on a machine without `ardt-aos` is tolerated, while `aoss:` is caught. The reserved set lives in `ardt_core.config`; growing it is a core release, and third-party sections are recognized once their plugin is installed.
+
+See [`ardt.example.yaml`](https://github.com/Asterion-Robotics/ardt/blob/main/ardt.example.yaml) for the annotated, exhaustive version, and {py:mod}`ardt_core.config` for the API.

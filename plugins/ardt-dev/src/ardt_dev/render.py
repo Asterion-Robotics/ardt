@@ -179,7 +179,7 @@ def requirements(
     """
     modules = _unique(*BASE_MODULES, *prof.ardt_modules, *dev.ardt_modules)
     if ardt_source is not None:
-        return tuple(f"{ARDT_SRC_MOUNT}/{dist.subdirectory(module)}" for module in modules)
+        return tuple(dist.local_requirement(module, ARDT_SRC_MOUNT) for module in modules)
     return cfg.ardt.requirements(modules)
 
 

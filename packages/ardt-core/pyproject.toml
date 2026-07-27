@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "ardt-core"
 dynamic = ["version"]
-description = "ardt — the company-wide CLI platform: one small core, everything else a plugin"
+description = "ardt — the open core of Asterion Robotics' dev/CI tooling: one small core, everything else a plugin"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
@@ -27,6 +27,13 @@ dependencies = [
     "pyyaml>=6.0",
     "rich>=13.0",
 ]
+
+# `ardt_core.testing` ships the shared pytest fixtures plugin authors build their
+# suites on, so it imports pytest at module scope. Declaring that as an extra
+# keeps the runtime install lean while making the dependency real for anyone who
+# imports the module — a test suite, or sphinx autodoc executing it.
+[project.optional-dependencies]
+testing = ["pytest>=8.0"]
 
 [project.scripts]
 ardt = "ardt_core.cli:main"

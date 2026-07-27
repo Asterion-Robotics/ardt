@@ -114,7 +114,7 @@ def _entry_points() -> list[metadata.EntryPoint]:
 
 
 def discover(entry_points: Iterable[metadata.EntryPoint] | None = None) -> Registry:
-    """Load every installed plugin. Failures become :class:`Problem`s, not exceptions."""
+    """Load every installed plugin. Failures become :class:`Problem` records, not exceptions."""
     eps = list(entry_points) if entry_points is not None else _entry_points()
 
     by_distribution: dict[str, list[metadata.EntryPoint]] = {}
