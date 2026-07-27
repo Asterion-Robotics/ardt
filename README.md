@@ -43,6 +43,14 @@ Shared test fixtures (`repo`, `console`, CI-env isolation) ship as `ardt_core.te
 `ardt` is a CLI you call from any repo, so install it **once as a uv tool** — a persistent, isolated venv with `ardt` on your PATH; no `uv run` prefix, no project venv needed:
 
 ```bash
+curl -LsSf https://raw.githubusercontent.com/Asterion-Robotics/ardt/main/install.sh | bash
+```
+
+[`install.sh`](install.sh) is a thin wrapper over the `uv tool install` below, and worth reading before you pipe it anywhere. `ARDT_REF=v0.1.0` pins a release, `ARDT_MODULES="…"` picks the plugin set. It needs [uv](https://docs.astral.sh/uv/), and says so rather than installing it for you.
+
+The same thing by hand:
+
+```bash
 # From a checkout (developers): editable, so source edits apply immediately
 uv tool install --editable ./packages/ardt-core \
     --with-editable ./plugins/ardt-ros-tasks \
