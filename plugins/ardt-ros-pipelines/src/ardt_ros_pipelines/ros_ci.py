@@ -144,6 +144,7 @@ def _build_context(
     rendered = recipes.render_ros2(
         builder=cfg.builder,
         base_image=cfg.base_image,
+        project=ctx.project,
         project_root=ctx.project_root,
         base_dockerfile=cfg.base_dockerfile,
         cmd=cfg.cmd,

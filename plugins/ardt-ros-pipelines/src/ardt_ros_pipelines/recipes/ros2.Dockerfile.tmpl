@@ -18,8 +18,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # The same ardt tasks as on a dev machine run the build (two-plane rule).
 @ARDT_INSTALL@
-COPY . /ws/src
-WORKDIR /ws/src
+# The canonical colcon workspace, identical to the dev container's: this repo
+# is ONE entry under /ws/src, `.repos` imports land grouped in /ws/src/external,
+# and colcon runs from /ws so build/install/log land beside the sources.
+# WORKDIR anchors ardt in this repo's config, not in the workspace root.
+COPY . /ws/src/@PROJECT@
+WORKDIR /ws/src/@PROJECT@
 
 # 1) deps (exclusions come from ardt.yaml: tasks.ros.exclude_packages / rosdep_skip_keys)
 RUN @GIT_MOUNTS@apt-get update && rosdep update --rosdistro ${ROS_DISTRO}@GIT_AUTH@ \
@@ -30,7 +34,8 @@ RUN ardt build --no-symlink-install --install-base @INSTALL_BASE@
 # 3) test — red tests fail the image build (same install base as the build)
 RUN ardt test --install-base @INSTALL_BASE@
 # 4) stage the JUnit XMLs where the pipeline (or a human) can copy them from
-RUN mkdir -p /results && cd build \
+# (colcon's build base is at the workspace root, not inside the repo)
+RUN mkdir -p /results && cd /ws/build \
  && (find . -path '*test_results*' -name '*.xml' -exec cp --parents -t /results {} +)
 @STRIP@@BASE_EXT@
 # ---- step 5: the shipped runtime image ----

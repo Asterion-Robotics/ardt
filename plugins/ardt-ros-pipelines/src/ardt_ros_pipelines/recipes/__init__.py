@@ -182,6 +182,7 @@ def render_ros2(
     *,
     builder: str,
     base_image: str,
+    project: str,
     project_root: Path,
     base_dockerfile: str,
     cmd: list[str] | None,
@@ -195,6 +196,9 @@ def render_ros2(
 ) -> str:
     """Render the ROS 2 workspace recipe for one repo.
 
+    ``project`` names the repo's directory under ``/ws/src`` — the same name
+    the dev container mounts it at, which is what keeps every source path
+    identical between the two.
     ``ardt_requirements`` (from :meth:`ardt_core.dist.DistConfig.requirements`
     for :data:`ARDT_MODULES`) is how ardt installs into the build stage;
     ``local_ardt`` replaces it with the injected-checkout install.
@@ -232,6 +236,7 @@ def render_ros2(
     return (
         _template("ros2.Dockerfile.tmpl")
         .replace("@VERSION@", __version__)
+        .replace("@PROJECT@", project)
         .replace("@BUILDER@", builder)
         .replace("@BASE_IMAGE@", base_image)
         .replace("@BASE_FILE@", base_dockerfile)
