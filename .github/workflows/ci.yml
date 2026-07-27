@@ -42,3 +42,38 @@ jobs:
 
       - name: Test with coverage gate
         run: uv run pytest --cov=ardt_core --cov-report=term-missing
+
+  # Dogfooding the pipeline plane: `docs-ci` builds the working tree plus every
+  # ref in `pipelines.docs_ci.versions` into a Pages-ready `public/`. Dagger
+  # provisions its engine over the runner's docker socket; nothing to install.
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Mandatory here, not just nice-to-have: historical versions are built
+          # by cloning this checkout and checking out each ref, so the objects
+          # and tags have to be present locally.
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+
+      - name: Sync workspace
+        run: uv sync --frozen || uv sync
+
+      # ardt_source=<checkout> installs the ardt modules from this working tree
+      # rather than the `ardt:` section's git pin, so the site documents the
+      # commit under test. `tasks.doc.strict` defaults to true, so each version
+      # runs sphinx -W --keep-going: any warning fails the job.
+      - name: Build the versioned site
+        run: uv run ardt pipe run docs-ci --arg ardt_source=${{ github.workspace }}
+
+      - name: Upload site
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-site
+          path: public
+          if-no-files-found: error
