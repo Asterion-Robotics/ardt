@@ -1,0 +1,94 @@
+# Publish every distribution in the workspace to PyPI, from one tag.
+#
+# All eight share a version: each `pyproject.toml` is `dynamic = ["version"]`
+# via hatch-vcs rooted at the repo, so `git tag vX.Y.Z` sets them together and
+# there is no per-package bump to forget. That invariant is checked below rather
+# than assumed -- a mis-rooted hatch-vcs would silently publish a mixed set.
+#
+# Trusted publishing (OIDC), so there is no API token to store or rotate. Each
+# project needs its own publisher on PyPI naming this workflow and environment;
+# until a project exists, that is a *pending* publisher.
+name: publish
+
+on:
+  push:
+    tags: ["v*"]
+  pull_request: # build only: catches packaging breakage before a release does
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # hatch-vcs reads tags; a shallow clone builds 0.0.0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build every workspace package
+        run: uv build --all-packages --out-dir dist
+
+      - name: Check one version across the whole workspace
+        run: |
+          versions=$(ls dist/*.whl | sed 's|.*/||' | cut -d- -f2 | sort -u)
+          count=$(printf '%s\n' "$versions" | wc -l)
+          printf 'built:\n%s\n' "$(ls dist/*.whl | sed 's|.*/||')"
+          if [ "$count" -ne 1 ]; then
+            echo "::error::packages disagree on the version: $versions"
+            echo "hatch-vcs must be rooted at the repo in every pyproject.toml."
+            exit 1
+          fi
+          echo "version=$versions" >> "$GITHUB_OUTPUT"
+        id: version
+
+      # Off a tag the version is local by construction (0.1.0.post1.dev2+g26974cc),
+      # which is correct for a branch build and merely unpublishable.
+      - name: Check the version is publishable
+        if: github.ref_type == 'tag'
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          case "$version" in
+            *+*|*dev*)
+              echo "::error::'$version' is a local or dev version; PyPI will reject it."
+              exit 1 ;;
+          esac
+          if [ "${GITHUB_REF_NAME#v}" != "$version" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} and built version $version disagree."
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  # No checkout, and none of our code runs here: the OIDC token that can publish
+  # is exposed to as little as possible.
+  publish:
+    needs: build
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/ardt-cli/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # Eight uploads in one call: if a later one fails, a re-run must not
+          # trip over the ones that already landed.
+          skip-existing: true
