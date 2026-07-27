@@ -29,11 +29,12 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+from ardt_core import env
 from ardt_core.context import Context
 from ardt_core.errors import ArdtError
 
 from . import doxygen as doxygen_module
-from .config import DOC_OUTPUT, DocConfig, doc_config
+from .config import DOC_OUTPUT, STYLE_ENV, DocConfig, doc_config
 
 _CPP_SUFFIXES = frozenset({".h", ".hpp", ".hh", ".c", ".cc", ".cpp", ".cxx"})
 _SKIP_DIRS = frozenset({"build", "install", "log", ".git", ".venv", "__pycache__"})
@@ -66,7 +67,7 @@ def build(ctx: Context) -> None:
         if cfg.strict:
             command += ["-W", "--keep-going"]
         command += [str(source), str(html)]
-        ctx.runner.run(command)
+        ctx.runner.run(command, extra_env=_style_env(ctx, cfg))
 
     ctx.emit(
         html_dir=f"{DOC_OUTPUT}/html",
@@ -74,6 +75,22 @@ def build(ctx: Context) -> None:
     )
     if not ctx.dry_run:
         ctx.console.success(f"docs at {html / 'index.html'}")
+
+
+def _style_env(ctx: Context, cfg: DocConfig) -> dict[str, str]:
+    """The style handed to the preset, and why it is an environment variable.
+
+    A caller that already set it wins: the doc pipeline sets it on the builder so
+    that *every* historical ref renders with the current style, and that ref's own
+    config must not override it. Empty locally means no style, not "unset".
+    """
+    if env.has(STYLE_ENV):
+        return {}
+    if cfg.style:
+        # An extension list that depends on ambient state is worth stating out
+        # loud rather than leaving to be discovered in a diff of the html.
+        ctx.console.detail(f"style: {' '.join(cfg.style)}")
+    return {STYLE_ENV: " ".join(cfg.style)}
 
 
 def _doxygen_enabled(root: Path, cfg: DocConfig) -> bool:

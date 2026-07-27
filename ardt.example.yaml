@@ -39,6 +39,10 @@ project:
 
 # ardt-ros-tasks — the `tasks.ros:` subsection.
 tasks:
+  # ardt-doc-tasks — the `tasks.doc:` subsection.
+  # doc:
+  #   style: [asterion_sphinx_style] # house style; a plain sphinx extension,
+  #                                  # installed via pipelines.docs_ci.pip_packages
   ros:
     distro: jazzy
     repos_file: aos_edge.repos # imported by `ardt deps` before rosdep runs
@@ -64,6 +68,8 @@ tasks:
 #   docs_ci:
 #     builder: python:3.12-slim # docs toolchain container (never ships)
 #     ardt_modules: [ardt-aos] # ardt modules the docs need importable (autodoc)
+#     pip_packages: # everything else: a sphinx style, a private doc dependency
+#       - "asterion-sphinx-style @ git+https://github.com/Asterion-Robotics/asterion-sphinx-style.git@v0.1.0"
 #     versions:
 #       branches: [main] # historical versions joining the site (+ working tree)
 #       tags: "v*"

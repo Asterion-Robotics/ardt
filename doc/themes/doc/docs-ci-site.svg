@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 400" width="900" height="400"
+     role="img" aria-labelledby="t d">
+  <title id="t">How docs-ci assembles the site</title>
+  <desc id="d">Every configured ref is built once, in a single builder container, and the results are assembled into public/ with a versions.json and a root redirect.</desc>
+
+  <!--
+    The docs-ci fan-in: many refs, one container, one site.
+    Asterion brand blues, one hue separated by lightness, so the diagram stays
+    readable under any colour vision deficiency. Generated; edit coordinates in
+    the source spec rather than by hand.
+  -->
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#030189"/>
+    </marker>
+  </defs>
+
+  <style>
+    .plane      { stroke-width: 1.5; }
+    .plane-name { font-weight: 600; font-size: 15px; text-anchor: middle; }
+    .node       { fill: #ffffff; stroke-width: 1.25; }
+    .solid      { stroke-width: 1.25; }
+    .node-name  { font-size: 14px; font-weight: 600; text-anchor: middle; }
+    .node-sub   { font-size: 11px; text-anchor: middle; }
+    .link       { fill: none; stroke: #8b93c9; stroke-width: 1.75; }
+    .link-label { font-size: 12.5px; fill: #030189; }
+    .tag        { font-size: 11.5px; fill: #4a5bc8; text-anchor: middle; }
+    text        { font-family: Lato, "Helvetica Neue", Helvetica, Arial, sans-serif; }
+  </style>
+
+  <rect class="plane" x="24" y="20" width="210" height="360" rx="8" fill="#eef1ff" stroke="#0832f6"/>
+  <text class="plane-name" x="129" y="46" fill="#0832f6">refs to build</text>
+  <rect class="node" x="40" y="62" width="178" height="48" rx="6" fill="#ffffff" stroke="#b9c4ff"/>
+  <text class="node-name" x="129.0" y="84.0" fill="#030189">working tree</text>
+  <text class="node-sub" x="129.0" y="102.0" fill="#4a5bc8">the triggering ref</text>
+  <rect class="node" x="40" y="122" width="178" height="48" rx="6" fill="#ffffff" stroke="#b9c4ff"/>
+  <text class="node-name" x="129.0" y="144.0" fill="#030189">main</text>
+  <text class="node-sub" x="129.0" y="162.0" fill="#4a5bc8">versions.branches</text>
+  <rect class="node" x="40" y="182" width="178" height="48" rx="6" fill="#ffffff" stroke="#b9c4ff"/>
+  <text class="node-name" x="129.0" y="204.0" fill="#030189">v0.0.3</text>
+  <text class="node-sub" x="129.0" y="222.0" fill="#4a5bc8">versions.tags glob</text>
+  <rect class="node" x="40" y="242" width="178" height="48" rx="6" fill="#ffffff" stroke="#b9c4ff"/>
+  <text class="node-name" x="129.0" y="271.0" fill="#030189">v0.0.2</text>
+  <rect class="node" x="40" y="302" width="178" height="48" rx="6" fill="#ffffff" stroke="#b9c4ff"/>
+  <text class="node-name" x="129.0" y="331.0" fill="#030189">v0.0.1</text>
+  <rect class="solid" x="300" y="118" width="250" height="164" rx="8" fill="#010042"/>
+  <text class="node-name" x="425" y="150" fill="#ffffff">one builder container</text>
+  <text class="node-sub" x="425" y="174" fill="#c7ccef">ardt-core + ardt-doc-tasks</text>
+  <text class="node-sub" x="425" y="192" fill="#c7ccef">+ pip_packages (the style)</text>
+  <rect class="node" x="320" y="208" width="210" height="56" rx="6" fill="#ffffff" stroke="#b9c4ff"/>
+  <text class="node-name" x="425" y="232" fill="#030189">ardt doc build</text>
+  <text class="node-sub" x="425" y="250" fill="#4a5bc8">once per ref, its own conf.py</text>
+  <path d="M 234 200 L 292 200" fill="none" stroke="#030189" stroke-width="1.75" marker-end="url(#arrow)"/>
+  <text class="tag" x="263" y="190" fill="#010042">each</text>
+  <rect class="plane" x="616" y="20" width="260" height="360" rx="8" fill="#dce2ff" stroke="#030189"/>
+  <text class="plane-name" x="746" y="46" fill="#010042">public/</text>
+  <rect class="node" x="632" y="62" width="228" height="44" rx="6" fill="#ffffff" stroke="#a9b5ee"/>
+  <text class="node-name" x="746.0" y="89.0" fill="#010042">main/</text>
+  <rect class="node" x="632" y="114" width="228" height="44" rx="6" fill="#ffffff" stroke="#a9b5ee"/>
+  <text class="node-name" x="746.0" y="141.0" fill="#010042">v0.0.3/</text>
+  <rect class="node" x="632" y="166" width="228" height="44" rx="6" fill="#ffffff" stroke="#a9b5ee"/>
+  <text class="node-name" x="746.0" y="193.0" fill="#010042">v0.0.2/</text>
+  <rect class="node" x="632" y="218" width="228" height="44" rx="6" fill="#ffffff" stroke="#a9b5ee"/>
+  <text class="node-name" x="746.0" y="245.0" fill="#010042">v0.0.1/</text>
+  <rect class="node" x="632" y="270" width="228" height="44" rx="6" fill="#ffffff" stroke="#a9b5ee"/>
+  <text class="node-name" x="746.0" y="290.0" fill="#010042">versions.json</text>
+  <text class="node-sub" x="746.0" y="308.0" fill="#4a5bc8">the flyout reads this</text>
+  <rect class="node" x="632" y="322" width="228" height="44" rx="6" fill="#ffffff" stroke="#a9b5ee"/>
+  <text class="node-name" x="746.0" y="342.0" fill="#010042">index.html</text>
+  <text class="node-sub" x="746.0" y="360.0" fill="#4a5bc8">redirect to default</text>
+  <path d="M 552 200 L 610 200" fill="none" stroke="#030189" stroke-width="1.75" marker-end="url(#arrow)"/>
+  <text class="tag" x="581" y="190" fill="#010042">export</text>
+</svg>

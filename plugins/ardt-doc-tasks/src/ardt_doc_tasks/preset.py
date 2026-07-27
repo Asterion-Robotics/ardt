@@ -43,8 +43,10 @@ from __future__ import annotations
 import sys as _sys
 from pathlib import Path as _Path
 
+from ardt_core import env as _env
 from ardt_core.config import find_project_root as _find_project_root
 from ardt_doc_tasks.config import DOC_OUTPUT as _DOC_OUTPUT
+from ardt_doc_tasks.config import STYLE_ENV as _STYLE_ENV
 
 _ROOT = _find_project_root(_Path.cwd())
 
@@ -65,6 +67,21 @@ extensions = [
     "sphinxcontrib.mermaid",
     "breathe",
     "ardt_doc_tasks.sphinx_ext",
+]
+
+# The repo's `tasks.doc.style`, arriving by environment rather than by config.
+#
+# `docs-ci` rebuilds *every* version of a site with the currently installed
+# toolchain, so anything the preset injects reaches releases cut years earlier,
+# while anything a ref opts into from its own `conf.py` cannot: a 2026 tag will
+# never mention a style written afterwards. Setting this on the builder makes a
+# style behave like the rest of the toolchain -- one declaration, applied to the
+# whole archive on the next rebuild.
+#
+# `ardt doc build` sets it from the local config, so a laptop and the pipeline
+# resolve identically.
+extensions += [
+    _style for _style in (_env.get(_STYLE_ENV) or "").split() if _style not in extensions
 ]
 
 source_suffix = {".rst": "restructuredtext", ".md": "markdown"}

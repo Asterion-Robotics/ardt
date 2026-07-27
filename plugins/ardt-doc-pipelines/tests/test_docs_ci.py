@@ -71,10 +71,40 @@ class TestBuilderModules:
         cfg = docs_ci.DocsCiConfig.model_validate({"ardt_modules": ["ardt-core"]})
         assert docs_ci.builder_modules(cfg) == docs_ci.ARDT_MODULES
 
+    def test_pip_packages_default_to_none(self) -> None:
+        assert docs_ci.DocsCiConfig().pip_packages == []
+
+    def test_pip_packages_take_pep_508_strings(self) -> None:
+        cfg = docs_ci.DocsCiConfig.model_validate(
+            {"pip_packages": ["asterion-sphinx-style @ git+https://example.com/s.git@v1.2.0"]}
+        )
+        # Not routed through `ardt:` -- these are not ardt distributions.
+        assert docs_ci.builder_modules(cfg) == docs_ci.ARDT_MODULES
+        assert cfg.pip_packages[0].startswith("asterion-sphinx-style @ git+")
+
     def test_extras_refine_a_base_module_in_place(self) -> None:
         cfg = docs_ci.DocsCiConfig.model_validate({"ardt_modules": ["ardt-core[testing]"]})
         # one ardt-core, keeping its position -- not two competing installs.
         assert docs_ci.builder_modules(cfg) == ("ardt-core[testing]", "ardt-doc-tasks")
+
+
+class TestStyleForwarding:
+    """The pipeline reads `tasks.doc` without depending on ardt-doc-tasks."""
+
+    def test_no_style_configured(self) -> None:
+        section = ArdtConfig().section_as("tasks", docs_ci.TasksSection)
+        assert section.doc.style == []
+
+    def test_reads_the_task_planes_section(self) -> None:
+        cfg = ArdtConfig.model_validate(
+            {"tasks": {"doc": {"style": ["asterion_sphinx_style"], "strict": False}}}
+        )
+        section = cfg.section_as("tasks", docs_ci.TasksSection)
+        # `strict` belongs to ardt-doc-tasks; extra="allow" keeps it from erroring.
+        assert section.doc.style == ["asterion_sphinx_style"]
+
+    def test_the_env_name_is_the_contract_with_the_task_plane(self) -> None:
+        assert docs_ci.STYLE_ENV == "ARDT_DOC_STYLE"
 
 
 class TestVersionSelection:
