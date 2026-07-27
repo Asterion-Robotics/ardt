@@ -6,6 +6,10 @@ name: ci
 on:
   push:
     branches: [main]
+    # Required, not optional: once `branches:` is set, tag pushes stop
+    # triggering this workflow unless `tags:` is set too. Publishing hangs off
+    # these, so a missing line here is a silently dead release.
+    tags: ["v*"]
   pull_request:
 
 concurrency:
@@ -71,9 +75,31 @@ jobs:
       - name: Build the versioned site
         run: uv run ardt pipe run docs-ci --arg ardt_source=${{ github.workspace }}
 
+      # Not plain upload-artifact: deploy-pages only consumes the `github-pages`
+      # tarball this action produces. Uploaded on every event, so a pull request
+      # gets a downloadable site to review; only tags go on to deploy it.
       - name: Upload site
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-pages-artifact@v3
         with:
-          name: docs-site
           path: public
-          if-no-files-found: error
+
+  # Publishing is tag-only: main and pull requests build the site and stop.
+  deploy-docs:
+    needs: docs
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write # create the deployment
+      id-token: write # deploy-pages authenticates over OIDC
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    # Deliberately not the workflow-level `cancel-in-progress: true` group: a
+    # half-cancelled deployment is worse than a queued one.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

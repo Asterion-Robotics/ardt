@@ -14,9 +14,12 @@ pipelines:
       - ardt-ros-pipelines
       - ardt-doc-pipelines
     versions:
-      # Historical versions joining the site, each built from git history with
-      # its own doc/ and conf.py. Empty until a ref other than this branch has
-      # a doc/ tree: `ardt doc build` fails hard on a ref that has none, and one
-      # failing ref fails the whole site. Add `branches: [main]` once the docs
-      # land on main, then a `tags:` glob once a tag ships them.
+      # Every release joins the site, each built from git history with its own
+      # doc/ and conf.py. `ardt doc build` fails hard on a ref that carries no
+      # doc/ tree and one failing ref fails the whole site, so every tag matched
+      # here must postdate the docs landing on main.
+      tags: "v*"
+      # `branches: [main]` would add an unreleased "dev" version alongside the
+      # releases. Off for now: it doubles the build and the tag is the thing
+      # being published.
       branches: []
