@@ -27,6 +27,8 @@ from __future__ import annotations
 import io
 from pathlib import Path
 
+import pytest
+
 from ardt_core.config import ArdtConfig
 from ardt_core.context import Context
 from ardt_core.plugins import Registry
@@ -43,6 +45,24 @@ def context(root: Path, **kwargs: object) -> Context:
 
 def output(ctx: Context) -> str:
     return ctx.console._stream.getvalue()  # type: ignore[attr-defined]
+
+
+def test_cli_rejects_a_mistyped_option(repo: Path) -> None:
+    """Regression: `ignore_unknown_options` forwarded any typo'd ardt flag
+    straight into a real colcon run; unknown options must be usage errors."""
+    from ardt_core.cli import main
+
+    assert main(["-C", str(repo), "build", "--dry-run", "--packages-selct", "pkg"]) == 2
+
+
+def test_cli_passes_arguments_after_the_separator_to_colcon(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from ardt_core.cli import main
+
+    argv = ["-C", str(repo), "build", "--dry-run", "--", "--event-handlers", "console_direct+"]
+    assert main(argv) == 0
+    assert "--event-handlers console_direct+" in capsys.readouterr().err
 
 
 def test_ros_config_defaults() -> None:

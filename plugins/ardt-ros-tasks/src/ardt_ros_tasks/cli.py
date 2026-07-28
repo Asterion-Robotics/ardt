@@ -83,7 +83,10 @@ def deps(
     )
 
 
-@click.command(context_settings={"ignore_unknown_options": True})
+# No `ignore_unknown_options` here or on `test`: a typo'd ardt flag must be an
+# error, not a silent colcon argument that starts a real build. Pass-through is
+# explicit, after `--`.
+@click.command()
 @_packages_option
 @_exclude_option
 @_install_base_option
@@ -117,7 +120,7 @@ def build(
     )
 
 
-@click.command(context_settings={"ignore_unknown_options": True})
+@click.command()
 @_packages_option
 @_exclude_option
 @_install_base_option
@@ -130,7 +133,10 @@ def test(
     install_base: str | None,
     colcon_args: tuple[str, ...],
 ) -> None:
-    """Run the workspace's tests and summarize the results."""
+    """Run the workspace's tests and summarize the results.
+
+    Arguments after `--` are passed through to colcon.
+    """
     tasks.test(
         ctx,
         packages=packages,
