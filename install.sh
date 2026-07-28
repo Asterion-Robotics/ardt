@@ -12,7 +12,9 @@
 # nothing, instead of running half an install.
 #
 # Knobs, all optional:
-#     ARDT_REF=v0.1.0     git ref to install (default: the repo's default branch)
+#     ARDT_REF=v0.1.0     git ref to install (default: the `ardt.version` pin
+#                         from ./ardt.yaml when present, else the repo's
+#                         default branch)
 #     ARDT_MODULES="…"    space-separated distribution names
 #     ARDT_REPO=…         a fork or a mirror
 set -euo pipefail
@@ -27,6 +29,20 @@ ARDT_MODULES="${ARDT_MODULES:-ardt-core ardt-pipelines ardt-ros-tasks ardt-ros-p
 
 say() { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 die() { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
+
+# The repo's own pin: the `ardt.version:` entry of an ardt.yaml in the working
+# directory -- the same pin the pipelines install inside the containers they
+# build, so one file versions both planes and CI needs no parsing of its own.
+# sed instead of a YAML parser on purpose: this runs from a bare `curl | bash`
+# with no dependencies, and the pin is one scalar under one top-level key.
+# Quotes and trailing comments are stripped; per-module `ardt.modules:` pins
+# are a pipeline concern, not a bootstrap one.
+pinned_ref() {
+    [ -f ardt.yaml ] || return 0
+    sed -n '/^ardt:/,/^[^[:space:]]/{s/^[[:space:]]*version:[[:space:]]*//p}' ardt.yaml \
+        | head -n 1 \
+        | sed "s/[[:space:]]*#.*\$//; s/^[\"']//; s/[\"']\$//"
+}
 
 # packages/ for the platform, plugins/ for everything else -- the same split
 # `ardt_core.dist.subdirectory` makes.
@@ -45,6 +61,11 @@ requirement() {
 }
 
 main() {
+    if [ -z "$ARDT_REF" ]; then
+        ARDT_REF="$(pinned_ref)"
+        [ -n "$ARDT_REF" ] && say "using the ardt.version pin from ./ardt.yaml: ${ARDT_REF}"
+    fi
+
     command -v uv >/dev/null 2>&1 || die "uv is required.
   Install it, then re-run this script:
     curl -LsSf https://astral.sh/uv/install.sh | sh
