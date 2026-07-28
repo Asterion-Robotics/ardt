@@ -45,10 +45,18 @@ pinned_ref() {
 
 # The default module set is contextual, because "no ardt-dev on a runner" is a
 # property of where the install runs, not of any one repo: GitHub Actions and
-# GitLab CI both export CI=true, so runners get the task+pipeline planes and
-# workstations add ardt-dev on top. The doc plugins are in neither bundle --
-# `ardt doc build` pulls sphinx and breathe, which most users of a ROS repo
-# never invoke; a repo whose CI builds docs lists them in `install_extras`.
+# GitLab CI both export CI=true, so runners get the bundle below and
+# workstations add ardt-dev on top.
+#
+# What is IN the bundle is policy, not necessity -- documented so the choice
+# can be revisited instead of rediscovered:
+#   - ardt-core, ardt-pipelines: the platform; everything needs them.
+#   - ardt-ros-tasks, ardt-ros-pipelines: included because ardt is a robotics
+#     toolchain and nearly every consumer repo is a ROS 2 repo; the default
+#     serves that majority. A non-ROS repo sheds them with `install_skip`.
+#   - doc plugins: excluded because `ardt doc build` pulls sphinx and breathe,
+#     which most repos never invoke. A repo whose CI builds docs opts in with
+#     `install_extras` (see ardt.example.yaml).
 default_bundle() {
     printf '%s' 'ardt-core ardt-pipelines ardt-ros-tasks ardt-ros-pipelines'
     [ -z "${CI:-}" ] && printf ' %s' 'ardt-dev'
