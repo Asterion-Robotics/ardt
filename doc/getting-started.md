@@ -26,7 +26,7 @@ The one-liner does that for you. [uv](https://docs.astral.sh/uv/) is the only pr
 curl -LsSf https://raw.githubusercontent.com/Asterion-Robotics/ardt/main/install.sh | bash
 ```
 
-ardt's installer deliberately will not install uv for you: chaining installers hides what you are trusting. `ARDT_REF=v0.1.0` pins a release rather than tracking the default branch, and `ARDT_MODULES="…"` picks the plugin set. The script is short and worth reading before piping it anywhere.
+ardt's installer deliberately will not install uv for you: chaining installers hides what you are trusting. Run from a repo checkout, it honors the repo's `ardt.yaml`: `ardt.version` pins the ref, and `install_extras` / `install_skip` adjust the default module bundle. That bundle is contextual — core + pipelines + the ROS 2 plugins everywhere, plus `ardt-dev` on workstations only (runners are detected via `CI=true`, which GitHub Actions and GitLab CI both set); the doc plugins are opt-in. The env vars override both: `ARDT_REF=v0.1.0` pins a release, `ARDT_MODULES="…"` replaces the module set outright. The script is short and worth reading before piping it anywhere — the bundle policy is documented in it.
 
 :::{admonition} To install uv
 :class: note

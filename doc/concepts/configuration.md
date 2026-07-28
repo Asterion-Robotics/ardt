@@ -12,9 +12,12 @@ Core owns `project:`, `check:` and `ardt:`. Everything else belongs to a plugin,
 project:
   name: my_robot          # defaults to the project-root directory name
 
-ardt:                     # which ardt pipelines install inside the images they build
+ardt:                     # the one ardt pin: pipelines install it inside their
+                          # images, install.sh honors it on workstations and CI
   git: git+https://github.com/Asterion-Robotics/ardt.git
   version: v0.3.0         # pin it: a recipe is reproducible only when its ardt is
+  install_extras: [ardt-doc-tasks, ardt-doc-pipelines]  # install.sh: add to its bundle
+  install_skip: [ardt-dev]                              # install.sh: drop from it
 
 tasks:
   ros:                    # ardt-ros-tasks
