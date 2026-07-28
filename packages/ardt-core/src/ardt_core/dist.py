@@ -110,6 +110,12 @@ class DistConfig(BaseModel):
     """Git rev every monorepo module installs at. None tracks HEAD."""
     modules: dict[str, ModulePin] = Field(default_factory=dict)
     """Per-module overrides, keyed by distribution name."""
+    install_extras: list[str] = Field(default_factory=list)
+    """Modules install.sh adds to its default bundle. A bootstrap knob only:
+    pipelines and dev profiles declare their own module sets and ignore it."""
+    install_skip: list[str] = Field(default_factory=list)
+    """Modules install.sh removes from its default bundle (before extras
+    apply). Same scope as ``install_extras``: the bootstrap installer only."""
 
     def requirement(self, module: str) -> str:
         """The PEP 508 requirement string installing ``module`` in an image.
