@@ -56,6 +56,14 @@ def test_the_workspace_is_canonical_and_the_workdir_is_the_repo(tmp_path: Path) 
     assert "cd /ws/build" in rendered
 
 
+def test_staging_matches_both_junit_layouts(tmp_path: Path) -> None:
+    """ament_cmake writes test_results/<pkg>/*.xml, colcon's pytest step writes
+    <pkg>/pytest.xml with no test_results component — the staging find must
+    match both, or ament_python results silently vanish from the reports."""
+    rendered = render(tmp_path)
+    assert "-path '*test_results*' -name '*.xml' -o -name 'pytest.xml'" in rendered
+
+
 def test_no_placeholders_survive(tmp_path: Path) -> None:
     rendered = render(tmp_path)
     assert "@" not in rendered.replace("ardt-core @", "").replace("ardt-ros-tasks @", "")

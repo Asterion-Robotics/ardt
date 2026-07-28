@@ -34,9 +34,11 @@ RUN ardt build --no-symlink-install --install-base @INSTALL_BASE@
 # 3) test — red tests fail the image build (same install base as the build)
 RUN ardt test --install-base @INSTALL_BASE@
 # 4) stage the JUnit XMLs where the pipeline (or a human) can copy them from
-# (colcon's build base is at the workspace root, not inside the repo)
+# (colcon's build base is at the workspace root, not inside the repo). Two
+# layouts: ament_cmake writes <pkg>/test_results/<pkg>/*.xml, colcon's pytest
+# step writes <pkg>/pytest.xml — the grouped find matches both.
 RUN mkdir -p /results && cd /ws/build \
- && (find . -path '*test_results*' -name '*.xml' -exec cp --parents -t /results {} +)
+ && (find . \( -path '*test_results*' -name '*.xml' -o -name 'pytest.xml' \) -exec cp --parents -t /results {} +)
 @STRIP@@BASE_EXT@
 # ---- step 5: the shipped runtime image ----
 FROM @RUNTIME_FROM@ AS runtime
