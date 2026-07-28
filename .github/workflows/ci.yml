@@ -12,6 +12,11 @@ on:
     tags: ["v*"]
   pull_request:
 
+# Read-only default token for every job; the deploy job grants itself the
+# pages/id-token scopes it needs. Anything more is a job-level, explicit grant.
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -31,7 +36,7 @@ jobs:
           python-version: "3.12"
 
       - name: Sync workspace
-        run: uv sync --frozen || uv sync
+        run: uv sync --frozen
 
       # Hook repos are cloned and installed on first use; keyed on the config so
       # the cache invalidates exactly when a `rev:` changes.
@@ -60,7 +65,7 @@ jobs:
           python-version: ${{ matrix.python }}
 
       - name: Sync workspace
-        run: uv sync --frozen || uv sync
+        run: uv sync --frozen
 
       - name: Lint
         run: uv run ruff check .
@@ -93,7 +98,7 @@ jobs:
           python-version: "3.12"
 
       - name: Sync workspace
-        run: uv sync --frozen || uv sync
+        run: uv sync --frozen
 
       # ardt_source=<checkout> installs the ardt modules from this working tree
       # rather than the `ardt:` section's git pin, so the site documents the
@@ -111,8 +116,10 @@ jobs:
           path: public
 
   # Publishing is tag-only: main and pull requests build the site and stop.
+  # Gated on the whole pipeline, not just `docs`: a tag is a release, and a
+  # release whose tests or lint are red must not ship its site either.
   deploy-docs:
-    needs: docs
+    needs: [docs, check, lint]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
