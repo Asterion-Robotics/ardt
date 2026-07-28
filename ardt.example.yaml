@@ -9,6 +9,8 @@ project:
 # ardt:
 #   git: git+https://github.com/Asterion-Robotics/ardt.git # the default
 #   version: v0.3.0 # git rev (tag/branch/sha) every monorepo module installs at
+#   install_extras: [ardt-doc-tasks, ardt-doc-pipelines] # added to install.sh's bundle
+#   install_skip: [ardt-ros-pipelines] # removed from it (workstations and CI alike)
 #   modules:
 #     ardt-acme: # out-of-monorepo module: its own address + pin
 #       git: git+https://code.example.com/ardt-acme.git

@@ -61,6 +61,23 @@ class TestLocalRequirement:
         )
 
 
+class TestInstallKnobs:
+    """The bootstrap-installer lists: declared here, consumed by install.sh."""
+
+    def test_default_empty(self) -> None:
+        section = dist.DistConfig()
+        assert section.install_extras == []
+        assert section.install_skip == []
+
+    def test_declared_fields_pass_extra_forbid(self) -> None:
+        section = dist.DistConfig(
+            install_extras=["ardt-doc-tasks", "ardt-doc-pipelines"],
+            install_skip=["ardt-ros-pipelines"],
+        )
+        assert section.install_extras == ["ardt-doc-tasks", "ardt-doc-pipelines"]
+        assert section.install_skip == ["ardt-ros-pipelines"]
+
+
 class TestRequirement:
     def test_default_tracks_monorepo_head(self) -> None:
         assert dist.DistConfig().requirement("ardt-core") == (
