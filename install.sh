@@ -32,15 +32,27 @@ die() { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
 # The repo's own pin: the `ardt.version:` entry of an ardt.yaml in the working
 # directory -- the same pin the pipelines install inside the containers they
 # build, so one file versions both planes and CI needs no parsing of its own.
-# sed instead of a YAML parser on purpose: this runs from a bare `curl | bash`
+# awk instead of a YAML parser on purpose: this runs from a bare `curl | bash`
 # with no dependencies, and the pin is one scalar under one top-level key.
-# Quotes and trailing comments are stripped; per-module `ardt.modules:` pins
-# are a pipeline concern, not a bootstrap one.
+# Keys match only at the section's own child indent (the indent of its first
+# entry), so a deeper `modules.<name>.version:` pin can never shadow the
+# top-level one. Quotes and trailing comments are stripped.
 pinned_ref() {
     [ -f ardt.yaml ] || return 0
-    sed -n '/^ardt:/,/^[^[:space:]]/{s/^[[:space:]]*version:[[:space:]]*//p}' ardt.yaml \
-        | head -n 1 \
-        | sed "s/[[:space:]]*#.*\$//; s/^[\"']//; s/[\"']\$//"
+    awk '
+        /^ardt:/ { section = 1; next }
+        section && /^[^ \t]/ { exit }
+        !section { next }
+        /^[ \t]*(#|$)/ { next }
+        {
+            match($0, /^[ \t]+/)
+            if (!child) child = RLENGTH
+            if (RLENGTH == child && sub(/^[ \t]+version:[ \t]*/, "")) {
+                sub(/[ \t]*#.*$/, ""); gsub(/^["'\'']|["'\'']$/, "")
+                print; exit
+            }
+        }
+    ' ardt.yaml
 }
 
 # The default module set is contextual, because "no ardt-dev on a runner" is a
@@ -66,14 +78,20 @@ default_bundle() {
 # A list-valued key of the `ardt:` section of ./ardt.yaml, one item per line.
 # Accepts the two YAML spellings a bootstrap parser should ever grow -- flow
 # (`key: [a, b]`) and block (`- a` lines); quotes and trailing comments are
-# stripped. awk, not a YAML parser: same rationale as pinned_ref above.
+# stripped. awk, not a YAML parser, and the same child-indent depth rule as
+# pinned_ref above: a nested key inside `modules:` must never match.
 config_list() {
     [ -f ardt.yaml ] || return 0
     awk -v key="$1" '
         /^ardt:/ { section = 1; next }
         section && /^[^ \t]/ { section = 0 }
         !section { next }
-        !in_list && $0 ~ "^[ \t]+" key ":" {
+        /^[ \t]*(#|$)/ { next }
+        {
+            match($0, /^[ \t]+/)
+            if (!child) child = RLENGTH
+        }
+        !in_list && RLENGTH == child && $0 ~ "^[ \t]+" key ":" {
             sub("^[ \t]+" key ":[ \t]*", ""); sub(/[ \t]*#.*$/, "")
             if ($0 ~ /^\[/) {                       # flow style: [a, b]
                 gsub(/[][,]/, " "); gsub(/["'\'']/, "")
