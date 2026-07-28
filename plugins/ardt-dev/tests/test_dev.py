@@ -34,7 +34,7 @@ import yaml
 
 from ardt_core.config import ArdtConfig
 from ardt_core.context import Context
-from ardt_core.errors import ArdtError
+from ardt_core.errors import ArdtError, ConfigError
 from ardt_core.plugins import Registry
 from ardt_dev import host as host_module
 from ardt_dev import profiles as profiles_module
@@ -367,12 +367,19 @@ def test_a_profile_without_cpp_renders_no_vscode_file(monkeypatch: pytest.Monkey
     assert render_module.CPP_PROPERTIES in plan(ArdtConfig()).files
 
 
-def test_workspace_folder_reaches_every_file_that_needs_it() -> None:
+def test_the_fixed_workspace_root_reaches_every_file_that_needs_it() -> None:
+    files = plan(ArdtConfig()).files
+    assert "/ws/install/setup.bash" in files[render_module.DOCKERFILE]
+    assert "..:/ws/src/demo:cached" in files[render_module.COMPOSE]
+    assert '"workspaceFolder": "/ws"' in files[render_module.DEVCONTAINER]
+
+
+def test_workspace_folder_is_not_a_knob() -> None:
+    """The workspace root is a fixed convention: the CI recipe hard-codes /ws,
+    and a configurable dev-side path silently broke the parity rule."""
     cfg = ArdtConfig.model_validate({"dev": {"workspace_folder": "/opt/ws"}})
-    files = plan(cfg).files
-    assert "/opt/ws/install/setup.bash" in files[render_module.DOCKERFILE]
-    assert "..:/opt/ws/src/demo:cached" in files[render_module.COMPOSE]
-    assert '"workspaceFolder": "/opt/ws"' in files[render_module.DEVCONTAINER]
+    with pytest.raises(ConfigError, match="workspace_folder"):
+        dev_config(cfg)
 
 
 def test_compose_build_paths_resolve_from_the_devcontainer_dir() -> None:

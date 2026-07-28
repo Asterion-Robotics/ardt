@@ -47,7 +47,15 @@ from ardt_core.config import ArdtConfig
 from ardt_core.errors import ArdtError
 
 from . import __version__
-from .config import DEVCONTAINER_DIR, VSCODE_DIR, DevConfig, ci_builder, ros_distro
+from .config import (
+    DEVCONTAINER_DIR,
+    VSCODE_DIR,
+    WORKSPACE_FOLDER,
+    DevConfig,
+    ci_builder,
+    ros_distro,
+    source_folder,
+)
 from .host import HostFacts, HostProfile, detect
 from .profiles import CXX_STANDARD, DISTRO, Profile, cxx_standard, profile
 
@@ -248,7 +256,7 @@ def dockerfile(prof: Profile, dev: DevConfig, *, project: str, base_image: str, 
         .replace("@VERSION@", __version__)
         .replace("@BASE_IMAGE@", base_image)
         .replace("@USER@", USER)
-        .replace("@WORKSPACE@", dev.workspace_folder)
+        .replace("@WORKSPACE@", WORKSPACE_FOLDER)
         .replace("@PROJECT@", project)
         .replace("@APT@", _apt_block(prof, dev.apt_packages, distro))
         .replace("@ENV@", _env_block(prof, dev))
@@ -288,13 +296,13 @@ def compose(
     image: str | None,
 ) -> str:
     """The portable half: everything identical on WSL2, Linux and macOS."""
-    workspace = dev.workspace_folder
+    workspace = WORKSPACE_FOLDER
     home = f"/home/{USER}"
 
     # The repo is ONE entry under the workspace's src/ — `.repos` imports land
     # grouped in src/external/ — and the colcon output dirs are the workspace
     # root's, exactly the tree the CI recipe builds in.
-    volumes: list[object] = [f"..:{dev.source_folder(ctx_project)}:cached"]
+    volumes: list[object] = [f"..:{source_folder(ctx_project)}:cached"]
     named: dict[str, object] = {}
     if dev.isolate_build_dirs:
         # One volume, three subpaths — long syntax, since the `src:dst` short
@@ -379,7 +387,7 @@ def devcontainer(project: str, dev: DevConfig, prof: Profile) -> str:
         # workspace root, of which the repo is src/<project>.
         "dockerComposeFile": [Path(COMPOSE).name, Path(COMPOSE_HOST).name],
         "service": "dev",
-        "workspaceFolder": dev.workspace_folder,
+        "workspaceFolder": WORKSPACE_FOLDER,
         "remoteUser": USER,
         "initializeCommand": f"bash {HOST_CONFIG}",
         "postCreateCommand": f"bash src/{project}/{POST_CREATE}",

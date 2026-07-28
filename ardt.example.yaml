@@ -35,7 +35,6 @@ project:
 #   base_image: ros:jazzy-ros-base # overrides the ros_ci builder (rarely wanted)
 #   apt_packages: [libeigen3-dev] # extra packages in the dev layer
 #   ardt_modules: [ardt-acme] # extra ardt modules installed in the container
-#   workspace_folder: /ws/src # the CI recipe's path, so CMake caches match
 #   gui: false # headless repo: no display sockets, no host GPU
 #   claude_code: false
 #   isolate_build_dirs: false # share build/ install/ log/ with the host checkout

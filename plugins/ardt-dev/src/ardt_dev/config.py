@@ -36,6 +36,22 @@ VSCODE_DIR = ".vscode"
 here (``c_cpp_properties.json``); everything an extension *can* pick up from
 ``devcontainer.json`` stays in :data:`DEVCONTAINER_DIR`."""
 
+WORKSPACE_FOLDER = "/ws"
+"""The colcon workspace root inside the container: what VS Code opens, where
+colcon runs, where ``build/``/``install/``/``log/`` land. The repo itself
+mounts two levels down at ``<WORKSPACE_FOLDER>/src/<project>``
+(:func:`source_folder`), matching the CI recipe's ``COPY . /ws/src/<repo>`` —
+so CMake paths, ``compile_commands.json`` and stack traces read the same in
+both, and ``.repos`` imports become the repo's siblings under ``src/``.
+
+A constant, not a knob: the CI recipe hard-codes the same path, and the parity
+promise rests on the two never drifting."""
+
+
+def source_folder(project: str) -> str:
+    """Where the repo mounts: one entry under the workspace's ``src/``."""
+    return f"{WORKSPACE_FOLDER}/src/{project}"
+
 
 class DevConfig(BaseModel):
     """``dev:`` — how this repo's dev container differs from the profile default."""
@@ -58,18 +74,6 @@ class DevConfig(BaseModel):
     """Extra apt packages in the dev layer, on top of the profile's set."""
     ardt_modules: list[str] = Field(default_factory=list)
     """Extra ardt modules installed in the container, on top of the profile's."""
-
-    workspace_folder: str = "/ws"
-    """The colcon workspace root: what VS Code opens, where colcon runs, where
-    ``build/``/``install/``/``log/`` land. The repo itself mounts two levels
-    down at ``<workspace_folder>/src/<project>`` (:meth:`source_folder`),
-    matching the CI recipe's ``COPY . /ws/src/<project>`` — so CMake paths,
-    ``compile_commands.json`` and stack traces read the same in both, and
-    ``.repos`` imports become the repo's siblings under ``src/``."""
-
-    def source_folder(self, project: str) -> str:
-        """Where the repo mounts: one entry under the workspace's ``src/``."""
-        return f"{self.workspace_folder}/src/{project}"
 
     gui: bool = True
     """Wire the host's display through (rviz2/rqt). Off for headless repos."""

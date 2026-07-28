@@ -38,7 +38,8 @@ from ardt_core.errors import ArdtError
 
 from . import host as host_module
 from . import render as render_module
-from .config import DEVCONTAINER_DIR, ci_builder, dev_config, ros_distro
+from .config import DEVCONTAINER_DIR, WORKSPACE_FOLDER, ci_builder, dev_config, ros_distro
+from .config import source_folder as container_source_folder
 from .host import HostFacts
 from .profiles import DISTRO, PROFILES, profile
 from .render import (
@@ -57,9 +58,10 @@ container can say so instead of half-running on someone's laptop."""
 def _workspace_root(root: Path) -> Path:
     """The colcon workspace root for a project root — the ``src/<repo>`` rule.
 
-    Derived from where the repo actually sits, not from ``dev.workspace_folder``,
-    so the same rule holds inside the container (``/ws/src/<repo>`` -> ``/ws``)
-    and for a host checkout (its own root)."""
+    Derived from where the repo actually sits, not from the container's fixed
+    :data:`~ardt_dev.config.WORKSPACE_FOLDER`, so the same rule holds inside
+    the container (``/ws/src/<repo>`` -> ``/ws``) and for a host checkout (its
+    own root)."""
     if root.parent.name == "src":
         return root.parent.parent
     if root.name == "src":
@@ -306,7 +308,7 @@ def up(ctx: Context, build: bool, no_bootstrap: bool) -> None:
     """Start the dev container, rendering and provisioning whatever is missing first."""
     plan = _ensure_synced(ctx)
     compose = _compose_argv(ctx)
-    source = dev_config(ctx.cfg).source_folder(ctx.project)
+    source = container_source_folder(ctx.project)
     if build:
         with ctx.console.section("docker compose build"):
             ctx.runner.run([*compose, "build"])
@@ -396,10 +398,10 @@ def open_command(ctx: Context, build: bool) -> None:
     with ctx.console.section("compose up — the first run builds the dev image (minutes)"):
         ctx.runner.run([*compose, "up", "-d"])
 
-    editor = _open_editor(ctx, plan, cfg.workspace_folder)
-    ctx.emit(editor=editor, workspace_folder=cfg.workspace_folder)
+    editor = _open_editor(ctx, plan, WORKSPACE_FOLDER)
+    ctx.emit(editor=editor, workspace_folder=WORKSPACE_FOLDER)
     if not ctx.json_output:
-        ctx.console.success(f"opening {cfg.workspace_folder} in the dev container ({editor})")
+        ctx.console.success(f"opening {WORKSPACE_FOLDER} in the dev container ({editor})")
         ctx.console.info("first attach runs postCreate in VS Code (rosdep + `ardt deps` — minutes)")
 
 
@@ -413,7 +415,7 @@ def shell(ctx: Context) -> None:
         "-u",
         USER,
         "-w",
-        dev_config(ctx.cfg).workspace_folder,  # /ws — build/ and src/ in view
+        WORKSPACE_FOLDER,  # build/ and src/ in view
         "dev",
         "bash",
         "-l",
