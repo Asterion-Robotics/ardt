@@ -107,7 +107,8 @@ ROS2 = Profile(
         ("toolchain", ("cmake", "ninja-build", "ccache", "pkg-config")),
         ("ROS dev tooling (colcon extensions, mixins, rosdep, vcstool)", ("ros-dev-tools",)),
         ("debuggers and analysers", ("gdb", "valgrind", "cppcheck")),
-        # IDE-side only: `ardt check` remains the CI truth for format/lint.
+        # IDE-side only: the repo's pre-commit config remains the CI truth
+        # for format/lint.
         # Note that a repo whose .pre-commit-config.yaml sets a higher
         # `minimum_pre_commit_version` installs its own.
         (

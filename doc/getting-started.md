@@ -38,6 +38,11 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 ### From the index
 
+:::{admonition} Not yet available
+:class: warning
+Nothing is published to a package index yet, and the `ardt-cli` metapackage does not exist as a distribution today. Until it does, use the one-liner above or the by-hand forms below.
+:::
+
 Once the distributions are published, `ardt-cli` bundles them. It is a metapackage with no code of its own, and each theme is an extra, so nothing installs a toolchain your repos do not use:
 
 ```bash
@@ -79,6 +84,14 @@ The set of installed packages *is* the feature set: every command past `ardt inf
 :::{note}
 `uvx ardt` is *run-without-install*: it re-resolves the package into a temporary environment on every invocation, cannot see an unpublished workspace, and forgets the plugins you `--with`-ed. Right for one-off runs of a published CLI, wrong for a daily driver.
 :::
+
+### Upgrade and uninstall
+
+Upgrading *is* re-running the installer: `uv tool install --force` replaces the previous install, honoring whatever `ardt.version` pin the current directory's `ardt.yaml` carries. Uninstalling removes the uv tool, which is named after the package owning the `ardt` entry point, not the command:
+
+```bash
+uv tool uninstall ardt-core
+```
 
 ## Two conventions every command honors
 
