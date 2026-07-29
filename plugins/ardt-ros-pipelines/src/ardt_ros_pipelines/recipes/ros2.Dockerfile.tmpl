@@ -46,7 +46,7 @@ FROM @RUNTIME_FROM@ AS runtime
 COPY --from=build @INSTALL_BASE@ @INSTALL_BASE@
 # 5b) exec dependencies install HERE, not in the build stage: the runtime image
 # starts from the configured base alone, and everything rosdep put into the
-# builder would otherwise be missing at `ros2 run` time. The install space's
+# builder would otherwise be missing at runtime. The install space's
 # share/*/package.xml files are the manifest rosdep scans; --ignore-src skips
 # the workspace's own (already copied) packages. An unresolvable key fails the
 # image build — the earliest moment it can be caught.
