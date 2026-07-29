@@ -3,7 +3,8 @@
 ## The five-minute path
 
 ```bash
-# 1. install ardt (uv is the only prerequisite — see below)
+# 1. install ardt (uv is the only prerequisite to install it; `ardt dev`
+#    additionally needs Docker and VS Code — see below)
 curl -LsSf https://raw.githubusercontent.com/Asterion-Robotics/ardt/main/install.sh | bash
 
 # 2. in a ROS 2 repo that has an ardt.yaml
@@ -20,7 +21,7 @@ The first `ardt dev open` takes minutes (image build + rosdep); after that, seco
 
 `ardt` is a CLI you call from any repo, so install it **once as a uv tool**: a persistent, isolated venv with `ardt` on your `PATH`. No `uv run` prefix, no project venv.
 
-The one-liner does that for you. [uv](https://docs.astral.sh/uv/) is the only prerequisite:
+The one-liner does that for you. [uv](https://docs.astral.sh/uv/) is the only prerequisite *to install ardt*; the devcontainer and pipeline planes additionally need Docker (and VS Code for `ardt dev open`) — the [devcontainer quickstart](themes/devcontainer/quickstart.md) lists those:
 
 ```bash
 curl -LsSf https://raw.githubusercontent.com/Asterion-Robotics/ardt/main/install.sh | bash
@@ -104,3 +105,15 @@ uv tool uninstall ardt-core
 ## Configure a repo
 
 One file per repo, `ardt.yaml` (or a `[tool.ardt]` table in `pyproject.toml`; the file wins), with one namespaced section per plugin. Nothing in it is required. See [Configuration](concepts/configuration.md).
+
+### A new repo, from scratch
+
+Nothing is required, so start minimal and grow. For a ROS 2 repo, two lines are enough:
+
+```yaml
+tasks:
+  ros:
+    distro: jazzy
+```
+
+From there `ardt deps` / `build` / `test`, `ardt dev open` and `ardt pipe run ros-ci` all work with defaults. The annotated [`ardt.example.yaml`](https://github.com/Asterion-Robotics/ardt/blob/main/ardt.example.yaml) is the full reference — copy it and uncomment what you need. Pin `ardt.version` as soon as CI matters: it is what makes pipeline builds reproducible.
