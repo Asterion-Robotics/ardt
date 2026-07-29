@@ -22,10 +22,37 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import click
+import pytest
 from click.testing import CliRunner
 
 from ardt_core import cli as cli_module
 from ardt_core.cli import cli, main
+from ardt_core.context import Context
+from ardt_core.plugins import ARDT_PLUGIN_API, Plugin, Registry
+
+
+@pytest.fixture
+def fake_plugin(monkeypatch: pytest.MonkeyPatch) -> Plugin:
+    """A minimal in-memory plugin, so core's suite needs no plugin installed."""
+
+    @click.command()
+    @cli_module.pass_ardt
+    def greet(ctx: Context) -> None:
+        """Say hello via the runner."""
+        ctx.runner.run(["echo", "greetings"])
+
+    plugin = Plugin(
+        name="acme-plug",
+        version="9.9.9",
+        api=ARDT_PLUGIN_API,
+        module="acme_plug",
+        section="acme",
+        commands={"greet": greet},
+    )
+    registry = Registry(plugins=[plugin], problems=[])
+    monkeypatch.setattr(cli_module, "_registry", lambda: registry)
+    return plugin
 
 
 def run(args: list[str], cwd: Path) -> tuple[int, str, str]:
@@ -74,11 +101,11 @@ def test_json_stdout_is_pure(repo: Path) -> None:
     json.loads(out)  # raises if anything else leaked onto stdout
 
 
-def test_plugins_lists_the_real_plugin(repo: Path) -> None:
+def test_plugins_lists_the_loaded_plugin(repo: Path, fake_plugin: Plugin) -> None:
     code, out, _ = run(["plugins", "--json"], repo)
     assert code == 0
     names = {p["name"] for p in json.loads(out)["data"]["plugins"]}
-    assert "ardt-ros-tasks" in names
+    assert names == {"acme-plug"}
 
 
 def test_unknown_section_is_one_line_error_not_traceback(repo: Path) -> None:
@@ -99,38 +126,33 @@ def test_error_envelope_on_json(repo: Path) -> None:
     assert "unknown config section" in envelope["error"]["message"]
 
 
-def test_global_options_injected_into_plugin_commands(repo: Path) -> None:
-    result = CliRunner().invoke(cli, ["build", "--help"])
+def test_global_options_injected_into_plugin_commands(fake_plugin: Plugin) -> None:
+    result = CliRunner().invoke(cli, ["greet", "--help"])
     assert result.exit_code == 0
     assert "--dry-run" in result.output
     assert "--json" in result.output
 
 
-def test_dry_run_build_prints_plan_and_runs_nothing(repo: Path) -> None:
-    (repo / "ardt.yaml").write_text("project:\n  name: proj\n")
-    code, _out, err = run(["build", "--dry-run"], repo)
+def test_dry_run_plugin_command_prints_plan_and_runs_nothing(
+    repo: Path, fake_plugin: Plugin
+) -> None:
+    code, _out, err = run(["greet", "--dry-run"], repo)
     assert code == 0
-    assert "colcon build" in err
-    assert not (repo / "build").exists()
+    assert "[dry-run]" in err
+    assert "echo greetings" in err
 
 
-def test_dry_run_before_subcommand_also_works(repo: Path) -> None:
-    code, _, err = run(["--dry-run", "build"], repo)
+def test_dry_run_before_subcommand_also_works(repo: Path, fake_plugin: Plugin) -> None:
+    code, _, err = run(["--dry-run", "greet"], repo)
     assert code == 0
-    assert "colcon build" in err
+    assert "echo greetings" in err
 
 
-def test_plugins_human_output_names_the_plugin(repo: Path) -> None:
+def test_plugins_human_output_names_the_plugin(repo: Path, fake_plugin: Plugin) -> None:
     code, _out, err = run(["plugins"], repo)
     assert code == 0
-    assert "ardt-ros-tasks" in err
+    assert "acme-plug" in err
     assert "commands:" in err
-
-
-def test_test_task_dry_run_plans_results_summary(repo: Path) -> None:
-    code, _, err = run(["test", "--dry-run"], repo)
-    assert code == 0
-    assert "colcon test-result" in err
 
 
 def test_keyboard_interrupt_exits_130(repo: Path, monkeypatch) -> None:

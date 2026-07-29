@@ -228,11 +228,3 @@ def test_duplicate_commands_across_plugins_are_reported(
     assert {p.name for p in registry.plugins} == {"a", "b"}
     assert len(registry.problems) == 1
     assert "also provided by `a`" in registry.problems[0].reason
-
-
-def test_real_installed_plugin_is_discovered() -> None:
-    """The genuinely-installed ardt-ros-tasks must load with no problems."""
-    registry = discover()
-    names = {p.name for p in registry.plugins}
-    assert "ardt-ros-tasks" in names
-    assert registry.problems == []
