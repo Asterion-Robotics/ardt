@@ -42,6 +42,31 @@ def test_build_in_a_repo(repo: Path) -> None:
     assert ctx.is_release is False
 
 
+def test_inventing_attributes_is_an_error(repo: Path) -> None:
+    """slots=True: `ctx.pubish = True` must fail loudly, not silently create a
+    side channel while `publish` stays False."""
+    ctx = build(repo)
+    with pytest.raises(AttributeError):
+        ctx.pubish = True  # type: ignore[attr-defined]
+
+
+def test_version_is_computed_once(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The manual `_version` cache must behave like the cached_property it replaced."""
+    from ardt_core import context as context_module
+
+    ctx = build(repo)
+    calls: list[int] = []
+
+    def fake_compute(git_info: object) -> str:
+        calls.append(1)
+        return "1.2.3"
+
+    monkeypatch.setattr(context_module.version_module, "compute", fake_compute)
+    assert ctx.version == "1.2.3"
+    assert ctx.version == "1.2.3"
+    assert calls == [1]
+
+
 def test_project_name_from_config(repo: Path) -> None:
     (repo / "ardt.yaml").write_text("project:\n  name: widget\n")
     assert build(repo).project == "widget"
