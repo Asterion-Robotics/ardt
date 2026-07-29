@@ -84,13 +84,24 @@ markers = [
 addopts = "-m 'not integration and not e2e' --strict-markers"
 
 [tool.coverage.run]
-source = ["ardt_core"]
+# Every package, not just core: a gate that measures only the safest package
+# reads as "covered" while the docker/git orchestration goes untested.
+source = [
+    "ardt_core",
+    "ardt_pipelines",
+    "ardt_ros_tasks",
+    "ardt_ros_pipelines",
+    "ardt_doc_tasks",
+    "ardt_doc_pipelines",
+    "ardt_dev",
+]
 branch = true
 
 [tool.coverage.report]
-# Core coverage gate: ≥ 90 %. Applied when the suite is run with
-# `--cov`; the plain `pytest` default in [tool.pytest.ini_options] stays fast.
-fail_under = 90
+# Combined gate: ≥ 80 % across all seven packages (core alone sits above 90).
+# Applied when the suite is run with `--cov`; the plain `pytest` default in
+# [tool.pytest.ini_options] stays fast.
+fail_under = 80
 exclude_lines = [
     "pragma: no cover",
     "if TYPE_CHECKING:",

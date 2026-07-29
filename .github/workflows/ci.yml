@@ -77,7 +77,8 @@ jobs:
         run: uv run pyright packages/ardt-core/src
 
       - name: Test with coverage gate
-        run: uv run pytest --cov=ardt_core --cov-report=term-missing
+        # Sources come from [tool.coverage.run] — all seven packages.
+        run: uv run pytest --cov --cov-report=term-missing
 
   # Dogfooding the pipeline plane: `docs-ci` builds the working tree plus every
   # ref in `pipelines.docs_ci.versions` into a Pages-ready `public/`. Dagger
