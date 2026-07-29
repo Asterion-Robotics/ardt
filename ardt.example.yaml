@@ -12,7 +12,7 @@ project:
 #   git: git+https://github.com/Asterion-Robotics/ardt.git # the default
 #   version: v0.3.0 # git rev (tag/branch/sha) every monorepo module installs at
 #   # install.sh's default bundle is core+pipelines+ros-tasks+ros-pipelines,
-#   # plus ardt-dev outside CI; doc plugins are opt-in (policy notes in the
+#   # plus the devcontainer modules outside CI; doc plugins are opt-in (policy notes in the
 #   # script). These two lists adjust it:
 #   install_extras: [ardt-doc-tasks, ardt-doc-pipelines] # added to the bundle
 #   install_skip: [ardt-ros-pipelines] # removed from it (workstations and CI alike)
@@ -28,7 +28,7 @@ project:
 #   ignore: []
 #   clang_format: path/to/.clang-format
 
-# ardt-dev — the `dev:` section. Everything here is optional: a ROS 2 repo with
+# ardt-devcontainers — the `dev:` section. Everything here is optional: a ROS 2 repo with
 # no `dev:` section gets the standard environment, and the whole `.devcontainer/`
 # is rendered (and gitignored) by `ardt dev sync`. The dev container's base image
 # defaults to `pipelines.ros_ci.builder` below — that is the parity rule, and

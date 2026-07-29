@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 400" width="900" height="400" role="img" aria-labelledby="planes-title planes-desc">
   <title id="planes-title">ardt plugin planes</title>
-  <desc id="planes-desc">ardt-core sits beside two plugin planes. The pipeline plane (ardt pipe run) holds ardt-pipelines, ardt-ros-pipelines and ardt-doc-pipelines. The task plane (ardt build / test / doc) holds ardt-ros-tasks, ardt-doc-tasks and ardt-dev. Core connects to both planes; the pipeline plane runs tasks inside containers.</desc>
+  <desc id="planes-desc">ardt-core sits beside two plugin planes. The pipeline plane (ardt pipe run) holds ardt-pipelines, ardt-ros-pipelines and ardt-doc-pipelines. The task plane (ardt build / test / doc / dev) holds ardt-ros-tasks, ardt-doc-tasks and ardt-devcontainers. Core connects to both planes; the pipeline plane runs tasks inside containers.</desc>
 
   <!--
     Hand-authored replacement for a `flowchart LR` mermaid diagram. Mermaid's
@@ -54,7 +54,7 @@
   <!-- ── task plane ───────────────────────────────────────────────────── -->
   <rect class="plane" x="290" y="250" width="580" height="140" rx="8"
         fill="#dce2ff" stroke="#030189"/>
-  <text class="plane-name" x="580" y="276" fill="#010042">task plane · ardt build / test / doc</text>
+  <text class="plane-name" x="580" y="276" fill="#010042">task plane · ardt build / test / doc / dev</text>
 
   <rect class="node" x="306" y="292" width="172" height="80" rx="6" stroke="#a9b5ee"/>
   <text class="node-name" x="392" y="337" fill="#010042">ardt-ros-tasks</text>
@@ -63,7 +63,7 @@
   <text class="node-name" x="580" y="337" fill="#010042">ardt-doc-tasks</text>
 
   <rect class="node" x="682" y="292" width="172" height="80" rx="6" stroke="#a9b5ee"/>
-  <text class="node-name" x="768" y="337" fill="#010042">ardt-dev</text>
+  <text class="node-name" x="768" y="337" fill="#010042">ardt-devcontainers</text>
 
   <!-- ── ardt-core ────────────────────────────────────────────────────── -->
   <rect x="24" y="150" width="200" height="100" rx="6"

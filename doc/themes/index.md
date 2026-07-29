@@ -4,7 +4,7 @@ A **theme** is one concern ardt knows how to handle, packaged as up to two plugi
 
 | Theme | Packages | Adds |
 |---|---|---|
-| [Devcontainer](devcontainer/index.md) | `ardt-dev` | `ardt dev` — renders and drives the container the repo is developed in |
+| [Devcontainer](devcontainer/index.md) | `ardt-devcontainers` + `ardt-ros-dev` | `ardt dev` — renders and drives the container the repo is developed in |
 | [ROS 2](ros2/index.md) | `ardt-ros-tasks`, `ardt-ros-pipelines` | `ardt deps` / `build` / `test`, the `ros-ci` pipeline and the ROS 2 image recipe |
 | [Documentation](doc/index.md) | `ardt-doc-tasks`, `ardt-doc-pipelines` | `ardt doc build`, the `docs-ci` versioned-site pipeline |
 

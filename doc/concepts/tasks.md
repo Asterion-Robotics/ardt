@@ -7,7 +7,7 @@ ardt deps      # vcs import + rosdep install     (ardt-ros-tasks)
 ardt build     # colcon build                    (ardt-ros-tasks)
 ardt test      # colcon test + result summary    (ardt-ros-tasks)
 ardt doc build # doxygen + sphinx                (ardt-doc-tasks)
-ardt dev up    # the repo's devcontainer         (ardt-dev)
+ardt dev up    # the repo's devcontainer         (ardt-devcontainers)
 ```
 
 ## What a task guarantees

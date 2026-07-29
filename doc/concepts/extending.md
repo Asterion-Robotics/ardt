@@ -1,11 +1,12 @@
 # Extending ardt
 
-A plugin is an ordinary Python distribution. It declares `ARDT_PLUGIN_API` on its root package and registers through one of two entry-point groups.
+A plugin is an ordinary Python distribution. It declares `ARDT_PLUGIN_API` on its root package and registers through one of three entry-point groups.
 
 | Group | Contributes | Loaded into |
 |---|---|---|
 | `ardt.commands` | click commands or groups | the `ardt` CLI |
 | `ardt.pipelines` | modules holding `@pipeline` functions | `ardt pipe list/run` |
+| `ardt.dev_profiles` | one `Profile` each | `ardt dev` |
 
 ```toml
 # pyproject.toml
@@ -14,7 +15,12 @@ doc = "ardt_doc_tasks.cli:doc"
 
 [project.entry-points."ardt.pipelines"]
 ros = "ardt_ros_pipelines.ros_ci"
+
+[project.entry-points."ardt.dev_profiles"]
+ros2 = "ardt_ros_dev.profile:ROS2"
 ```
+
+Only `ardt.commands` loads at startup; the rest load on demand, and per group — resolving a dev profile never imports a pipeline module, so `ardt dev sync` never pays for Dagger.
 
 ```python
 # src/ardt_<theme>_tasks/__init__.py
@@ -124,6 +130,43 @@ def test_greet_dry_run(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
 
 A pipeline plugin is the same skeleton with an `ardt.pipelines` entry point naming a module of `@pipeline` functions — see [Pipelines](pipelines.md) for that contract.
 
+## A dev profile plugin
+
+A profile is the smallest kind of plugin: no command, no config section of its own, no code path. It declares what a kind of repo needs in its devcontainer, and {py:mod}`ardt_devcontainers` does the rendering.
+
+```
+ardt-acme-dev/
+├── pyproject.toml               # dependencies = ["ardt-core", "ardt-devcontainers"]
+└── src/ardt_acme_dev/
+    ├── __init__.py              # ARDT_PLUGIN_API = 1, ARDT_CONFIG_SECTION = "dev"
+    ├── profile.py               # one Profile instance
+    └── templates/acme.Dockerfile.tmpl
+```
+
+```python
+# src/ardt_acme_dev/profile.py
+from ardt_devcontainers.profiles import DISTRO, Profile
+
+ACME = Profile(
+    name="acme",
+    summary="Acme SDK workspace",
+    distribution="ardt-acme-dev",              # installed in the container too
+    dockerfile="acme.Dockerfile.tmpl",
+    templates_package="ardt_acme_dev.templates",
+    default_base_image="ubuntu:24.04",
+    ardt_modules=("ardt-core",),
+    apt_groups=(("toolchain", ("cmake", "ninja-build")),),
+    bootstrap=(("ardt", "deps"),),
+    extensions=("ms-python.python",),
+)
+```
+
+The entry-point name **is** the profile name — what a repo writes in `dev.profile` — and two plugins claiming the same one is an error, not a silent last-wins. `distribution` names the plugin itself, because `ardt dev bootstrap` runs *inside* the container and has to resolve the same profile the host rendered from; it is installed there from the repo's own `ardt:` pin. `templates_package` is an import anchor, not a path, so the template is read through `importlib.resources` and works from a wheel as well as an editable checkout.
+
+:::{warning}
+The `Profile` contract is **provisional**. Its fields were extracted from a single profile, so it may change in a minor release until a second one exists to argue with; `ARDT_PLUGIN_API` is what gets bumped when it does. Pin `ardt-devcontainers` accordingly, and check the engine's README for the internals that are still colcon-shaped (the volume layout, `ardt dev compile-commands`, the `ros_ci.builder` parity check, the `@DISTRO@` token) — a non-ROS profile meets those edges first.
+:::
+
 ## The context
 
 Every command receives one {py:class}`~ardt_core.context.Context`, built once per invocation:
@@ -156,15 +199,16 @@ The monorepo is a uv workspace. Every distribution owns its unit tests; `tests/`
 
 ```
 ardt/
-├── packages/                # the platform
+├── packages/                # the platform planes
 │   ├── ardt-core/           # cli, plugin loader, context, config, runner, console, version policy
-│   └── ardt-pipelines/      # the generic Dagger plane: `ardt pipe`, @pipeline registry, std helpers
-├── plugins/                 # first-party theme plugins (ardt-<theme>-tasks / -pipelines)
+│   ├── ardt-pipelines/      # the generic Dagger plane: `ardt pipe`, @pipeline registry, std helpers
+│   └── ardt-devcontainers/  # the devcontainer plane: `ardt dev` renders and drives, profile-agnostic
+├── plugins/                 # first-party theme plugins (ardt-<theme>-<plane>)
 │   ├── ardt-ros-tasks/      # deps / build / test (colcon, rosdep, vcs) — in-env tasks
 │   ├── ardt-ros-pipelines/  # ros-ci + the ros2 image recipe
+│   ├── ardt-ros-dev/        # the ros2 dev profile — data for the devcontainer plane
 │   ├── ardt-doc-tasks/      # doc build (sphinx preset + doxygen/breathe + ros2-interfaces)
-│   ├── ardt-doc-pipelines/  # docs-ci: versioned site (working tree + tags) -> public/
-│   └── ardt-dev/            # `ardt dev`: renders and drives the repo's devcontainer
+│   └── ardt-doc-pipelines/  # docs-ci: versioned site (working tree + tags) -> public/
 ├── tests/                   # cross-package only: policy sweeps + docker-marked integration
 └── .github/workflows/       # lint, tests, the versioned docs site, PyPI publication
 ```

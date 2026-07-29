@@ -22,7 +22,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 curl -LsSf https://raw.githubusercontent.com/Asterion-Robotics/ardt/main/install.sh | bash
 ```
 
-[uv](https://docs.astral.sh/uv/) is the only prerequisite, and ardt's installer will not install it for you: chaining installers hides what you are trusting. Run from a repo checkout, the installer honors the repo's `ardt.yaml`: `ardt.version` pins the ref, and `ardt.install_extras` / `ardt.install_skip` adjust the default module bundle (core + pipelines + the ROS 2 task/pipeline plugins, plus `ardt-dev` outside CI; doc plugins are opt-in — the policy is spelled out in the script). `ARDT_REF=v0.1.0` and `ARDT_MODULES="…"` override both. [`install.sh`](install.sh) is short, and worth reading before you pipe it anywhere.
+[uv](https://docs.astral.sh/uv/) is the only prerequisite, and ardt's installer will not install it for you: chaining installers hides what you are trusting. Run from a repo checkout, the installer honors the repo's `ardt.yaml`: `ardt.version` pins the ref, and `ardt.install_extras` / `ardt.install_skip` adjust the default module bundle (core + pipelines + the ROS 2 task/pipeline plugins, plus `ardt-devcontainers` and `ardt-ros-dev` outside CI; doc plugins are opt-in — the policy is spelled out in the script). `ARDT_REF=v0.1.0` and `ARDT_MODULES="…"` override both. [`install.sh`](install.sh) is short, and worth reading before you pipe it anywhere.
 
 Other routes — a published release, a fork, an editable checkout — are under *Getting started* in the [documentation](https://asterion-robotics.github.io/ardt/).
 

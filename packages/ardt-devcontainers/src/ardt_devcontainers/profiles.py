@@ -36,14 +36,13 @@ The entry-point name is the profile name — what a repo writes in ``dev.profile
 Loading happens on demand (:func:`profiles`), narrowed to this one group, so
 ``ardt dev sync`` never imports a pipeline module.
 
-:::{admonition} Provisional API
-:class: warning
+.. warning::
 
-The :class:`Profile` fields were extracted from a single profile. Until a second
-one exists to argue with, this contract may change in a **minor** release; the
-``ARDT_PLUGIN_API`` version is what will be bumped when it does. Out-of-tree
-profiles should pin ``ardt-devcontainers`` accordingly.
-:::
+    **Provisional API.** The :class:`Profile` fields were extracted from a
+    single profile. Until a second one exists to argue with, this contract may
+    change in a **minor** release; the ``ARDT_PLUGIN_API`` version is what will
+    be bumped when it does. Out-of-tree profiles should pin
+    ``ardt-devcontainers`` accordingly.
 """
 
 from __future__ import annotations

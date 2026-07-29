@@ -17,7 +17,7 @@ ardt:                     # the one ardt pin: pipelines install it inside their
   git: git+https://github.com/Asterion-Robotics/ardt.git
   version: v0.3.0         # pin it: a recipe is reproducible only when its ardt is
   install_extras: [ardt-doc-tasks, ardt-doc-pipelines]  # install.sh: add to its bundle
-  install_skip: [ardt-dev]                              # install.sh: drop from it
+  install_skip: [ardt-ros-dev]                          # install.sh: drop from it
 
 tasks:
   ros:                    # ardt-ros-tasks
@@ -32,7 +32,7 @@ pipelines:
     versions:
       branches: [main]
 
-dev:                      # ardt-dev
+dev:                      # ardt-devcontainers
   profile: ros2
 ```
 

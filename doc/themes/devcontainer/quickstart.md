@@ -58,7 +58,7 @@ One pass checks: docker present *and its daemon reachable* (the usual WSL2 trap:
 ## Prerequisites
 
 - **Docker** — Docker Engine on Linux/WSL2, or Docker Desktop with WSL integration enabled for your distro.
-- **ardt** with the `ardt-dev` plugin ([getting started](../../getting-started.md)).
+- **ardt** with the `ardt-devcontainers` engine and a profile — `ardt-ros-dev` for a ROS 2 repo ([getting started](../../getting-started.md)). The workstation bundle installs both.
 - **VS Code + the Dev Containers extension**, only if you want `ardt dev open` to attach an editor.
 
 ## Details, for the days you need them
