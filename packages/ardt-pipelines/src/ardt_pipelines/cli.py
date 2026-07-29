@@ -25,11 +25,11 @@ from ardt_core.cli import pass_ardt
 from ardt_core.context import Context
 from ardt_core.errors import ArdtError
 
-from . import engine
 from .registry import PipelineDef, collect
 
 
 def _pipelines(ctx: Context) -> dict[str, PipelineDef]:
+    ctx.registry.load_deferred()  # pipeline modules (and dagger) import here, not at startup
     modules: dict[str, object] = {}
     for plugin in ctx.registry.plugins:
         for entry_name, module in plugin.pipelines.items():
@@ -108,4 +108,9 @@ def run_command(ctx: Context, name: str, args: tuple[str, ...], publish: bool) -
 
     ctx.publish = publish
     bound = definition.bind(parsed)
+    # Imported here, not at module top: the engine imports the Dagger SDK, and
+    # this `pipe` group is an eagerly-loaded command — a top-level import would
+    # put dagger back on every invocation's startup path.
+    from . import engine
+
     engine.run_pipeline(ctx, definition, bound)

@@ -227,6 +227,7 @@ def info(ctx: Context) -> None:
 def plugins_command(ctx: Context) -> None:
     """List loaded plugins: what, from where, at which API version."""
     registry = ctx.registry
+    registry.load_deferred()  # this command's whole point is the full picture
     ctx.emit(
         plugins=[
             {

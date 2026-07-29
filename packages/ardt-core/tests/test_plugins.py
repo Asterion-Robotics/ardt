@@ -179,10 +179,42 @@ def test_all_three_groups_are_collected(monkeypatch: pytest.MonkeyPatch, fake_pa
         FakeEntryPoint("tset", plugins.TEMPLATES_GROUP, "acme_plugin.tpl", object(), dist="acme"),
     ]
 
-    plugin = discover(eps).plugins[0]
+    registry = discover(eps)
+    plugin = registry.plugins[0]
     assert set(plugin.commands) == {"cmd"}
+    assert plugin.pipelines == {} and plugin.templates == {}  # deferred
+    registry.load_deferred()
     assert set(plugin.pipelines) == {"pipe"}
     assert set(plugin.templates) == {"tset"}
+
+
+def test_pipeline_groups_do_not_load_at_discovery(
+    monkeypatch: pytest.MonkeyPatch, fake_package
+) -> None:
+    """`ardt --help` must not pay for pipeline modules (they import dagger):
+    an exploding pipeline entry point is only touched by load_deferred()."""
+    fake_package("acme_plugin", plugins.ARDT_PLUGIN_API)
+    _version_ok(monkeypatch)
+    eps = [
+        FakeEntryPoint(
+            "cmd", plugins.COMMANDS_GROUP, "acme_plugin.cli", click.Command("cmd"), dist="acme"
+        ),
+        FakeEntryPoint(
+            "pipe", plugins.PIPELINES_GROUP, "acme_plugin.pipe", RuntimeError("boom"), dist="acme"
+        ),
+    ]
+
+    registry = discover(eps)
+    assert registry.problems == []  # the bomb was never loaded
+    assert set(registry.commands()) == {"cmd"}
+
+    registry.load_deferred()
+    assert "entry point `pipe` failed" in registry.problems[0].reason
+    assert registry.plugins[0].pipelines == {}
+    assert set(registry.commands()) == {"cmd"}  # commands survive
+
+    registry.load_deferred()  # idempotent: the problem is not re-reported
+    assert len(registry.problems) == 1
 
 
 def test_registry_helpers(monkeypatch: pytest.MonkeyPatch, fake_package) -> None:
