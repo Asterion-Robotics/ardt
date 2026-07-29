@@ -38,6 +38,7 @@ from ardt_core.context import Context
 from ardt_core.errors import ArdtError
 
 from . import host as host_module
+from . import manifest as manifest_module
 from . import render as render_module
 from .config import DEVCONTAINER_DIR, WORKSPACE_FOLDER, ci_builder, dev_config, ros_distro
 from .config import source_folder as container_source_folder
@@ -46,47 +47,49 @@ from .profiles import DISTRO, PROFILES, profile
 from .render import (
     COMPOSE,
     COMPOSE_HOST,
+    IN_CONTAINER_ENV,
     POST_CREATE,
     USER,
     Render,
 )
 
-IN_CONTAINER_ENV = "ARDT_DEV_CONTAINER"
-"""Set by the rendered image, so a command that only makes sense inside the
-container can say so instead of half-running on someone's laptop."""
+
+def _daemon_status(ctx: Context) -> tuple[bool, str]:
+    """Probe the docker daemon: ``(reachable, detail)``.
+
+    The one probe both :func:`_require_docker` and ``doctor`` use, so their
+    diagnoses cannot drift. The unreachable detail is the everyday WSL2 trap:
+    Docker Desktop stopped, or its WSL integration off for this very distro,
+    and every `docker` call dies with a socket error the user has seen ten
+    times without ever reading.
+    """
+    probe = ctx.runner.run(
+        ["docker", "info", "--format", "{{.ServerVersion}}"], check=False, quiet=True
+    )
+    if probe.ok:
+        return True, f"daemon up (server {probe.tail.strip()})"
+    if HostFacts.probe().wsl_kernel:
+        return False, (
+            "WSL2: start Docker Desktop on Windows and check Settings > Resources > "
+            "WSL integration is enabled for THIS distro — or install Docker Engine "
+            "inside the distro"
+        )
+    return False, (
+        "start the daemon (`sudo systemctl start docker`) and check your user "
+        "is in the `docker` group"
+    )
 
 
 def _require_docker(ctx: Context) -> None:
-    """Fail with a diagnosis, not a stack trace, when docker cannot run.
-
-    Two distinct failures, two distinct hints: no client on PATH at all, and a
-    client with no daemon behind it — the everyday WSL2 trap, where Docker
-    Desktop is stopped or its WSL integration is off for this very distro and
-    every `docker` call dies with a socket error the user has seen ten times
-    without ever reading.
-    """
+    """Fail with a diagnosis, not a stack trace, when docker cannot run."""
     ctx.runner.require(
         "docker", hint="install Docker Engine, or enable Docker Desktop's WSL integration"
     )
     if ctx.dry_run:
         return
-    probe = ctx.runner.run(
-        ["docker", "info", "--format", "{{.ServerVersion}}"], check=False, quiet=True
-    )
-    if probe.ok:
-        return
-    if HostFacts.probe().wsl_kernel:
-        hint = (
-            "WSL2: start Docker Desktop on Windows and check Settings > Resources > "
-            "WSL integration is enabled for THIS distro — or install Docker Engine "
-            "inside the distro"
-        )
-    else:
-        hint = (
-            "start the daemon (`sudo systemctl start docker`) and check your user "
-            "is in the `docker` group"
-        )
-    raise ArdtError("docker is installed but its daemon is not reachable", hint=hint)
+    ok, detail = _daemon_status(ctx)
+    if not ok:
+        raise ArdtError("docker is installed but its daemon is not reachable", hint=detail)
 
 
 @click.group()
@@ -115,7 +118,7 @@ def _relative_source(root: Path, source: Path) -> str:
 
 
 def _remembered_source(ctx: Context) -> str | None:
-    manifest_path = ctx.project_root / render_module.MANIFEST
+    manifest_path = ctx.project_root / manifest_module.MANIFEST
     if not manifest_path.is_file():
         return None
     try:
@@ -157,8 +160,8 @@ def sync(ctx: Context, ardt_source: Path | None, from_pin: bool, force: bool) ->
             ctx.console.info(f"  {name}")
         return
 
-    result = render_module.write(ctx.project_root, plan, force=force)
-    ignored = render_module.ensure_gitignored(ctx.project_root)
+    result = manifest_module.write(ctx.project_root, plan, force=force)
+    ignored = manifest_module.ensure_gitignored(ctx.project_root)
 
     ctx.emit(
         profile=plan.profile.name,
@@ -192,7 +195,7 @@ def sync(ctx: Context, ardt_source: Path | None, from_pin: bool, force: bool) ->
 def host_config(ctx: Context) -> None:
     """Re-derive only the host overlay. Runs as the devcontainer's initializeCommand."""
     plan = _plan(ctx, ardt_source=_remembered_source(ctx))
-    result = render_module.write(ctx.project_root, plan, force=True, only=plan.host_files)
+    result = manifest_module.write(ctx.project_root, plan, force=True, only=plan.host_files)
     ctx.emit(host=plan.host.kind, written=result.written)
     if not ctx.json_output:
         ctx.console.info(f"host {plan.host.kind}: {COMPOSE_HOST} up to date")
@@ -281,10 +284,10 @@ def _ensure_synced(ctx: Context) -> Render:
     plan = _plan(ctx, ardt_source=_remembered_source(ctx))
     if ctx.dry_run:
         return plan
-    state = render_module.audit(ctx.project_root, plan)
+    state = manifest_module.audit(ctx.project_root, plan)
     if state.written or state.conflicts:
-        result = render_module.write(ctx.project_root, plan)  # refuses hand-edits
-        render_module.ensure_gitignored(ctx.project_root)
+        result = manifest_module.write(ctx.project_root, plan)  # refuses hand-edits
+        manifest_module.ensure_gitignored(ctx.project_root)
         ctx.console.step(f"synced {len(result.written)} dev file(s) (implicit `ardt dev sync`)")
         for name in sorted(result.written):
             ctx.console.detail(f"  wrote {name}")
@@ -560,7 +563,7 @@ def doctor(ctx: Context) -> None:
     if plan.ardt_source:
         check("warn", "ardt source", f"local checkout {plan.ardt_source} (not the pin)")
 
-    state = render_module.audit(ctx.project_root, plan)
+    state = manifest_module.audit(ctx.project_root, plan)
     if state.conflicts:
         check("fail", "render", f"hand-edited: {', '.join(sorted(state.conflicts))}")
     elif state.written:
@@ -568,7 +571,7 @@ def doctor(ctx: Context) -> None:
     else:
         check("ok", "render", f"{len(state.unchanged)} files match this ardt-dev")
 
-    missing = render_module.missing_gitignore_entries(ctx.project_root)
+    missing = manifest_module.missing_gitignore_entries(ctx.project_root)
     check(
         "fail" if missing else "ok",
         "gitignore",
@@ -583,18 +586,8 @@ def doctor(ctx: Context) -> None:
         if ctx.runner.which("docker") is None:
             check("fail", "docker", "not on PATH")
         else:
-            probe = ctx.runner.run(
-                ["docker", "info", "--format", "{{.ServerVersion}}"], check=False, quiet=True
-            )
-            if probe.ok:
-                check("ok", "docker", f"daemon up (server {probe.tail.strip()})")
-            else:
-                check(
-                    "fail",
-                    "docker",
-                    "client on PATH but the daemon is unreachable "
-                    "(WSL2: Docker Desktop running, WSL integration on for this distro?)",
-                )
+            ok, detail = _daemon_status(ctx)
+            check("ok" if ok else "fail", "docker", detail)
 
     ctx.emit(checks=[{"level": lvl, "check": label, "detail": d} for lvl, label, d in checks])
     if not ctx.json_output:

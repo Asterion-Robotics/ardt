@@ -37,6 +37,7 @@ from ardt_core.context import Context
 from ardt_core.errors import ArdtError, ConfigError
 from ardt_core.plugins import Registry
 from ardt_dev import host as host_module
+from ardt_dev import manifest as manifest_module
 from ardt_dev import profiles as profiles_module
 from ardt_dev import render as render_module
 from ardt_dev.config import ci_builder, dev_config, ros_distro
@@ -425,8 +426,8 @@ def test_unknown_profile_names_the_ones_that_exist() -> None:
 
 def test_sync_writes_the_render_and_gitignores_it(repo: Path) -> None:
     ctx = context(repo)
-    result = render_module.write(repo, plan(ctx.cfg))
-    assert render_module.ensure_gitignored(repo) == list(render_module.GITIGNORE_ENTRIES)
+    result = manifest_module.write(repo, plan(ctx.cfg))
+    assert manifest_module.ensure_gitignored(repo) == list(manifest_module.GITIGNORE_ENTRIES)
     assert (repo / render_module.DOCKERFILE).is_file()
     # The .vscode/ half lands outside .devcontainer/, and is ignored on its own.
     assert (repo / render_module.CPP_PROPERTIES).is_file()
@@ -442,73 +443,73 @@ def test_sync_writes_the_render_and_gitignores_it(repo: Path) -> None:
 
 
 def test_gitignore_entries_are_added_once(repo: Path) -> None:
-    assert render_module.ensure_gitignored(repo) == list(render_module.GITIGNORE_ENTRIES)
-    assert render_module.ensure_gitignored(repo) == []
-    assert render_module.is_gitignored(repo)
+    assert manifest_module.ensure_gitignored(repo) == list(manifest_module.GITIGNORE_ENTRIES)
+    assert manifest_module.ensure_gitignored(repo) == []
+    assert manifest_module.is_gitignored(repo)
 
 
 def test_a_partially_ignored_repo_gets_only_what_it_lacks(repo: Path) -> None:
     """The .vscode/ entry is new; a repo synced by an older ardt-dev has only the first."""
     (repo / ".gitignore").write_text(".devcontainer/\n")
-    assert render_module.ensure_gitignored(repo) == [render_module.CPP_PROPERTIES]
+    assert manifest_module.ensure_gitignored(repo) == [render_module.CPP_PROPERTIES]
     assert (repo / ".gitignore").read_text().count(".devcontainer/") == 1
 
 
 def test_a_pre_vscode_manifest_is_read_not_treated_as_hand_edits(repo: Path) -> None:
     """Older ardt-dev keyed the manifest by bare file name, not by repo path."""
     ctx = context(repo)
-    render_module.write(repo, plan(ctx.cfg))
-    path = repo / render_module.MANIFEST
+    manifest_module.write(repo, plan(ctx.cfg))
+    path = repo / manifest_module.MANIFEST
     data = json.loads(path.read_text())
     data["generated"] = {Path(k).name: v for k, v in data["generated"].items()}
     path.write_text(json.dumps(data))
     # Same files on disk, legacy keys: nothing is a conflict, nothing is stale.
-    state = render_module.audit(repo, plan(ctx.cfg))
+    state = manifest_module.audit(repo, plan(ctx.cfg))
     assert state.conflicts == []
     assert render_module.DOCKERFILE in state.unchanged
 
 
 def test_a_second_sync_is_a_no_op(repo: Path) -> None:
     ctx = context(repo)
-    render_module.write(repo, plan(ctx.cfg))
-    again = render_module.write(repo, plan(ctx.cfg))
+    manifest_module.write(repo, plan(ctx.cfg))
+    again = manifest_module.write(repo, plan(ctx.cfg))
     assert again.written == []
     assert render_module.DOCKERFILE in again.unchanged
 
 
 def test_a_hand_edit_is_refused_not_silently_kept(repo: Path) -> None:
     ctx = context(repo)
-    render_module.write(repo, plan(ctx.cfg))
+    manifest_module.write(repo, plan(ctx.cfg))
     (repo / render_module.DOCKERFILE).write_text("FROM scratch\n")
     with pytest.raises(ArdtError, match="did not generate"):
-        render_module.write(repo, plan(ctx.cfg))
-    assert render_module.audit(repo, plan(ctx.cfg)).conflicts == [render_module.DOCKERFILE]
+        manifest_module.write(repo, plan(ctx.cfg))
+    assert manifest_module.audit(repo, plan(ctx.cfg)).conflicts == [render_module.DOCKERFILE]
 
 
 def test_force_overwrites_a_hand_edit(repo: Path) -> None:
     ctx = context(repo)
-    render_module.write(repo, plan(ctx.cfg))
+    manifest_module.write(repo, plan(ctx.cfg))
     (repo / render_module.DOCKERFILE).write_text("FROM scratch\n")
-    result = render_module.write(repo, plan(ctx.cfg), force=True)
+    result = manifest_module.write(repo, plan(ctx.cfg), force=True)
     assert result.conflicts == []
     assert "FROM scratch" not in (repo / render_module.DOCKERFILE).read_text()
 
 
 def test_a_stale_render_of_ours_refreshes_without_force(repo: Path) -> None:
     ctx = context(repo)
-    render_module.write(repo, plan(ctx.cfg))
+    manifest_module.write(repo, plan(ctx.cfg))
     # Same content ardt wrote, but from an older tool: still ours to replace.
     stale = plan(ctx.cfg, facts=MAC)
-    result = render_module.write(repo, stale)
+    result = manifest_module.write(repo, stale)
     assert render_module.COMPOSE_HOST in result.written
 
 
 def test_host_config_rewrites_only_the_overlay(repo: Path) -> None:
     ctx = context(repo)
     linux_plan = plan(ctx.cfg, facts=LINUX)
-    render_module.write(repo, linux_plan)
+    manifest_module.write(repo, linux_plan)
     mac_plan = plan(ctx.cfg, facts=MAC)
-    result = render_module.write(repo, mac_plan, force=True, only=mac_plan.host_files)
+    result = manifest_module.write(repo, mac_plan, force=True, only=mac_plan.host_files)
     assert result.written == [render_module.COMPOSE_HOST]
     overlay = (repo / render_module.COMPOSE_HOST).read_text()
     assert "LOCALHOST" in overlay
@@ -518,8 +519,8 @@ def test_host_config_rewrites_only_the_overlay(repo: Path) -> None:
 
 def test_manifest_records_what_the_render_was_resolved_from(repo: Path) -> None:
     ctx = context(repo)
-    render_module.write(repo, plan(ctx.cfg, facts=WSL, ardt_source="../../ardt"))
-    data = json.loads((repo / render_module.MANIFEST).read_text())
+    manifest_module.write(repo, plan(ctx.cfg, facts=WSL, ardt_source="../../ardt"))
+    data = json.loads((repo / manifest_module.MANIFEST).read_text())
     assert data["profile"] == "ros2"
     assert data["host"] == "wsl2"
     assert data["ardt_source"] == "../../ardt"
