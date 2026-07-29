@@ -142,10 +142,34 @@ def test_cpp_properties_is_rendered_at_the_repo_distro() -> None:
     # Plain JSON, no comment header: cpptools flags comments here (#5885, #6132).
     entry = json.loads(text)["configurations"][0]
     assert entry["name"] == "ROS-kilted"
-    assert entry["includePath"][0] == "/opt/ros/kilted/include/**"
+    assert "/opt/ros/kilted/include/**" in entry["includePath"]
     # `ardt dev compile-commands` merges into <workspace>/build; the two agree.
     assert entry["compileCommands"] == "${workspaceFolder}/build/compile_commands.json"
     assert "@DISTRO@" not in text and "@CXX_STANDARD@" not in text
+
+
+def test_the_workspace_install_space_shadows_the_distro() -> None:
+    """Overlay before underlay, as `install/setup.bash` orders them.
+
+    A message package built here installs its generated headers under
+    `install/`; if the distro's include tree came first, a package name present
+    in both would resolve to the installed copy rather than the one just built.
+    """
+    paths = ROS2.cpp_properties["includePath"]
+    workspace = [p for p in paths if p.startswith("${workspaceFolder}")]
+    distro = [p for p in paths if p.startswith("/opt/ros/")]
+    assert workspace, "the workspace's own install space is not on the include path"
+    assert paths.index(workspace[-1]) < paths.index(distro[0])
+    # Both colcon layouts: isolated (the default) and tasks.ros.merge_install.
+    assert "${workspaceFolder}/install/*/include/**" in paths
+    assert "${workspaceFolder}/install/include/**" in paths
+
+
+def test_the_include_path_uses_the_workspace_root_the_render_opens() -> None:
+    """`${workspaceFolder}`, not a literal /ws: cpptools expands it from
+    devcontainer.json, so the two cannot drift."""
+    entry = json.loads(plan(ArdtConfig()).files[render_module.CPP_PROPERTIES])["configurations"][0]
+    assert all("/ws/" not in path for path in entry["includePath"])
 
 
 def test_clangd_owns_intellisense_and_cpptools_keeps_the_debug_adapter() -> None:

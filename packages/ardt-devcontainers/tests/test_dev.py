@@ -369,7 +369,10 @@ def test_cpp_properties_is_rendered_at_the_repo_distro() -> None:
     # Plain JSON, no comment header: cpptools flags comments here (#5885, #6132).
     entry = json.loads(text)["configurations"][0]
     assert entry["name"] == "ROS-kilted"
-    assert entry["includePath"][0] == "/opt/ros/kilted/include/**"
+    # The engine's job here is resolving the profile's tokens through nested
+    # data (a dict of lists of strings); which paths the profile names is
+    # asserted in its own suite.
+    assert "/opt/ros/kilted/include/**" in entry["includePath"]
     assert entry["compileCommands"] == "${workspaceFolder}/build/compile_commands.json"
     assert "@DISTRO@" not in text and "@CXX_STANDARD@" not in text
 

@@ -117,7 +117,23 @@ ROS2 = Profile(
     },
     cpp_properties={
         "name": f"ROS-{DISTRO}",
-        "includePath": [f"/opt/ros/{DISTRO}/include/**", "/usr/include/**"],
+        # Overlay before underlay, the order `install/setup.bash` establishes:
+        # a package built in this workspace shadows the distro's copy of the
+        # same name, which is the entire point of an overlay. Without the
+        # workspace entries, headers generated here (message packages above
+        # all) resolve to nothing, or to a stale installed version.
+        #
+        # Both colcon layouts are listed because both are reachable from
+        # config: isolated is the default (`install/<pkg>/include`), merged is
+        # `tasks.ros.merge_install: true` (`install/include`). The workspace
+        # root is `${workspaceFolder}` rather than a literal `/ws` so this
+        # keeps matching whatever the render opens.
+        "includePath": [
+            "${workspaceFolder}/install/*/include/**",
+            "${workspaceFolder}/install/include/**",
+            f"/opt/ros/{DISTRO}/include/**",
+            "/usr/include/**",
+        ],
         "intelliSenseMode": "gcc-x64",
         "compilerPath": "/usr/bin/gcc",
         "cStandard": "gnu11",
