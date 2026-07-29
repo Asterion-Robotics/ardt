@@ -121,6 +121,13 @@ def deps(
             script += f" --skip-keys {shlex.quote(' '.join(keys))}"
         ctx.runner.run(_sourced(ctx, cfg, script), cwd=_ws(ctx))
 
+    ctx.emit(
+        deps_ok=True,
+        repos_file=cfg.repos_file if not skip_vcs else None,
+        rosdep_skip_keys=list(keys),
+        excluded_packages=list(excluded),
+    )
+
 
 def build(
     ctx: Context,

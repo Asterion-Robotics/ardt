@@ -310,6 +310,7 @@ def up(ctx: Context, build: bool, no_bootstrap: bool) -> None:
     with ctx.console.section("compose up — the first run builds the dev image (minutes)"):
         ctx.runner.run([*compose, "up", "-d"])
     if no_bootstrap:
+        ctx.emit(compose_up=True, image_built=build, bootstrapped=False)
         return
     with ctx.console.section("postCreate — rosdep + `ardt deps` (minutes on first run)"):
         ctx.runner.run(
@@ -325,6 +326,7 @@ def up(ctx: Context, build: bool, no_bootstrap: bool) -> None:
                 POST_CREATE,
             ]
         )
+    ctx.emit(compose_up=True, image_built=build, bootstrapped=True)
     ctx.console.success("dev container ready — `ardt dev shell`, or `ardt dev open` for VS Code")
 
 
@@ -440,6 +442,7 @@ def down(ctx: Context, purge: bool, purge_shared: bool) -> None:
     if purge:
         argv.append("--volumes")
     ctx.runner.run(argv)
+    ctx.emit(down=True, purged=purge, purged_shared=purge_shared)
     if not purge_shared:
         return
     for name in plan.shared_volumes:
@@ -466,6 +469,7 @@ def bootstrap(ctx: Context) -> None:
         command = [part.replace(DISTRO, distro) for part in step]
         with ctx.console.section(" ".join(command)):
             ctx.runner.run(command)
+    ctx.emit(profile=cfg.profile, bootstrap_steps=len(prof.bootstrap))
     ctx.console.success("container ready — `ardt build`, then `ardt test`")
 
 
