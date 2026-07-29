@@ -57,8 +57,9 @@ class TestBuilderModules:
         assert docs_ci.builder_modules(docs_ci.DocsCiConfig()) == docs_ci.ARDT_MODULES
 
     def test_extra_modules_append_after_the_base_set(self) -> None:
-        cfg = docs_ci.DocsCiConfig.model_validate({"ardt_modules": ["ardt-pipelines", "ardt-dev"]})
-        assert docs_ci.builder_modules(cfg) == (*docs_ci.ARDT_MODULES, "ardt-pipelines", "ardt-dev")
+        extra = ["ardt-pipelines", "ardt-devcontainers"]
+        cfg = docs_ci.DocsCiConfig.model_validate({"ardt_modules": extra})
+        assert docs_ci.builder_modules(cfg) == (*docs_ci.ARDT_MODULES, *extra)
 
     def test_naming_a_base_module_does_not_duplicate_it(self) -> None:
         cfg = docs_ci.DocsCiConfig.model_validate({"ardt_modules": ["ardt-core"]})
