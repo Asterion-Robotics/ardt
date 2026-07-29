@@ -80,6 +80,27 @@ jobs:
         # Sources come from [tool.coverage.run] — all seven packages.
         run: uv run pytest --cov --cov-report=term-missing
 
+  # The engine-backed tests: the trivial engine smoke plus ros-ci end to end on
+  # a fixture package (the shipping pipeline never ran anywhere before this).
+  # Hosted runners have Docker; Dagger provisions its engine over the socket.
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # ctx.version reads tags; a shallow clone hides them
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+
+      - name: Sync workspace
+        run: uv sync --frozen
+
+      - name: Engine-backed tests
+        run: uv run pytest -m integration
+
   # Dogfooding the pipeline plane: `docs-ci` builds the working tree plus every
   # ref in `pipelines.docs_ci.versions` into a Pages-ready `public/`. Dagger
   # provisions its engine over the runner's docker socket; nothing to install.
@@ -120,7 +141,7 @@ jobs:
   # Gated on the whole pipeline, not just `docs`: a tag is a release, and a
   # release whose tests or lint are red must not ship its site either.
   deploy-docs:
-    needs: [docs, check, lint]
+    needs: [docs, check, lint, integration]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
