@@ -129,6 +129,13 @@ RUN find {base} -type d \\( -name include -o -name cmake -o -name pkgconfig \\) 
 """
 
 
+def _runtime_skip(keys: Sequence[str]) -> str:
+    """The runtime rosdep pass must skip the same keys `ardt deps` skips."""
+    if not keys:
+        return ""
+    return f' --skip-keys "{" ".join(keys)}"'
+
+
 def _template(name: str) -> str:
     return (resources.files("ardt_ros_pipelines.recipes") / name).read_text(encoding="utf-8")
 
@@ -193,6 +200,7 @@ def render_ros2(
     git_host: str | None = None,
     git_ssh_port: int = 22,
     git_token_user: str = "gitlab-ci-token",
+    rosdep_skip_keys: Sequence[str] = (),
 ) -> str:
     """Render the ROS 2 workspace recipe for one repo.
 
@@ -205,6 +213,9 @@ def render_ros2(
     ``git_host`` switches on private-host git auth for the deps layer (the
     ``vcs import`` of a private ``.repos``): SSH-agent and token mounts plus
     the runtime branching between them.
+    ``rosdep_skip_keys`` reaches the runtime stage's own rosdep pass (exec
+    dependencies of the shipped install space), mirroring what ``ardt deps``
+    skipped in the build stage.
     """
     base_ext = ""
     runtime_from = "${BASE_IMAGE}"
@@ -244,6 +255,7 @@ def render_ros2(
         .replace("@GIT_MOUNTS@", git_mounts)
         .replace("@GIT_AUTH@", git_auth)
         .replace("@INSTALL_BASE@", install_base)
+        .replace("@RUNTIME_SKIP@", _runtime_skip(rosdep_skip_keys))
         .replace("@STRIP@", strip)
         .replace("@BASE_EXT@", base_ext)
         .replace("@RUNTIME_FROM@", runtime_from)
