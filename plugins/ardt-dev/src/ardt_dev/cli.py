@@ -33,6 +33,7 @@ import click
 
 from ardt_core import env as env_module
 from ardt_core.cli import pass_ardt
+from ardt_core.config import workspace_root
 from ardt_core.context import Context
 from ardt_core.errors import ArdtError
 
@@ -53,20 +54,6 @@ from .render import (
 IN_CONTAINER_ENV = "ARDT_DEV_CONTAINER"
 """Set by the rendered image, so a command that only makes sense inside the
 container can say so instead of half-running on someone's laptop."""
-
-
-def _workspace_root(root: Path) -> Path:
-    """The colcon workspace root for a project root — the ``src/<repo>`` rule.
-
-    Derived from where the repo actually sits, not from the container's fixed
-    :data:`~ardt_dev.config.WORKSPACE_FOLDER`, so the same rule holds inside
-    the container (``/ws/src/<repo>`` -> ``/ws``) and for a host checkout (its
-    own root)."""
-    if root.parent.name == "src":
-        return root.parent.parent
-    if root.name == "src":
-        return root.parent
-    return root
 
 
 def _require_docker(ctx: Context) -> None:
@@ -495,7 +482,7 @@ def _claim_volume_dirs(ctx: Context) -> None:
     ownership on purpose: apt downloads as ``_apt`` and warns loudly if its
     archive dir belongs to someone else.
     """
-    base = _workspace_root(ctx.project_root)
+    base = workspace_root(ctx.project_root)
     dirs = [base / name for name in ("build", "install", "log") if (base / name).is_dir()]
     owned = [path for path in dirs if not os.access(path, os.W_OK)]
     if owned:
@@ -513,7 +500,7 @@ def _claim_volume_dirs(ctx: Context) -> None:
 @pass_ardt
 def compile_commands(ctx: Context) -> None:
     """Merge colcon's per-package compile_commands.json into one for clangd."""
-    build_dir = _workspace_root(ctx.project_root) / "build"
+    build_dir = workspace_root(ctx.project_root) / "build"
     parts = sorted(build_dir.glob("*/compile_commands.json"))
     if not parts:
         raise ArdtError(

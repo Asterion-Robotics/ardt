@@ -136,13 +136,10 @@ def _rosdep_skip_keys(ctx: Context) -> tuple[str, ...]:
     (which this plugin must not import), so it is read as plain data and treated
     as absent when malformed — the task plugin owns validation.
     """
-    ros = ctx.cfg.section("tasks").get("ros")
-    if not isinstance(ros, dict):
-        return ()
-    keys = ros.get("rosdep_skip_keys")  # type: ignore[union-attr]
+    keys = ctx.cfg.raw("tasks.ros.rosdep_skip_keys")
     if not isinstance(keys, list):
         return ()
-    return tuple(key for key in keys if isinstance(key, str))
+    return tuple(key for key in keys if isinstance(key, str))  # pyright: ignore[reportUnknownVariableType]
 
 
 def _ardt_dist(ctx: Context, ardt_source: str) -> DistConfig:

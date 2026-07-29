@@ -176,6 +176,22 @@ def test_find_project_root_accepts_a_repo_checked_out_as_src(tmp_path: Path) -> 
     assert config.find_project_root(tmp_path) == (tmp_path / "src").resolve()
 
 
+def test_raw_reads_dotted_paths_tolerantly() -> None:
+    cfg = config.ArdtConfig.model_validate({"tasks": {"ros": {"distro": "kilted"}}})
+    assert cfg.raw("tasks.ros.distro") == "kilted"
+    assert cfg.raw("tasks.ros") == {"distro": "kilted"}
+    assert cfg.raw("tasks.ros.nope") is None
+    assert cfg.raw("tasks.ros.distro.deeper") is None  # scalar mid-path
+    assert cfg.raw("ghost.anything") is None
+
+
+def test_workspace_root_convention(tmp_path: Path) -> None:
+    ws = tmp_path / "ws"
+    assert config.workspace_root(ws / "src" / "repo") == ws
+    assert config.workspace_root(ws / "src") == ws
+    assert config.workspace_root(tmp_path / "plain") == tmp_path / "plain"
+
+
 def test_duplicate_yaml_keys_are_rejected(tmp_path: Path) -> None:
     """Regression: PyYAML silently kept the last duplicate, dropping the first
     `tasks:` block — the opposite of the typo-safety this module promises."""

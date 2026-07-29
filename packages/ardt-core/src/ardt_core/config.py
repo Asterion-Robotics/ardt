@@ -101,6 +101,25 @@ class ArdtConfig(BaseModel):
         except ValidationError as exc:
             raise ConfigError(f"invalid `{name}:` section: {_first_error(exc)}") from exc
 
+    def raw(self, path: str) -> object | None:
+        """A dotted-path read of raw plugin-section data (``"tasks.ros.distro"``).
+
+        For *cross-section* reads: a plugin needing one value from a section
+        another plugin owns reads it as plain, unvalidated data — no import of
+        the owning plugin (validation is the owner's job), and malformed data
+        reads as absent. ``None`` when any segment is missing or not a mapping.
+        Core-owned sections (``project:``, ``check:``, ``ardt:``) are typed
+        fields, not raw data — read those directly.
+        """
+        parts = path.split(".")
+        extra = self.__pydantic_extra__ or {}
+        node: object = extra.get(parts[0])
+        for part in parts[1:]:
+            if not isinstance(node, dict):
+                return None
+            node = cast("dict[str, object]", node).get(part)
+        return node
+
     def unknown_sections(self, installed: frozenset[str]) -> tuple[list[str], list[str]]:
         """Split extra sections into ``(fatal, from_uninstalled_plugins)``."""
         extra = self.__pydantic_extra__ or {}
@@ -172,6 +191,26 @@ def find_project_root(start: Path) -> Path:
         if (directory / ".git").exists():
             return directory
     return start
+
+
+def workspace_root(project_root: Path) -> Path:
+    """The colcon workspace root for a project root — the ``/ws`` convention.
+
+    A repo living under a directory named ``src`` (``/ws/src/<repo>``) sits in
+    a colcon workspace, and colcon runs from the grandparent so ``build/``,
+    ``install/`` and ``log/`` land *beside* ``src/`` instead of inside the
+    repo. A repo checked out *as* ``src`` itself gets the parent for the same
+    reason. Any other checkout is its own workspace root — plain-repo behavior.
+
+    The one implementation of the rule: the same walk holds inside the
+    container (``/ws/src/<repo>`` -> ``/ws``) and for a host checkout, and the
+    ros-ci Dockerfile template hard-codes the identical convention.
+    """
+    if project_root.parent.name == "src":
+        return project_root.parent.parent
+    if project_root.name == "src":
+        return project_root.parent
+    return project_root
 
 
 def _workspace_shaped(directory: Path, start: Path) -> bool:

@@ -21,6 +21,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # The canonical colcon workspace, identical to the dev container's: this repo
 # is ONE entry under /ws/src, `.repos` imports land grouped in /ws/src/external,
 # and colcon runs from /ws so build/install/log land beside the sources.
+# (The /ws rule's one implementation is ardt_core.config.workspace_root; this
+# template hard-codes the same convention.)
 # WORKDIR anchors ardt in this repo's config, not in the workspace root.
 COPY . /ws/src/@PROJECT@
 WORKDIR /ws/src/@PROJECT@

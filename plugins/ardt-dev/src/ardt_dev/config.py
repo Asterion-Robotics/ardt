@@ -96,10 +96,7 @@ def dev_config(cfg: ArdtConfig) -> DevConfig:
 
 def ros_distro(cfg: ArdtConfig, default: str = "jazzy") -> str:
     """``tasks.ros.distro``, read raw — see :func:`ci_builder` for why raw."""
-    ros = cfg.section("tasks").get("ros")
-    if not isinstance(ros, dict):
-        return default
-    distro = ros.get("distro")  # type: ignore[union-attr]
+    distro = cfg.raw("tasks.ros.distro")
     return distro if isinstance(distro, str) else default
 
 
@@ -111,9 +108,5 @@ def ci_builder(cfg: ArdtConfig) -> str | None:
     section is read as plain data and treated as absent when malformed — this is
     a comparison, not a validation: ``ros-ci`` owns that.
     """
-    pipelines = cfg.section("pipelines")
-    ros_ci = pipelines.get("ros_ci")
-    if not isinstance(ros_ci, dict):
-        return None
-    builder = ros_ci.get("builder")  # type: ignore[union-attr]
+    builder = cfg.raw("pipelines.ros_ci.builder")
     return builder if isinstance(builder, str) else None

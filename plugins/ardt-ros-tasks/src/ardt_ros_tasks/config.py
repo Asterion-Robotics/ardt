@@ -23,28 +23,20 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ardt_core.config import ArdtConfig
+from ardt_core.config import ArdtConfig, workspace_root
+
+__all__ = [
+    "JUNIT_GLOB",
+    "RosConfig",
+    "TasksConfig",
+    "repos_target_path",
+    "ros_config",
+    "workspace_root",
+]
 
 JUNIT_GLOB = "build/**/test_results/**/*.xml"
 """Fixed path convention (relative to the workspace root), so pipelines can
 export JUnit XMLs blindly."""
-
-
-def workspace_root(project_root: Path) -> Path:
-    """The colcon workspace root for a project root.
-
-    The ``/ws`` convention: a repo living under a directory named ``src``
-    (``/ws/src/<repo>``) sits in a colcon workspace, and colcon runs from the
-    grandparent so ``build/``, ``install/`` and ``log/`` land *beside* ``src/``
-    instead of inside the repo. A repo checked out *as* ``src`` itself gets the
-    parent for the same reason. Any other checkout is its own workspace root,
-    which is plain-repo behavior.
-    """
-    if project_root.parent.name == "src":
-        return project_root.parent.parent
-    if project_root.name == "src":
-        return project_root.parent
-    return project_root
 
 
 def repos_target_path(cfg: RosConfig, project_root: Path) -> Path:
