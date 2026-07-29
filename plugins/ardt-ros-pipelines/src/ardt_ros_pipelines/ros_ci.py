@@ -257,9 +257,11 @@ async def ros_ci(ctx: Context, dag: dagger.Client, ardt_source: str = "") -> Non
                 "(the daemon can hold a foreign-arch image but cannot run it)"
             )
         else:
-            tag = await std.load_local(ctx, native)
-            ctx.emit(loaded=tag)
-            ctx.console.success(f"loaded {tag} into the local docker daemon")
+            names = await std.load_local(ctx, native)
+            ctx.emit(loaded=names)
+            ctx.console.success(
+                f"loaded {', '.join(names)} into the local docker daemon (version {ctx.version})"
+            )
 
     if not ctx.publish:
         ctx.console.info("runtime image built; skipping push (no --publish)")

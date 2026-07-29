@@ -6,7 +6,7 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 
 ### Added
 
-- `ardt pipe run <name> --load`: put the built runtime image into the local docker daemon as `<project>:<version>` — the local counterpart of `--publish` (which stays registry-only and errors loudly without one).
+- `ardt pipe run <name> --load`: put the built runtime image into the local docker daemon as the moving tag `<project>:<X.Y.Z>-dev` for the release being developed (a release load also gets the pinned `<project>:<version>`) — the local counterpart of `--publish`, which stays registry-only and errors loudly without one.
 
 ## [0.2.0] - 2026-07-29
 

@@ -113,22 +113,38 @@ def image_ref(ctx: Context, name: str | None = None) -> str:
     return f"{ctx.ci.registry}/{repository.lower()}:{image_tag(ctx.version)}"
 
 
-async def load_local(ctx: Context, container: dagger.Container) -> str:
-    """Put a built image into the local docker daemon; returns its local tag.
+async def load_local(ctx: Context, container: dagger.Container) -> list[str]:
+    """Put a built image into the local docker daemon; returns its local tags.
 
     The engine's image store is not the daemon's, so the image travels as a
-    docker-format tarball through ``docker load`` and is then tagged
-    ``<project>:<version-tag>`` — deterministic, and registry-free (the
-    daemon-local counterpart of :func:`publish_multiarch`, single-arch by
-    nature: a daemon holds one architecture, a registry holds a manifest).
+    docker-format tarball through ``docker load`` (the daemon-local counterpart
+    of :func:`publish_multiarch`, single-arch by nature).
+
+    Tagged ``<project>:<X.Y.Z>-dev`` for the release being developed — a
+    *moving* tag, unlike the registry's immutable ones: each load overwrites
+    it, so the daemon holds one dev image per release line whose stale
+    predecessors dangle for ``docker image prune``, instead of one tag per
+    commit piling up. A release load (exact tag, clean tree) additionally gets
+    the pinned ``<project>:<version>``.
     """
-    tag = f"{ctx.project.lower()}:{image_tag(ctx.version)}"
+    project = ctx.project.lower()
+    names = [f"{project}:{dev_tag(ctx.version)}"]
+    if ctx.is_release:
+        names.append(f"{project}:{image_tag(ctx.version)}")
     with tempfile.TemporaryDirectory(prefix="ardt-load-") as tmp:
         tarball = str(Path(tmp) / "image.tar")
         await container.export(tarball, media_types=dagger.ImageMediaTypes.DockerMediaTypes)
         result = ctx.runner.run(["docker", "load", "-i", tarball], quiet=True)
-    ctx.runner.run(["docker", "tag", _loaded_ref(result.tail), tag], quiet=True)
-    return tag
+    loaded = _loaded_ref(result.tail)
+    for name in names:
+        ctx.runner.run(["docker", "tag", loaded, name], quiet=True)
+    return names
+
+
+def dev_tag(version: str) -> str:
+    """``0.1.1.dev3+g…`` -> ``0.1.1-dev``: the release being developed, as a tag."""
+    base = version.split("+")[0].partition(".dev")[0]
+    return f"{base}-dev"
 
 
 def _loaded_ref(output: str) -> str:
