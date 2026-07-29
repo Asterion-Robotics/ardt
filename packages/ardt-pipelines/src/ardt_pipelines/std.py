@@ -23,6 +23,7 @@ most SDK churn lands here and in :mod:`.engine` rather than in every plugin.
 
 from __future__ import annotations
 
+import tempfile
 from collections.abc import Sequence
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -110,6 +111,36 @@ def image_ref(ctx: Context, name: str | None = None) -> str:
     # Registry repository paths must be lowercase (GitLab lowercases
     # CI_REGISTRY_IMAGE; ghcr rejects uppercase).
     return f"{ctx.ci.registry}/{repository.lower()}:{image_tag(ctx.version)}"
+
+
+async def load_local(ctx: Context, container: dagger.Container) -> str:
+    """Put a built image into the local docker daemon; returns its local tag.
+
+    The engine's image store is not the daemon's, so the image travels as a
+    docker-format tarball through ``docker load`` and is then tagged
+    ``<project>:<version-tag>`` — deterministic, and registry-free (the
+    daemon-local counterpart of :func:`publish_multiarch`, single-arch by
+    nature: a daemon holds one architecture, a registry holds a manifest).
+    """
+    tag = f"{ctx.project.lower()}:{image_tag(ctx.version)}"
+    with tempfile.TemporaryDirectory(prefix="ardt-load-") as tmp:
+        tarball = str(Path(tmp) / "image.tar")
+        await container.export(tarball, media_types=dagger.ImageMediaTypes.DockerMediaTypes)
+        result = ctx.runner.run(["docker", "load", "-i", tarball], quiet=True)
+    ctx.runner.run(["docker", "tag", _loaded_ref(result.tail), tag], quiet=True)
+    return tag
+
+
+def _loaded_ref(output: str) -> str:
+    """The image docker just loaded, from `docker load`'s own report."""
+    for line in output.splitlines():
+        for prefix in ("Loaded image ID: ", "Loaded image: "):
+            if line.startswith(prefix):
+                return line.removeprefix(prefix).strip()
+    raise ArdtError(
+        "docker load reported no image",
+        hint="is the docker CLI unusually old? `docker load` normally prints the loaded ref",
+    )
 
 
 def image_tag(version: str) -> str:

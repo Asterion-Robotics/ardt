@@ -121,6 +121,20 @@ class TestImageRef:
             std.image_ref(ctx)
 
 
+class TestLoadedRef:
+    """Parsing `docker load`'s report — the contract load_local depends on."""
+
+    def test_image_id_form(self) -> None:
+        assert std._loaded_ref("Loaded image ID: sha256:abc123\n") == "sha256:abc123"
+
+    def test_named_form(self) -> None:
+        assert std._loaded_ref("Loaded image: repo/name:tag\n") == "repo/name:tag"
+
+    def test_no_report_is_a_clean_error(self) -> None:
+        with pytest.raises(ArdtError, match="reported no image"):
+            std._loaded_ref("something unexpected\n")
+
+
 class TestPathFromRemote:
     def test_path_only_remote_yields_none(self, repo: Path) -> None:
         git("remote", "add", "origin", "/srv/git/mirror", cwd=repo)

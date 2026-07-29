@@ -24,6 +24,7 @@ first run downloads the engine image (slow once, cached after).
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -73,12 +74,19 @@ def test_ros_ci_end_to_end_on_a_fixture_package(repo: Path) -> None:
     git("commit", "-qm", "fixture package", cwd=repo)
 
     ctx = Context.build(cwd=repo, registry=Registry(plugins=[], problems=[]))
+    ctx.load = True  # exercise the daemon-load path end to end
     run_pipeline(ctx, ros_ci, ros_ci.bind({"ardt_source": str(ARDT_ROOT)}))
 
     assert ctx.emitted["tests_ok"] is True
     reports = repo / "pipeline-reports"
     assert (reports / "Dockerfile.rendered").is_file()
     assert list(reports.rglob("*.xml")), "no JUnit results were staged"
+
+    loaded = ctx.emitted["loaded"]
+    try:
+        subprocess.run(["docker", "image", "inspect", loaded], check=True, capture_output=True)
+    finally:
+        subprocess.run(["docker", "rmi", loaded], check=False, capture_output=True)
 
 
 def test_trivial_pipeline_against_real_engine(repo: Path) -> None:

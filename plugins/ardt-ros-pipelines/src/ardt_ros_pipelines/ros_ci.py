@@ -53,6 +53,7 @@ a local checkout into the build; a ``git+…`` URL swaps the monorepo address.
 
 from __future__ import annotations
 
+import platform
 from pathlib import Path
 
 import dagger
@@ -142,6 +143,26 @@ def _rosdep_skip_keys(ctx: Context) -> tuple[str, ...]:
     return tuple(key for key in keys if isinstance(key, str))  # pyright: ignore[reportUnknownVariableType]
 
 
+_NATIVE_PLATFORM = {"x86_64": "linux/amd64", "aarch64": "linux/arm64", "arm64": "linux/arm64"}
+
+
+def _native_variant(
+    platforms: list[str], variants: list[dagger.Container]
+) -> dagger.Container | None:
+    """The variant this machine can actually run, for ``--load``.
+
+    A single-platform build is taken at face value; a multi-platform one picks
+    the variant matching the local architecture, or none.
+    """
+    if len(variants) == 1:
+        return variants[0]
+    native = _NATIVE_PLATFORM.get(platform.machine())
+    for built_platform, variant in zip(platforms, variants, strict=True):
+        if built_platform == native:
+            return variant
+    return None
+
+
 def _ardt_dist(ctx: Context, ardt_source: str) -> DistConfig:
     """The repo's ``ardt:`` section, with a ``--arg ardt_source=git+…`` swap."""
     section = ctx.cfg.ardt
@@ -227,6 +248,18 @@ async def ros_ci(ctx: Context, dag: dagger.Client, ardt_source: str = "") -> Non
     ]
     for variant in variants:
         await variant.sync()
+
+    if ctx.load:
+        native = _native_variant(cfg.platforms, variants)
+        if native is None:
+            ctx.console.warn(
+                f"--load skipped: none of {cfg.platforms} matches this machine "
+                "(the daemon can hold a foreign-arch image but cannot run it)"
+            )
+        else:
+            tag = await std.load_local(ctx, native)
+            ctx.emit(loaded=tag)
+            ctx.console.success(f"loaded {tag} into the local docker daemon")
 
     if not ctx.publish:
         ctx.console.info("runtime image built; skipping push (no --publish)")

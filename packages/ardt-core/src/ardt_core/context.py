@@ -46,11 +46,12 @@ class Context:
 
     The write contract (``slots=True`` makes inventing attributes an
     ``AttributeError``; a policy test in the workspace ``tests/`` sweeps for
-    the rest): every field except ``publish`` is *identity* — set once by
-    :meth:`build`, never reassigned, because every command and plugin aliases
-    this one instance and a mid-run rewrite is visible to all of them.
-    Commands may set ``publish`` and call :meth:`emit`; nothing else writes.
-    Tests may inject identity fields (``ctx.ci = …``) on instances they own.
+    the rest): every field except ``publish`` and ``load`` is *identity* — set
+    once by :meth:`build`, never reassigned, because every command and plugin
+    aliases this one instance and a mid-run rewrite is visible to all of them.
+    Commands may set ``publish``/``load`` and call :meth:`emit`; nothing else
+    writes. Tests may inject identity fields (``ctx.ci = …``) on instances
+    they own.
     """
 
     project_root: Path
@@ -63,6 +64,9 @@ class Context:
     registry: Registry
     dry_run: bool = False
     publish: bool = False
+    load: bool = False
+    """Put the built image into the local docker daemon (the local counterpart
+    of ``publish``; the third destination, a tarball export, does not exist yet)."""
     json_output: bool = False
     _emitted: dict[str, object] = field(default_factory=dict[str, object], repr=False)
     _version: str | None = field(default=None, repr=False)
