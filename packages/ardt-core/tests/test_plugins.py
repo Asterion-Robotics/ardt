@@ -23,6 +23,7 @@ import sys
 import types
 from dataclasses import dataclass
 
+import click
 import pytest
 
 from ardt_core import plugins
@@ -82,7 +83,7 @@ def _version_ok(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_compatible_plugin_loads(monkeypatch: pytest.MonkeyPatch, fake_package) -> None:
     fake_package("acme_plugin", plugins.ARDT_PLUGIN_API)
     _version_ok(monkeypatch)
-    marker = object()
+    marker = click.Command("hello")
     eps = [
         FakeEntryPoint("hello", plugins.COMMANDS_GROUP, "acme_plugin.cli", marker, dist="acme-plug")
     ]
@@ -104,7 +105,9 @@ def test_declared_config_section_wins_over_derivation(
     fake_package("acme_plugin", plugins.ARDT_PLUGIN_API, section="tasks")
     _version_ok(monkeypatch)
     eps = [
-        FakeEntryPoint("hi", plugins.COMMANDS_GROUP, "acme_plugin.cli", object(), dist="acme-ros")
+        FakeEntryPoint(
+            "hi", plugins.COMMANDS_GROUP, "acme_plugin.cli", click.Command("hi"), dist="acme-ros"
+        )
     ]
 
     plugin = discover(eps).plugins[0]
@@ -148,7 +151,9 @@ def test_entry_point_load_failure_disqualifies_whole_plugin(
     fake_package("acme_plugin", plugins.ARDT_PLUGIN_API)
     _version_ok(monkeypatch)
     eps = [
-        FakeEntryPoint("good", plugins.COMMANDS_GROUP, "acme_plugin.cli", object(), dist="acme"),
+        FakeEntryPoint(
+            "good", plugins.COMMANDS_GROUP, "acme_plugin.cli", click.Command("good"), dist="acme"
+        ),
         FakeEntryPoint(
             "bad",
             plugins.COMMANDS_GROUP,
@@ -167,7 +172,9 @@ def test_all_three_groups_are_collected(monkeypatch: pytest.MonkeyPatch, fake_pa
     fake_package("acme_plugin", plugins.ARDT_PLUGIN_API)
     _version_ok(monkeypatch)
     eps = [
-        FakeEntryPoint("cmd", plugins.COMMANDS_GROUP, "acme_plugin.cli", object(), dist="acme"),
+        FakeEntryPoint(
+            "cmd", plugins.COMMANDS_GROUP, "acme_plugin.cli", click.Command("cmd"), dist="acme"
+        ),
         FakeEntryPoint("pipe", plugins.PIPELINES_GROUP, "acme_plugin.pipe", object(), dist="acme"),
         FakeEntryPoint("tset", plugins.TEMPLATES_GROUP, "acme_plugin.tpl", object(), dist="acme"),
     ]
@@ -181,11 +188,46 @@ def test_all_three_groups_are_collected(monkeypatch: pytest.MonkeyPatch, fake_pa
 def test_registry_helpers(monkeypatch: pytest.MonkeyPatch, fake_package) -> None:
     fake_package("acme_plugin", plugins.ARDT_PLUGIN_API)
     _version_ok(monkeypatch)
-    eps = [FakeEntryPoint("cmd", plugins.COMMANDS_GROUP, "acme_plugin.cli", 1, dist="ardt-tasks")]
+    command = click.Command("cmd")
+    eps = [
+        FakeEntryPoint("cmd", plugins.COMMANDS_GROUP, "acme_plugin.cli", command, dist="ardt-tasks")
+    ]
 
     registry = discover(eps)
     assert registry.sections == frozenset({"tasks"})
-    assert registry.commands() == {"cmd": 1}
+    assert registry.commands() == {"cmd": command}
+
+
+def test_non_click_command_entry_point_is_refused(
+    monkeypatch: pytest.MonkeyPatch, fake_package
+) -> None:
+    """Regression: an entry point aimed at the wrong attribute used to vanish
+    silently — the CLI filtered non-click objects with zero diagnostics."""
+    fake_package("acme_plugin", plugins.ARDT_PLUGIN_API)
+    _version_ok(monkeypatch)
+    eps = [FakeEntryPoint("hi", plugins.COMMANDS_GROUP, "acme_plugin.cli", object(), dist="acme")]
+
+    registry = discover(eps)
+    assert registry.plugins == []
+    assert "must load to a click.Command" in registry.problems[0].reason
+
+
+def test_duplicate_commands_across_plugins_are_reported(
+    monkeypatch: pytest.MonkeyPatch, fake_package
+) -> None:
+    """Both plugins load, the later one wins the merge — but never silently."""
+    fake_package("plug_a", plugins.ARDT_PLUGIN_API)
+    fake_package("plug_b", plugins.ARDT_PLUGIN_API)
+    _version_ok(monkeypatch)
+    eps = [
+        FakeEntryPoint("run", plugins.COMMANDS_GROUP, "plug_a.cli", click.Command("run"), dist="a"),
+        FakeEntryPoint("run", plugins.COMMANDS_GROUP, "plug_b.cli", click.Command("run"), dist="b"),
+    ]
+
+    registry = discover(eps)
+    assert {p.name for p in registry.plugins} == {"a", "b"}
+    assert len(registry.problems) == 1
+    assert "also provided by `a`" in registry.problems[0].reason
 
 
 def test_real_installed_plugin_is_discovered() -> None:

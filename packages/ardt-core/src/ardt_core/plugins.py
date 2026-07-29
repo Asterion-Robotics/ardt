@@ -20,9 +20,11 @@
 A plugin provides any subset of three entry-point groups:
 
 ===================  ==========================================================
-``ardt.commands``     click commands/groups mounted at the top level
-``ardt.pipelines``    a module exposing ``@pipeline`` functions
-``ardt.templates``    scaffold sets for ``ardt new``
+``ardt.commands``     must load to a :class:`click.Command` (command or group),
+                      mounted at the top level; anything else refuses the plugin
+``ardt.pipelines``    must load to a *module* exposing ``@pipeline`` functions
+                      (checked by ``ardt_pipelines.collect``)
+``ardt.templates``    scaffold sets for ``ardt new`` (contract not yet enforced)
 ===================  ==========================================================
 
 Every plugin distribution declares ``ARDT_PLUGIN_API`` on its root package: an
@@ -42,6 +44,8 @@ import importlib
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from importlib import metadata
+
+import click
 
 ARDT_PLUGIN_API = 1
 """Bumped with core majors. Plugins declaring another value are refused."""
@@ -147,6 +151,21 @@ def discover(entry_points: Iterable[metadata.EntryPoint] | None = None) -> Regis
         if problem is not None:
             problems.append(problem)
 
+    # Cross-plugin command collisions: :meth:`Registry.commands` merges in this
+    # same order, so the later plugin wins — silently, unless reported here.
+    owners: dict[str, str] = {}
+    for plugin in plugins:
+        for command in plugin.commands:
+            if command in owners:
+                problems.append(
+                    Problem(
+                        plugin.name,
+                        f"command `{command}` is also provided by `{owners[command]}`; "
+                        f"`{plugin.name}`'s wins",
+                    )
+                )
+            owners[command] = plugin.name
+
     return Registry(plugins=plugins, problems=problems)
 
 
@@ -182,6 +201,15 @@ def _load_distribution(
             loaded: object = entry_point.load()
         except Exception as exc:
             return None, Problem(name, f"entry point `{entry_point.name}` failed: {_brief(exc)}")
+        # An entry point aimed at the wrong attribute used to vanish silently
+        # (the CLI filtered non-click objects); wrong type is a refusal like
+        # any other, so the author hears about it instead of missing a command.
+        if entry_point.group == COMMANDS_GROUP and not isinstance(loaded, click.Command):
+            return None, Problem(
+                name,
+                f"entry point `{entry_point.name}` must load to a click.Command, "
+                f"got {type(loaded).__name__}",
+            )
         target = {
             COMMANDS_GROUP: plugin.commands,
             PIPELINES_GROUP: plugin.pipelines,
