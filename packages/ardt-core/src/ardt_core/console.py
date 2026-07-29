@@ -62,6 +62,11 @@ class Console:
         """True when output must stay free of control sequences."""
         return self._plain
 
+    @property
+    def stream(self) -> TextIO:
+        """The output stream. Public so tests can read captured output back."""
+        return self._stream
+
     def _write(self, markup: str, plain: str) -> None:
         if self.quiet:
             return

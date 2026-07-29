@@ -79,14 +79,20 @@ class Context:
         json_output: bool = False,
         verbose: int = 0,
         registry: Registry | None = None,
+        console: Console | None = None,
     ) -> Context:
-        """Assemble the context. The only place the pieces are wired together."""
+        """Assemble the context. The only place the pieces are wired together.
+
+        ``registry`` and ``console`` are injection points for tests (a fake
+        plugin set, a capturing stream); production callers pass neither.
+        """
         cwd = (cwd or Path.cwd()).resolve()
         root = config_module.find_project_root(cwd)
         cfg, source = config_module.load(root)
 
         ci = ci_module.detect()
-        console = Console(ci, verbose=verbose)
+        if console is None:
+            console = Console(ci, verbose=verbose)
         plugin_registry = registry if registry is not None else discover()
 
         _report_plugin_problems(console, plugin_registry)

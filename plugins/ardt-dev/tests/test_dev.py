@@ -24,7 +24,6 @@ three host shapes, and the refusal to clobber a file ardt did not write.
 
 from __future__ import annotations
 
-import io
 import json
 from dataclasses import replace
 from pathlib import Path
@@ -33,9 +32,8 @@ import pytest
 import yaml
 
 from ardt_core.config import ArdtConfig
-from ardt_core.context import Context
 from ardt_core.errors import ArdtError, ConfigError
-from ardt_core.plugins import Registry
+from ardt_core.testing import build_context
 from ardt_dev import host as host_module
 from ardt_dev import manifest as manifest_module
 from ardt_dev import profiles as profiles_module
@@ -44,12 +42,7 @@ from ardt_dev.config import ci_builder, dev_config, ros_distro
 from ardt_dev.host import HostFacts
 from ardt_dev.profiles import ROS2, profile
 
-
-def context(root: Path, **kwargs: object) -> Context:
-    ctx = Context.build(cwd=root, registry=Registry(plugins=[], problems=[]), **kwargs)  # type: ignore[arg-type]
-    ctx.console._stream = io.StringIO()  # capture; keep it plain
-    ctx.console._plain = True
-    return ctx
+context = build_context
 
 
 def plan(

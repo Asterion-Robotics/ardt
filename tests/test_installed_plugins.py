@@ -22,19 +22,12 @@ here, where the uv workspace guarantees they exist.
 
 from __future__ import annotations
 
-import contextlib
-import io
 from pathlib import Path
 
-from ardt_core.cli import main
 from ardt_core.plugins import discover
+from ardt_core.testing import run_cli
 
-
-def run(args: list[str], cwd: Path) -> tuple[int, str, str]:
-    out, err = io.StringIO(), io.StringIO()
-    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-        code = main([*("-C", str(cwd)), *args])
-    return code, out.getvalue(), err.getvalue()
+run = run_cli
 
 
 def test_installed_first_party_plugins_load_cleanly() -> None:

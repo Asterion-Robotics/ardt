@@ -27,9 +27,10 @@ import pytest
 from click.testing import CliRunner
 
 from ardt_core import cli as cli_module
-from ardt_core.cli import cli, main
+from ardt_core.cli import cli
 from ardt_core.context import Context
 from ardt_core.plugins import ARDT_PLUGIN_API, Plugin, Registry
+from ardt_core.testing import run_cli
 
 
 @pytest.fixture
@@ -55,15 +56,7 @@ def fake_plugin(monkeypatch: pytest.MonkeyPatch) -> Plugin:
     return plugin
 
 
-def run(args: list[str], cwd: Path) -> tuple[int, str, str]:
-    """Invoke `main` in-process, capturing stdout/stderr separately."""
-    import contextlib
-    import io
-
-    out, err = io.StringIO(), io.StringIO()
-    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-        code = main([*("-C", str(cwd)), *args])
-    return code, out.getvalue(), err.getvalue()
+run = run_cli
 
 
 def test_help_does_not_touch_the_repo() -> None:

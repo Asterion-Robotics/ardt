@@ -19,8 +19,6 @@
 
 from __future__ import annotations
 
-import contextlib
-import io
 import json
 from pathlib import Path
 
@@ -28,17 +26,10 @@ import pytest
 
 from ardt_core.config import ArdtConfig
 from ardt_core.context import Context
-from ardt_core.testing import git
+from ardt_core.testing import git, run_cli
 from ardt_doc_pipelines import docs_ci
 
-
-def run(args: list[str], cwd: Path) -> tuple[int, str, str]:
-    from ardt_core.cli import main
-
-    out, err = io.StringIO(), io.StringIO()
-    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-        code = main(["-C", str(cwd), *args])
-    return code, out.getvalue(), err.getvalue()
+run = run_cli
 
 
 class TestConfig:
