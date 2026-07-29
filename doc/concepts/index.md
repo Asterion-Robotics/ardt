@@ -1,6 +1,6 @@
 # Concepts
 
-Seven words carry all of ardt. Everything else in these pages is detail:
+Eight words carry all of ardt. Everything else in these pages is detail:
 
 | Word | Meaning |
 |---|---|
@@ -8,7 +8,8 @@ Seven words carry all of ardt. Everything else in these pages is detail:
 | **pipeline** | the same tasks run *inside* containers — `ardt pipe run ros-ci` is CI |
 | **plugin** | a Python package adding tasks, pipelines or dev profiles; every command past `ardt info` is one |
 | **module** | an installable piece of ardt (technically: a Python distribution) — the platform packages and the plugins; the name `install.sh`, `ARDT_MODULES` and the `ardt:` config section address |
-| **theme** | a family of plugins for one concern (ROS 2, docs, devcontainer) |
+| **plane** | *where* a command runs: in the environment you typed it in (task), in a container Dagger builds (pipeline), or in the container you develop in (devcontainer). A platform package owns each |
+| **theme** | a family of plugins for one concern (ROS 2, docs) — up to one per plane, named `ardt-<theme>-<plane>` |
 | **profile** | a dev-container flavor a repo picks (`ros2` is the only one today) |
 | **render** | files ardt generates, gitignored and machine-owned — never edited, always re-derived |
 
