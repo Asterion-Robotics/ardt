@@ -266,6 +266,10 @@ def volumes(ctx: Context) -> None:
 def _compose_argv(ctx: Context) -> list[str]:
     for name in (COMPOSE, COMPOSE_HOST):
         if not (ctx.project_root / name).is_file():
+            # Under --dry-run the file may legitimately not exist yet: the
+            # implicit sync plans it but must not write. The plan still prints.
+            if ctx.dry_run:
+                continue
             raise ArdtError(f"{name} is missing", hint="run `ardt dev sync` first")
     _require_docker(ctx)
     return [
@@ -518,10 +522,19 @@ def compile_commands(ctx: Context) -> None:
         )
     entries: list[object] = []
     for part in parts:
-        loaded = json.loads(part.read_text(encoding="utf-8"))
+        try:
+            loaded = json.loads(part.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise ArdtError(
+                f"{part} is not valid JSON: {exc}",
+                hint="rebuild the package (`ardt build`) to regenerate it",
+            ) from exc
         if isinstance(loaded, list):
             entries.extend(loaded)  # type: ignore[arg-type]
     target = build_dir / "compile_commands.json"
+    if ctx.dry_run:
+        ctx.console.info(f"[dry-run] would merge {len(parts)} file(s) into {target}")
+        return
     target.write_text(json.dumps(entries, indent=1) + "\n", encoding="utf-8")
     ctx.emit(compile_commands=str(target), packages=len(parts), entries=len(entries))
     ctx.console.success(f"{len(entries)} entries from {len(parts)} package(s) -> {target}")

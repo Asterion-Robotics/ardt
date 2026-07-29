@@ -51,6 +51,8 @@ class HostFacts:
     """``/dev/dxg`` present: WSL GPU passthrough (D3D12-backed GL)."""
     dri: bool = False
     """``/dev/dri`` present: native GPU nodes."""
+    x11_socket: bool = False
+    """``/tmp/.X11-unix`` present: an X server (or XWayland) is serving."""
     display: str | None = None
     wsl_distro: str | None = None
     """``WSL_DISTRO_NAME`` — needed to name this distro from the Windows side."""
@@ -68,6 +70,7 @@ class HostFacts:
             wslg=Path("/mnt/wslg").is_dir(),
             dxg=Path("/dev/dxg").exists(),
             dri=Path("/dev/dri").exists(),
+            x11_socket=Path("/tmp/.X11-unix").is_dir(),
             display=env.get("DISPLAY"),
             wsl_distro=env.get("WSL_DISTRO_NAME"),
         )
@@ -196,8 +199,7 @@ def _linux(facts: HostFacts, *, gui: bool) -> HostProfile:
     devices: list[str] = []
 
     if gui:
-        socket = Path("/tmp/.X11-unix")
-        if socket.is_dir():
+        if facts.x11_socket:
             environment["DISPLAY"] = facts.display or ":0"
             volumes.append("/tmp/.X11-unix:/tmp/.X11-unix")
             notes.append("run `xhost +local:docker` once per login if a GUI cannot open a display")

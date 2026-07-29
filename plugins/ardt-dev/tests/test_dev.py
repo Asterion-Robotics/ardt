@@ -66,7 +66,7 @@ def plan(
     )
 
 
-LINUX = HostFacts(system="Linux", display=":1", dri=True)
+LINUX = HostFacts(system="Linux", display=":1", dri=True, x11_socket=True)
 WSL = HostFacts(system="Linux", wsl_kernel=True, wslg=True, dxg=True, display=":0")
 MAC = HostFacts(system="Darwin")
 
@@ -90,11 +90,20 @@ def test_wsl2_without_wslg_says_so_instead_of_mounting_nothing() -> None:
     assert any("wsl --update" in note for note in host.notes)
 
 
-def test_linux_mounts_the_x11_socket_when_present(tmp_path: Path) -> None:
+def test_linux_mounts_the_x11_socket_when_present() -> None:
     host = host_module.detect(LINUX)
     assert host.kind == host_module.LINUX
     assert host.environment["DISPLAY"] == ":1"
+    assert "/tmp/.X11-unix:/tmp/.X11-unix" in host.volumes
     assert "/dev/dri" in host.devices
+
+
+def test_linux_without_an_x_socket_notes_it_instead_of_wiring_a_dead_display() -> None:
+    """Regression: detect() used to probe the real /tmp/.X11-unix, so this
+    branch was untestable and the test above failed on headless machines."""
+    host = host_module.detect(HostFacts(system="Linux", display=":1"))
+    assert not host.gui
+    assert any("Wayland-only" in note for note in host.notes)
 
 
 def test_macos_has_no_display_and_no_host_networking() -> None:
