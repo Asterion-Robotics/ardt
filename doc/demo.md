@@ -20,6 +20,7 @@ ardt deps        # rosdep install
 ardt build       # colcon build
 ardt test        # colcon test + summary
 ardt doc build   # doxygen + sphinx -> build/doc/html/index.html
+ardt doc serve   # preview the result at http://127.0.0.1:8000/
 ```
 
 The two pipelines need Docker and nothing else (no Dockerfile in the repo, no colcon on the host):

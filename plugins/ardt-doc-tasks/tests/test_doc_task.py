@@ -100,6 +100,27 @@ class TestCli:
         assert "doxygen" in err
 
 
+class TestServe:
+    def test_missing_build_is_a_clean_error(self, repo: Path) -> None:
+        code, _, err = run(["doc", "serve"], repo)
+        assert code == 1
+        assert "nothing to serve" in err
+        assert "ardt doc build" in err
+
+    def test_site_flag_points_at_the_pipeline_output(self, repo: Path) -> None:
+        code, _, err = run(["doc", "serve", "--site"], repo)
+        assert code == 1
+        assert "public" in err
+        assert "docs-ci" in err
+
+    def test_dry_run_prints_the_plan(self, repo: Path) -> None:
+        code, _, err = run(["doc", "serve", "--dry-run", "--port", "9999"], repo)
+        assert code == 0
+        assert "[dry-run]" in err
+        assert "http.server" in err
+        assert "9999" in err
+
+
 class TestRealSphinxBuild:
     """End to end against the sphinx in this venv — no doxygen needed."""
 
