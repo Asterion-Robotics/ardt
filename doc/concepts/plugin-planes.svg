@@ -34,13 +34,6 @@
     Every text/background pairing below clears WCAG AA.
   -->
 
-  <defs>
-    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
-            markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M 0 0 L 10 5 L 0 10 z" fill="#030189"/>
-    </marker>
-  </defs>
-
   <style>
     .plane      { stroke-width: 1.5; }
     .plane-name { font-weight: 600; font-size: 15px; text-anchor: middle; }
@@ -48,6 +41,8 @@
     .node-name  { font-size: 14px; font-weight: 600; text-anchor: middle; }
     .node-sub   { font-size: 11px; text-anchor: middle; }
     .link       { fill: none; stroke: #8b93c9; stroke-width: 1.75; }
+    .feeds      { fill: none; stroke: #030189; stroke-width: 1.75; }
+    .head       { fill: #030189; }
     .link-label { font-size: 12.5px; fill: #030189; text-anchor: middle; }
     text        { font-family: Lato, "Helvetica Neue", Helvetica, Arial, sans-serif; }
   </style>
@@ -104,11 +99,18 @@
   <path class="link" d="M 224 298 C 252 298, 252 454, 280 454"/>
 
   <!-- Both container planes into the task plane, routed clear of the bands.
-       The outer curve lands lower than the inner one so the two never cross;
-       which entry point each takes on the band's edge carries no meaning. -->
-  <path d="M 860 94 C 950 94, 950 486, 866 486" fill="none" stroke="#030189"
-        stroke-width="1.75" marker-end="url(#arrow)"/>
-  <path d="M 860 274 C 896 274, 896 422, 866 422" fill="none" stroke="#030189"
-        stroke-width="1.75" marker-end="url(#arrow)"/>
+       The outer route lands lower than the inner one so the two never cross;
+       which entry point each takes on the band's edge carries no meaning.
+
+       Each route ends in a straight horizontal run and the head is an explicit
+       triangle, not a marker. A marker orients itself on the path's end
+       *tangent*: on a curve turning this tightly it lands looking like a
+       detached diagonal blob, because the stroke is still visibly descending
+       where the head has already gone horizontal. Drawing both means the head
+       points where the stroke actually arrives, in every renderer. -->
+  <path class="feeds" d="M 860 94 Q 946 94 946 112 L 946 468 Q 946 486 928 486 L 872 486"/>
+  <path class="feeds" d="M 860 274 Q 906 274 906 292 L 906 404 Q 906 422 888 422 L 872 422"/>
+  <path class="head" d="M 860 486 L 876 480.5 L 876 491.5 Z"/>
+  <path class="head" d="M 860 422 L 876 416.5 L 876 427.5 Z"/>
   <text class="link-label" x="690" y="366">both run these tasks inside a container</text>
 </svg>
