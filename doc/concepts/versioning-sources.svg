@@ -6,8 +6,27 @@
   <!--
     Versioning: one source, three readers.
     Asterion brand blues, one hue separated by lightness, so the diagram stays
-    readable under any colour vision deficiency. Generated; edit coordinates in
-    the source spec rather than by hand.
+    readable under any colour vision deficiency. No generator or source spec is
+    committed alongside this file, so the coordinates below are the original.
+  -->
+
+  <!--
+    Arrowheads, two ways, and the reason for it:
+
+    A marker orients itself on the path's end *tangent*. On a straight run that
+    is exactly the direction the stroke arrives from, so the four horizontal
+    arrows use the marker below and look right.
+
+    On the two S-curves into `hatch-vcs` and the by-hand `git describe` it did
+    not. They flatten to horizontal only in their last few pixels, so the head
+    went
+    level while the stroke was still visibly climbing, and it read as a
+    detached, skewed blob. Those two end in a straight horizontal run instead,
+    with the head drawn explicitly at the geometry the marker would have
+    produced (12.25 long, 6.125 half-height at stroke-width 1.75), so the two
+    kinds of arrow stay indistinguishable.
+
+    Add a curved arrow here and draw its head; do not reach for the marker.
   -->
 
   <defs>
@@ -25,6 +44,8 @@
     .node-name  { font-size: 14px; font-weight: 600; text-anchor: middle; }
     .node-sub   { font-size: 11px; text-anchor: middle; }
     .link       { fill: none; stroke: #8b93c9; stroke-width: 1.75; }
+    .feeds      { fill: none; stroke: #030189; stroke-width: 1.75; }
+    .head       { fill: #030189; }
     .link-label { font-size: 12.5px; fill: #030189; }
     .tag        { font-size: 11.5px; fill: #4a5bc8; text-anchor: middle; }
     text        { font-family: Lato, "Helvetica Neue", Helvetica, Arial, sans-serif; }
@@ -54,8 +75,10 @@
   <text class="node-name" x="758.0" y="248.0" fill="#010042">the tag itself</text>
   <text class="node-sub" x="758.0" y="266.0" fill="#4a5bc8">git</text>
   <path d="M 564 250 L 634 250" fill="none" stroke="#030189" stroke-width="1.75" marker-end="url(#arrow)"/>
-  <path d="M 248 130 C 290 130, 296 50, 324 50" fill="none" stroke="#030189" stroke-width="1.75" marker-end="url(#arrow)"/>
+  <path class="feeds" d="M 248 130 C 276 130, 276 50, 300 50 L 318 50"/>
+  <path class="head" d="M 325.2 50 L 313 43.9 L 313 56.1 Z"/>
   <path d="M 248 150 L 324 150" fill="none" stroke="#030189" stroke-width="1.75" marker-end="url(#arrow)"/>
-  <path d="M 248 170 C 290 170, 296 250, 324 250" fill="none" stroke="#030189" stroke-width="1.75" marker-end="url(#arrow)"/>
+  <path class="feeds" d="M 248 170 C 276 170, 276 250, 300 250 L 318 250"/>
+  <path class="head" d="M 325.2 250 L 313 243.9 L 313 256.1 Z"/>
   <text class="link-label" x="450" y="312" fill="#010042" text-anchor="middle">they agree on a clean tag, the only publishable state</text>
 </svg>
