@@ -37,3 +37,16 @@ def doc() -> None:
 def build(ctx: Context) -> None:
     """Build the docs: doxygen (C++ repos) then sphinx html into build/doc."""
     tasks.build(ctx)
+
+
+@doc.command()
+@click.option("--port", default=8000, show_default=True, help="Port to bind on 127.0.0.1.")
+@click.option(
+    "--site",
+    is_flag=True,
+    help="Serve the versioned site from public/ (docs-ci output) instead of build/doc/html.",
+)
+@pass_ardt
+def serve(ctx: Context, port: int, site: bool) -> None:
+    """Serve the built docs over local http (browsers cripple file:// sites)."""
+    tasks.serve(ctx, port=port, site=site)

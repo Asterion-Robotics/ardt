@@ -6,6 +6,8 @@ ardt pipe run docs-ci      # the whole versioned site into public/
 
 Each version is one containerized run of the same `ardt doc build` a developer uses locally: the working tree, plus every configured branch and tag-glob match built from git history *with its own docs and config*. The site ships a `versions.json` (theme flyout data) and a root redirect to the default version. `public/` is GitLab Pages' artifact convention.
 
+Preview the exported site with `ardt doc serve --site`: it must be served over http, since the root redirect targets a directory URL and the version switcher fetches `versions.json`, neither of which works from `file://` (see {ref}`local preview <doc-local-preview>`).
+
 ```{image} docs-ci-site.svg
 :alt: Every configured ref builds once in a single builder container; the results are assembled into public/ with a versions.json and a root redirect.
 :width: 100%

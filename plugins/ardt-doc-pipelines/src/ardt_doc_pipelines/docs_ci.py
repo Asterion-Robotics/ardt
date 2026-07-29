@@ -341,3 +341,6 @@ async def docs_ci(ctx: Context, dag: dagger.Client, ardt_source: str = "") -> No
     await site.export(str(ctx.project_root / SITE_DIR), wipe=True)
     ctx.emit(site_dir=SITE_DIR, versions=names, default=default)
     ctx.console.success(f"site at {SITE_DIR}/ ({', '.join(names)}; default -> {default})")
+    ctx.console.info(
+        f"preview: ardt doc serve --site (the {SITE_DIR}/ site needs http, not file://)"
+    )

@@ -2,9 +2,15 @@
 
 ```bash
 ardt doc build     # doxygen (C++ repos) then sphinx html into build/doc/
+ardt doc serve     # the built docs at http://127.0.0.1:8000/
 ```
 
 Output follows the fixed convention: HTML at `build/doc/html`, Doxygen XML at `build/doc/doxygen/xml`. Sphinx runs as `sys.executable -m sphinx`, so it executes in the venv holding the plugin — the preset, breathe and the `ros2-interfaces` extension are importable from `conf.py` by construction.
+
+(doc-local-preview)=
+## Local preview
+
+`ardt doc serve` serves `build/doc/html` over local http (`--port` to move it off 8000); `ardt doc serve --site` serves the `public/` site that [`docs-ci`](pipelines.md) exports instead. Serving matters more than it looks: opening the files directly over `file://` breaks the versioned site, because mapping a directory URL to its `index.html` is a web-server convention and the version switcher fetches `versions.json`, which browsers block on file origins. The server is the stdlib `http.server` from the plugin's venv, so the command adds no dependency.
 
 ## The preset
 

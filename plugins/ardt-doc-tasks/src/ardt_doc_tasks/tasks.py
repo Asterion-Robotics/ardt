@@ -26,6 +26,7 @@ ros-interfaces extension are importable by ``conf.py`` by construction.
 
 from __future__ import annotations
 
+import contextlib
 import sys
 from pathlib import Path
 
@@ -38,6 +39,11 @@ from .config import DOC_OUTPUT, STYLE_ENV, DocConfig, doc_config
 
 _CPP_SUFFIXES = frozenset({".h", ".hpp", ".hh", ".c", ".cc", ".cpp", ".cxx"})
 _SKIP_DIRS = frozenset({"build", "install", "log", ".git", ".venv", "__pycache__"})
+
+# The docs-ci site directory. Owned by ardt-doc-pipelines (SITE_DIR in
+# docs_ci.py) and mirrored here: the task plane must not import the pipeline
+# plane, and `doc serve --site` must work whether or not it is installed.
+SITE_DIR = "public"
 
 
 def build(ctx: Context) -> None:
@@ -75,6 +81,39 @@ def build(ctx: Context) -> None:
     )
     if not ctx.dry_run:
         ctx.console.success(f"docs at {html / 'index.html'}")
+        ctx.console.detail("preview: ardt doc serve")
+
+
+def serve(ctx: Context, *, port: int, site: bool) -> None:
+    """Serve built docs (or the docs-ci site) over local http.
+
+    ``file://`` cannot preview these builds faithfully: mapping a directory URL
+    to its ``index.html`` is a web-server convention, not a filesystem one, and
+    the version switcher fetches ``versions.json``, which browsers block on
+    file origins. Static serving needs nothing beyond the stdlib, so this is
+    ``python -m http.server`` from the venv that holds this plugin.
+    """
+    target = SITE_DIR if site else f"{DOC_OUTPUT}/html"
+    root = ctx.project_root / target
+    if not root.is_dir() and not ctx.dry_run:
+        producer = "ardt pipe run docs-ci" if site else "ardt doc build"
+        raise ArdtError(
+            f"nothing to serve: `{target}/` does not exist",
+            hint=f"run `{producer}` first",
+        )
+    ctx.console.info(f"serving {target}/ at http://127.0.0.1:{port}/ (Ctrl+C to stop)")
+    command = [
+        sys.executable,
+        "-m",
+        "http.server",
+        str(port),
+        "--bind",
+        "127.0.0.1",
+        "--directory",
+        str(root),
+    ]
+    with contextlib.suppress(KeyboardInterrupt):
+        ctx.runner.run(command)
 
 
 def _style_env(ctx: Context, cfg: DocConfig) -> dict[str, str]:

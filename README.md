@@ -10,6 +10,8 @@ One CLI for the three things every robotics repo needs: a dev container, CI that
 
 **[Documentation](https://asterion-robotics.github.io/ardt/)**: concepts, configuration, and what each plugin adds.
 
+**Demo**: [`ardt_ros2_demo`](https://github.com/Asterion-Robotics/ardt_ros2_demo) ([GitLab mirror](https://gitlab.com/tpoignonec/ardt_ros2_demo)) is a minimal but complete ROS 2 workspace driven end-to-end by ardt: tasks, dev container, and a CI that is nothing but "install ardt, run two pipelines", on both GitHub Actions and GitLab CI.
+
 ## Install
 
 ```bash
