@@ -15,11 +15,18 @@
 
 # Author: Thibault Poignonec <t.poignonec@asterion-robotics.com>
 
-"""ardt-dev: host detection, render resolution, and the machine-owned guarantees.
+"""The devcontainer engine: host detection, render resolution, machine ownership.
 
 All `unit`: no docker, no container. What matters here is that the *render* is
 right — the parity rule (base image, ardt requirements, workspace path), the
 three host shapes, and the refusal to clobber a file ardt did not write.
+
+The engine is profile-agnostic, but a render needs *a* profile, so this suite
+resolves the installed `ros2` one through the real `ardt.dev_profiles` entry
+point (the uv workspace guarantees `ardt-ros-dev` is there, exactly as the root
+`tests/` rely on the first-party plugins being installed). What that profile
+*decides* — the apt sets, the C++ standard table — is asserted in its own suite;
+what is asserted here is the engine's handling of whatever a profile says.
 """
 
 from __future__ import annotations
@@ -33,16 +40,38 @@ import yaml
 
 from ardt_core.config import ArdtConfig
 from ardt_core.errors import ArdtError, ConfigError
+from ardt_core.plugins import Plugin, Registry, discover
 from ardt_core.testing import build_context
-from ardt_dev import host as host_module
-from ardt_dev import manifest as manifest_module
-from ardt_dev import profiles as profiles_module
-from ardt_dev import render as render_module
-from ardt_dev.config import ci_builder, dev_config, ros_distro
-from ardt_dev.host import HostFacts
-from ardt_dev.profiles import ROS2, profile
+from ardt_devcontainers import host as host_module
+from ardt_devcontainers import manifest as manifest_module
+from ardt_devcontainers import render as render_module
+from ardt_devcontainers.config import ci_builder, dev_config, ros_distro
+from ardt_devcontainers.host import HostFacts
+from ardt_devcontainers.profiles import profile, profiles
 
 context = build_context
+
+INSTALLED = discover()
+"""Discovery as production does it — the engine's worked-example profile."""
+
+ROS2 = profiles(INSTALLED)["ros2"]
+
+
+def registry_of(**named: object) -> Registry:
+    """A registry contributing exactly these ``ardt.dev_profiles`` entries.
+
+    Nothing is deferred in it, so ``load_deferred`` is a no-op and the engine
+    sees the objects as if a plugin's entry points had just loaded them.
+    """
+    plugin = Plugin(
+        name="ardt-fake-dev",
+        version="0",
+        api=1,
+        module="fake_dev",
+        section="dev",
+        dev_profiles=dict(named),
+    )
+    return Registry(plugins=[plugin], problems=[])
 
 
 def plan(
@@ -50,11 +79,13 @@ def plan(
     *,
     facts: HostFacts | None = None,
     ardt_source: str | None = None,
+    registry: Registry | None = None,
 ) -> render_module.Render:
     return render_module.build(
         "demo",
         cfg,
         dev_config(cfg),
+        registry=registry or INSTALLED,
         facts=facts or HostFacts(system="Linux"),
         ardt_source=ardt_source,
     )
@@ -182,11 +213,17 @@ def test_requirements_come_from_the_ardt_pin() -> None:
         "@v0.3.0#subdirectory=packages/ardt-core"
     )
     names = [r.split(" @ ")[0] for r in reqs]
-    # ardt-dev itself: postCreate hands over to `ardt dev bootstrap` in there.
-    assert names[:2] == ["ardt-core", "ardt-dev"]
+    # The engine itself (postCreate hands over to `ardt dev bootstrap` in
+    # there), then the profile's own distribution — without that one the
+    # container could not resolve the profile it was rendered from.
+    assert names[:3] == ["ardt-core", "ardt-devcontainers", "ardt-ros-dev"]
     # And what the CI recipe's build stage installs, from the same pin.
     assert {"ardt-core", "ardt-ros-tasks"} <= set(names)
     assert all("@v0.3.0#" in r for r in reqs)
+    # The engine is a platform plane, the profile a theme plugin — and these
+    # URLs are what a pinned repo pip-installs, so the paths have to be real.
+    assert "#subdirectory=packages/ardt-devcontainers" in reqs[1]
+    assert "#subdirectory=plugins/ardt-ros-dev" in reqs[2]
 
 
 def test_local_checkout_replaces_the_pin_with_container_paths() -> None:
@@ -332,7 +369,10 @@ def test_cpp_properties_is_rendered_at_the_repo_distro() -> None:
     # Plain JSON, no comment header: cpptools flags comments here (#5885, #6132).
     entry = json.loads(text)["configurations"][0]
     assert entry["name"] == "ROS-kilted"
-    assert entry["includePath"][0] == "/opt/ros/kilted/include/**"
+    # The engine's job here is resolving the profile's tokens through nested
+    # data (a dict of lists of strings); which paths the profile names is
+    # asserted in its own suite.
+    assert "/opt/ros/kilted/include/**" in entry["includePath"]
     assert entry["compileCommands"] == "${workspaceFolder}/build/compile_commands.json"
     assert "@DISTRO@" not in text and "@CXX_STANDARD@" not in text
 
@@ -362,11 +402,10 @@ def test_cpp_properties_points_at_what_compile_commands_writes() -> None:
     assert entry["compileCommands"].endswith("/build/compile_commands.json")
 
 
-def test_a_profile_without_cpp_renders_no_vscode_file(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_profile_without_cpp_renders_no_vscode_file() -> None:
     bare = replace(ROS2, name="bare", cpp_properties=None)
-    monkeypatch.setitem(profiles_module.PROFILES, "bare", bare)
     cfg = ArdtConfig.model_validate({"dev": {"profile": "bare"}})
-    assert render_module.CPP_PROPERTIES not in plan(cfg).files
+    assert render_module.CPP_PROPERTIES not in plan(cfg, registry=registry_of(bare=bare)).files
     assert render_module.CPP_PROPERTIES in plan(ArdtConfig()).files
 
 
@@ -406,12 +445,64 @@ def test_requirements_file_lists_each_module_once() -> None:
     text = plan(ArdtConfig()).files[render_module.REQUIREMENTS]
     lines = [line for line in text.splitlines() if not line.startswith("#")]
     # The profile names ardt-core too; a module is never installed twice.
-    assert len(lines) == len({*render_module.BASE_MODULES, *ROS2.ardt_modules})
+    expected = {*render_module.BASE_MODULES, ROS2.distribution, *ROS2.ardt_modules}
+    assert len(lines) == len(expected)
+
+
+# --- the ardt.dev_profiles extension point ----------------------------------
+
+
+def test_the_installed_profile_arrives_through_the_real_entry_point() -> None:
+    """No import of any profile plugin anywhere in the engine: `ros2` is here
+    because a distribution registered it, which is the whole point of the split."""
+    assert "ardt_ros_dev" not in str(render_module.ENGINE_TEMPLATES)
+    assert ROS2.name == "ros2"
+    assert ROS2.distribution == "ardt-ros-dev"
+    assert ROS2.templates_package == "ardt_ros_dev.templates"
 
 
 def test_unknown_profile_names_the_ones_that_exist() -> None:
-    with pytest.raises(ArdtError, match="unknown dev profile"):
-        profile("ros1")
+    with pytest.raises(ArdtError, match="unknown dev profile") as excinfo:
+        profile("ros1", INSTALLED)
+    assert "ros2" in str(excinfo.value.hint)
+
+
+def test_no_profile_installed_says_what_to_install() -> None:
+    """A laptop with the engine but no profile plugin must get a pointer, not
+    an empty list — the two are separately installable now."""
+    with pytest.raises(ArdtError, match="unknown dev profile") as excinfo:
+        profile("ros2", Registry(plugins=[], problems=[]))
+    assert "ardt-ros-dev" in str(excinfo.value.hint)
+
+
+def test_an_entry_point_aimed_at_the_wrong_object_is_refused_loudly() -> None:
+    """Core cannot type-check this (it must not depend on the engine), so the
+    engine does it on consumption — and says which plugin to blame."""
+    with pytest.raises(ArdtError, match="must point at a Profile"):
+        profiles(registry_of(ros2="not a profile"))
+
+
+def test_two_plugins_claiming_one_profile_name_is_an_error() -> None:
+    """`dev.profile: ros2` must never be ambiguous — same rule as pipelines."""
+    other = Plugin(name="ardt-other-dev", version="0", api=1, module="other", section="dev")
+    other.dev_profiles["ros2"] = replace(ROS2, summary="a different ros2")
+    clashing = registry_of(ros2=ROS2)
+    clashing.plugins.append(other)
+    with pytest.raises(ArdtError, match="provided by both"):
+        profiles(clashing)
+
+
+def test_a_profile_brings_its_own_dockerfile_template() -> None:
+    """The engine resolves the recipe from the profile's package, not its own:
+    a second profile ships its template without touching this distribution."""
+    bare = replace(ROS2, name="bare", templates_package="ardt_devcontainers.templates")
+    cfg = ArdtConfig.model_validate({"dev": {"profile": "bare"}})
+    # postCreate.sh.tmpl is not a Dockerfile, but it is a template only the
+    # engine ships: rendering it proves the anchor, not the content, is what moved.
+    rendered = plan(
+        cfg, registry=registry_of(bare=replace(bare, dockerfile="postCreate.sh.tmpl"))
+    ).files[render_module.DOCKERFILE]
+    assert "ardt dev bootstrap" in rendered
 
 
 # --- machine ownership ------------------------------------------------------

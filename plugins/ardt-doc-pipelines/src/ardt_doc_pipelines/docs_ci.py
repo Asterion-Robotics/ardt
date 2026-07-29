@@ -297,6 +297,36 @@ def _build_docs(container: dagger.Container) -> dagger.Directory:
     )
 
 
+async def _build_historical(
+    ctx: Context, ref: str, built: dagger.Directory
+) -> dagger.Directory | None:
+    """Force ``ref``'s build now, or report it and leave it out of the site.
+
+    Historical refs fail *soft*, and the working tree does not. The asymmetry is
+    the point: a ref is immutable, so a build that breaks on it can never be
+    repaired, and failing the whole run over it only costs you every *other*
+    version of the site. The working tree is the half you can still fix, so it
+    keeps failing hard (its build is not forced here — the export at the end
+    raises for it).
+
+    What breaks an old ref is normally the builder: docs-ci installs one module
+    set, from the working tree, and then checks every ref out inside it, so a
+    ref whose ``conf.py`` imports a distribution that has since been renamed
+    cannot resolve it. Dropping that version beats maintaining a glob that
+    excludes it by hand.
+
+    ``sync()`` is what makes this possible at all: without it the directory is a
+    lazy handle and the failure would not surface until ``export``, by which
+    point it is the whole site failing, not one version.
+    """
+    try:
+        return await built.sync()
+    except dagger.DaggerError as exc:
+        detail = str(exc).splitlines()[0] if str(exc) else type(exc).__name__
+        ctx.console.warn(f"docs-ci: `{ref}` failed to build; leaving it out of the site ({detail})")
+        return None
+
+
 @pipeline(name="docs-ci", doc="Build the versioned docs site into public/ (Pages-ready)")
 async def docs_ci(ctx: Context, dag: dagger.Client, ardt_source: str = "") -> None:
     cfg = _config(ctx)
@@ -309,6 +339,7 @@ async def docs_ci(ctx: Context, dag: dagger.Client, ardt_source: str = "") -> No
     ]
 
     repo_with_history: dagger.Directory | None = None
+    skipped: list[str] = []
     for ref in historical_refs(ctx, cfg):
         if repo_with_history is None:
             repo_with_history = dag.host().directory(
@@ -323,7 +354,11 @@ async def docs_ci(ctx: Context, dag: dagger.Client, ardt_source: str = "") -> No
             .with_exec(["git", "clone", "-q", "--no-hardlinks", "/repo", "/ws"])
             .with_exec(["git", "-C", "/ws", "checkout", "-q", ref])
         )
-        entries.append((site_name(ref), _build_docs(checkout)))
+        built = await _build_historical(ctx, ref, _build_docs(checkout))
+        if built is None:
+            skipped.append(ref)
+            continue
+        entries.append((site_name(ref), built))
 
     names = [name for name, _ in entries]
     default = cfg.default or current
@@ -339,8 +374,13 @@ async def docs_ci(ctx: Context, dag: dagger.Client, ardt_source: str = "") -> No
     # wipe: a version removed from the config must also leave public/ — a stale
     # directory would otherwise ride along into the Pages artifact forever.
     await site.export(str(ctx.project_root / SITE_DIR), wipe=True)
-    ctx.emit(site_dir=SITE_DIR, versions=names, default=default)
+    ctx.emit(site_dir=SITE_DIR, versions=names, default=default, skipped=skipped)
     ctx.console.success(f"site at {SITE_DIR}/ ({', '.join(names)}; default -> {default})")
+    if skipped:
+        ctx.console.warn(
+            f"{len(skipped)} version(s) left out of the site: {', '.join(skipped)} — "
+            "the site is complete apart from these"
+        )
     ctx.console.info(
         f"preview: ardt doc serve --site (the {SITE_DIR}/ site needs http, not file://)"
     )

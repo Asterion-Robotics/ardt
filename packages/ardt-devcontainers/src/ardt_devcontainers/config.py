@@ -103,7 +103,7 @@ def ros_distro(cfg: ArdtConfig, default: str = "jazzy") -> str:
 def ci_builder(cfg: ArdtConfig) -> str | None:
     """``pipelines.ros_ci.builder``, read raw.
 
-    The parity rule needs the CI builder image, but ardt-dev must not import a
+    The parity rule needs the CI builder image, but the engine must not import a
     pipeline plugin to get it (it would drag ``dagger-io`` onto a laptop). The
     section is read as plain data and treated as absent when malformed — this is
     a comparison, not a validation: ``ros-ci`` owns that.

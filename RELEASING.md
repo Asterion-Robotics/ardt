@@ -1,6 +1,6 @@
 # Releasing
 
-A release is a git tag; there is no version file to bump. hatch-vcs derives every package's version from the tag (`root = "../.."` in each `pyproject.toml`), so one tag versions all seven distributions, and consumer repos pin it via `ardt.version` in their `ardt.yaml`.
+A release is a git tag; there is no version file to bump. hatch-vcs derives every package's version from the tag (`root = "../.."` in each `pyproject.toml`), so one tag versions all eight distributions, and consumer repos pin it via `ardt.version` in their `ardt.yaml`.
 
 ## Procedure
 

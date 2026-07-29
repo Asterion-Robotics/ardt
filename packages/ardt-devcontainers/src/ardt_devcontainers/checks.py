@@ -63,7 +63,7 @@ def run_checks(ctx: Context, plan: Render) -> list[tuple[str, str, str]]:
     elif state.written:
         check("warn", "render", f"stale, run `ardt dev sync`: {', '.join(sorted(state.written))}")
     else:
-        check("ok", "render", f"{len(state.unchanged)} files match this ardt-dev")
+        check("ok", "render", f"{len(state.unchanged)} files match this ardt-devcontainers")
 
     missing = manifest_module.missing_gitignore_entries(ctx.project_root)
     check(

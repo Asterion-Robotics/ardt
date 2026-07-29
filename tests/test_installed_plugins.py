@@ -37,6 +37,22 @@ def test_installed_first_party_plugins_load_cleanly() -> None:
     assert registry.problems == []
 
 
+def test_the_ros_dev_profile_matches_the_ci_recipes_module_set() -> None:
+    """The parity rule, across the two planes that have to agree on it.
+
+    `ardt-ros-dev` names the modules the dev container installs and
+    `ardt-ros-pipelines` names the ones CI's build stage installs; they resolve
+    from the same `ardt:` pin, so drift here is drift between the container a
+    developer works in and the image CI builds. The check lives at the root
+    because it crosses two distributions that must never import each other —
+    the recipes module pulls dagger, which no dev-side test may pay for.
+    """
+    from ardt_ros_dev.profile import ROS2
+    from ardt_ros_pipelines.recipes import ARDT_MODULES
+
+    assert set(ARDT_MODULES) <= set(ROS2.ardt_modules)
+
+
 def test_build_dry_run_through_the_real_cli(repo: Path) -> None:
     code, _out, err = run(["build", "--dry-run"], repo)
     assert code == 0

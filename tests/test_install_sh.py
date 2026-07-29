@@ -81,8 +81,13 @@ def run_install(
 BUNDLE = ["ardt-core", "ardt-pipelines", "ardt-ros-tasks", "ardt-ros-pipelines"]
 
 
-def test_workstation_bundle_adds_dev(tmp_path: Path) -> None:
-    assert run_install(tmp_path, ci=False) == [*BUNDLE, "ardt-dev"]
+DEV = ["ardt-devcontainers", "ardt-ros-dev"]
+"""The engine and its ros2 profile: two modules since the split, and the
+workstation bundle takes both — an engine with no profile renders nothing."""
+
+
+def test_workstation_bundle_adds_the_devcontainer_modules(tmp_path: Path) -> None:
+    assert run_install(tmp_path, ci=False) == [*BUNDLE, *DEV]
 
 
 def test_ci_bundle_has_no_dev(tmp_path: Path) -> None:
@@ -108,9 +113,9 @@ def test_extras_and_skip_compose(tmp_path: Path) -> None:
         "ardt:\n"
         "  version: v0.1.3\n"
         "  install_extras: [ardt-acme]  # trailing comment\n"
-        "  install_skip: [ardt-dev]\n"
+        "  install_skip: [ardt-devcontainers, ardt-ros-dev]\n"
     )
-    # Workstation context: the skip prunes ardt-dev from the bundle.
+    # Workstation context: the skip prunes both dev modules from the bundle.
     assert run_install(tmp_path, ci=False, ardt_yaml=yaml) == [*BUNDLE, "ardt-acme"]
 
 

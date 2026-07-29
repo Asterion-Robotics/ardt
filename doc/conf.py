@@ -24,7 +24,7 @@ wiring, the ``ros2-interfaces`` directive) comes from
 The Python API pages autodoc the **installed** ardt distributions: ``ardt doc
 build`` runs sphinx as ``sys.executable -m sphinx``, so whatever ``ardt_*``
 packages live in that environment are importable here. Build from the workspace
-venv (all seven packages, editable) to document the working tree.
+venv (all eight packages, editable) to document the working tree.
 """
 
 from __future__ import annotations
@@ -52,9 +52,10 @@ author = "Asterion Robotics"
 ARDT_PACKAGES = (
     "ardt_core",
     "ardt_pipelines",
-    "ardt_dev",
+    "ardt_devcontainers",
     "ardt_ros_tasks",
     "ardt_ros_pipelines",
+    "ardt_ros_dev",
     "ardt_doc_tasks",
     "ardt_doc_pipelines",
 )
@@ -65,7 +66,7 @@ for _name in ARDT_PACKAGES:
         importlib.import_module(_module.name)
 
 # Autodoc renders bare type names from annotations (`type[ModelT]`) as *fuzzy*
-# python cross-references. With seven packages in one inventory those collide
+# python cross-references. With eight packages in one inventory those collide
 # with same-named attributes elsewhere (`interfaces.Field_.type`), and sphinx
 # warns — fatal under `tasks.doc.strict`. Suppression is the only lever sphinx
 # offers here, and it costs little: outside nitpicky mode, `ref.python` carries

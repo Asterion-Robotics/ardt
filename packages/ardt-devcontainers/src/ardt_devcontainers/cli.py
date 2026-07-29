@@ -43,7 +43,7 @@ from . import manifest as manifest_module
 from . import render as render_module
 from .config import DEVCONTAINER_DIR, WORKSPACE_FOLDER, dev_config, ros_distro
 from .config import source_folder as container_source_folder
-from .profiles import DISTRO, PROFILES, profile
+from .profiles import DISTRO, profile, profiles
 from .render import (
     COMPOSE_HOST,
     POST_CREATE,
@@ -62,6 +62,7 @@ def _plan(ctx: Context, *, ardt_source: str | None) -> Render:
         ctx.project,
         ctx.cfg,
         dev_config(ctx.cfg),
+        registry=ctx.registry,
         ardt_source=ardt_source,
     )
 
@@ -369,7 +370,7 @@ def bootstrap(ctx: Context) -> None:
             hint="use `ardt dev up` from the host, which runs it for you",
         )
     cfg = dev_config(ctx.cfg)
-    prof = profile(cfg.profile)
+    prof = profile(cfg.profile, ctx.registry)
     distro = ros_distro(ctx.cfg)
 
     if cfg.isolate_build_dirs:
@@ -462,11 +463,20 @@ def doctor(ctx: Context) -> None:
 @dev.command(name="profiles")
 @pass_ardt
 def profiles_command(ctx: Context) -> None:
-    """List the dev profiles this ardt knows."""
-    ctx.emit(profiles={name: p.summary for name, p in PROFILES.items()})
+    """List the dev profiles installed plugins contribute."""
+    installed = profiles(ctx.registry)
+    ctx.emit(
+        profiles={
+            name: {"summary": p.summary, "distribution": p.distribution}
+            for name, p in installed.items()
+        }
+    )
     if ctx.json_output:
         return
+    if not installed:
+        ctx.console.warn("no dev profile installed — `ardt-ros-dev` provides the ROS 2 one")
+        return
     active = dev_config(ctx.cfg).profile
-    for name, prof in sorted(PROFILES.items()):
+    for name, prof in sorted(installed.items()):
         marker = "*" if name == active else " "
-        ctx.console.info(f"{marker} {name:10} {prof.summary}")
+        ctx.console.info(f"{marker} {name:10} {prof.summary}  ({prof.distribution})")

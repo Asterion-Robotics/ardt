@@ -5,7 +5,7 @@
 **Repos own no Dockerfile.** The recipe for this repo type (`recipes/ros2.Dockerfile.tmpl`) lives in the plugin and updates by bumping the pinned ardt version. Because the recipe runs the ardt tasks as build stages, *building the image is the CI run*:
 
 ```{image} ros-ci-stages.svg
-:alt: The build target runs ardt deps, build and test as image stages and exports reports; the runtime target ships the install base.
+:alt: The build target runs ardt deps, build and test as image stages and exports reports; the runtime target copies the install base and then installs its exec dependencies with rosdep.
 :width: 100%
 :align: center
 ```
@@ -25,12 +25,17 @@ ardt pipe run ros-ci
 │     └─ exported → pipeline-reports/                 ← CI renders these
 │
 └─ build the `runtime` target
-      5) FROM base_image (⊕ the repo's base extension, if any)
+     5a) FROM base_image (⊕ the repo's base extension, if any)
          + COPY the built install base + CMD
+     5b) rosdep install --dependency-types exec over that install base
+         ← exec deps only, resolved from the share/*/package.xml files
+           the copy brought along; skips tasks.ros.rosdep_skip_keys
       → always built (a broken runtime stage fails the MR run)
       → with --publish: one multi-arch manifest pushed as
         <registry>/<project>:<ctx.version>, digest in the --json envelope
 ```
+
+Step 5b runs in the *runtime* stage, not the build stage, and it is raw `rosdep` rather than `ardt deps`. Both are deliberate. The runtime image starts from `base_image` alone, so everything rosdep installed into the builder is absent from it; and what it needs is the **exec** closure only, resolved from the install base it just copied, not the build and test dependencies `ardt deps` resolves from the source tree. There is no source tree and no ardt in the runtime image, and putting either there would ship a toolchain with the app. An unresolvable key fails the image build, which is the earliest moment it can be caught.
 
 ## Configuration
 

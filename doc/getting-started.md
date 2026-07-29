@@ -15,19 +15,19 @@ ardt build
 ardt test
 ```
 
-The first `ardt dev open` takes minutes (image build + rosdep); after that, seconds. If anything fails, `ardt dev doctor` names the culprit — including the classic WSL2 one, Docker Desktop's WSL integration being off for your distro. The rest of this page is install variants; the [devcontainer quickstart](themes/devcontainer/quickstart.md) explains what `dev open` set up.
+The first `ardt dev open` takes minutes (image build + rosdep); after that, seconds. If anything fails, `ardt dev doctor` names the culprit — including the classic WSL2 one, Docker Desktop's WSL integration being off for your distro. The rest of this page is install variants; the [devcontainer quickstart](devcontainer/quickstart.md) explains what `dev open` set up.
 
 ## Install
 
 `ardt` is a CLI you call from any repo, so install it **once as a uv tool**: a persistent, isolated venv with `ardt` on your `PATH`. No `uv run` prefix, no project venv.
 
-The one-liner does that for you. [uv](https://docs.astral.sh/uv/) is the only prerequisite *to install ardt*; the devcontainer and pipeline planes additionally need Docker (and VS Code for `ardt dev open`) — the [devcontainer quickstart](themes/devcontainer/quickstart.md) lists those:
+The one-liner does that for you. [uv](https://docs.astral.sh/uv/) is the only prerequisite *to install ardt*; the devcontainer and pipeline planes additionally need Docker (and VS Code for `ardt dev open`) — the [devcontainer quickstart](devcontainer/quickstart.md) lists those:
 
 ```bash
 curl -LsSf https://raw.githubusercontent.com/Asterion-Robotics/ardt/main/install.sh | bash
 ```
 
-ardt's installer deliberately will not install uv for you: chaining installers hides what you are trusting. Run from a repo checkout, it honors the repo's `ardt.yaml`: `ardt.version` pins the ref, and `install_extras` / `install_skip` adjust the default module bundle. That bundle is contextual — core + pipelines + the ROS 2 plugins everywhere, plus `ardt-dev` on workstations only (runners are detected via `CI=true`, which GitHub Actions and GitLab CI both set); the doc plugins are opt-in. The env vars override both: `ARDT_REF=v0.1.0` pins a release, `ARDT_MODULES="…"` replaces the module set outright. The script is short and worth reading before piping it anywhere — the bundle policy is documented in it.
+ardt's installer deliberately will not install uv for you: chaining installers hides what you are trusting. Run from a repo checkout, it honors the repo's `ardt.yaml`: `ardt.version` pins the ref, and `install_extras` / `install_skip` adjust the default module bundle. That bundle is contextual — core + pipelines + the ROS 2 plugins everywhere, plus the devcontainer engine `ardt-devcontainers` and its `ardt-ros-dev` profile on workstations only (runners are detected via `CI=true`, which GitHub Actions and GitLab CI both set); the doc plugins are opt-in. The env vars override both: `ARDT_REF=v0.1.0` pins a release, `ARDT_MODULES="…"` replaces the module set outright. The script is short and worth reading before piping it anywhere — the bundle policy is documented in it.
 
 :::{admonition} To install uv
 :class: note
@@ -73,7 +73,8 @@ uv tool install --editable ./packages/ardt-core \
     --with-editable ./packages/ardt-pipelines \
     --with-editable ./plugins/ardt-ros-tasks \
     --with-editable ./plugins/ardt-doc-tasks \
-    --with-editable ./plugins/ardt-dev \
+    --with-editable ./packages/ardt-devcontainers \
+    --with-editable ./plugins/ardt-ros-dev \
     --with-editable ./plugins/ardt-ros-pipelines \
     --with-editable ./plugins/ardt-doc-pipelines
 

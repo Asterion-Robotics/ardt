@@ -1,10 +1,24 @@
-# ardt-dev
+# ardt-devcontainers
 
-Dev environments for [ardt](../../README.md): `ardt dev` renders the container a repo is developed in, then drives it. In-environment and engine-free — it writes files and shells out to `docker compose`, and never imports Dagger or a ROS package.
+The devcontainer engine for [ardt](../../README.md): `ardt dev` renders the container a repo is developed in, then drives it. In-environment and Dagger-free — it writes files and shells out to `docker compose`.
 
-**Repos own no devcontainer.** The recipe and the editor wiring live here as package data and update by bumping the pinned ardt version, exactly as the CI image recipe does in [ardt-ros-pipelines](../ardt-ros-pipelines/README.md). `ardt dev sync` writes them into a **gitignored** `.devcontainer/`, hashes them in a manifest, and refuses to clobber anything a human edited.
+**Repos own no devcontainer.** The recipe and the editor wiring live in ardt as package data and update by bumping the pinned ardt version, exactly as the CI image recipe does in [ardt-ros-pipelines](../../plugins/ardt-ros-pipelines/README.md). `ardt dev sync` writes them into a **gitignored** `.devcontainer/`, hashes them in a manifest, and refuses to clobber anything a human edited.
 
-One exception to "everything under `.devcontainer/`": cpptools reads its C/C++ configuration only from `.vscode/c_cpp_properties.json`, so the ros2 profile renders that file too. It is gitignored **by path**, not by directory, so a repo keeping its own `.vscode/launch.json` is unaffected. Unlike the other rendered files it carries no comment header: cpptools only gained a JSONC parser in 1.0.0 ([#5885](https://github.com/microsoft/vscode-cpptools/issues/5885)) and VS Code still flags comments there ([#6132](https://github.com/microsoft/vscode-cpptools/issues/6132)).
+## Engine and profiles
+
+This distribution is **domain-neutral**: it knows how to render, hash, provision and drive, and nothing about what kind of repo it is rendering for. That knowledge is a `Profile` — base image, apt sets, ardt modules, bootstrap steps, editor wiring — contributed by a separate distribution through the `ardt.dev_profiles` entry-point group. [`ardt-ros-dev`](../../plugins/ardt-ros-dev/README.md) ships the `ros2` one; the engine imports no profile plugin, and a third party adds a profile without a PR against this package.
+
+```toml
+# a profile plugin's pyproject.toml — the entry-point name is the profile name
+[project.entry-points."ardt.dev_profiles"]
+ros2 = "ardt_ros_dev.profile:ROS2"
+```
+
+The container installs the engine **and** the profile's own distribution, both resolved from the repo's `ardt:` pin, because `ardt dev bootstrap` runs inside the container and has to resolve the same profile the host rendered from.
+
+> **The `Profile` contract is provisional.** Its fields were extracted from a single profile; until a second one exists to argue with, it may change in a minor release, and `ARDT_PLUGIN_API` is what gets bumped when it does. Out-of-tree profiles should pin `ardt-devcontainers` accordingly.
+
+One exception to "everything under `.devcontainer/`": cpptools reads its C/C++ configuration only from `.vscode/c_cpp_properties.json`, so a profile with `cpp_properties` renders that file too. It is gitignored **by path**, not by directory, so a repo keeping its own `.vscode/launch.json` is unaffected. Unlike the other rendered files it carries no comment header: cpptools only gained a JSONC parser in 1.0.0 ([#5885](https://github.com/microsoft/vscode-cpptools/issues/5885)) and VS Code still flags comments there ([#6132](https://github.com/microsoft/vscode-cpptools/issues/6132)).
 
 | Command | Runs | Does |
 |---|---|---|
@@ -16,7 +30,7 @@ One exception to "everything under `.devcontainer/`": cpptools reads its C/C++ c
 | `ardt dev host-config` | host | re-derive only the host overlay (the `initializeCommand`) |
 | `ardt dev bootstrap` | container | claim the volume dirs, then the profile's create steps |
 | `ardt dev compile-commands` | container | merge colcon's per-package files for clangd |
-| `ardt dev profiles` | either | list the profiles this ardt knows |
+| `ardt dev profiles` | either | list the profiles installed plugins contribute |
 
 ## The parity rule
 
@@ -25,9 +39,20 @@ The container a developer works in and the image CI builds must not drift:
 - the dev layer's base **is** `pipelines.ros_ci.builder` (that resolution order is why a repo with CI configured gets parity with nothing to keep in sync);
 - ardt is installed from the repo's `ardt:` pin via `ardt_core.dist`, producing the same requirement strings the `ros-ci` recipe installs into its build stage (readable afterwards in `.devcontainer/ardt-requirements.txt`);
 - the workspace mounts at the recipe's own path (`/ws/src`), so CMake paths, `compile_commands.json` and stack traces read the same in both;
-- `ardt dev bootstrap` runs the recipe's first step, `ardt deps`.
+- the profile's last bootstrap step is the recipe's first one (`ardt deps` for `ros2`).
 
-`ardt dev doctor` fails when any of that drifts, and warns when `ardt.version` is unpinned (a recipe is only reproducible when the ardt inside it is).
+`ardt dev doctor` fails when any of that drifts, and warns when `ardt.version` is unpinned (a recipe is only reproducible when the ardt inside it is). The comparison it makes is `pipelines.ros_ci.builder`-shaped, which is one of the internals below.
+
+## Still profile-driven candidates
+
+The engine kept its ROS-shaped internals through the split, deliberately: generalizing them without a concrete second profile to argue with risks the wrong abstraction. A second profile's author should expect to touch these, and they are listed here so the list is findable rather than rediscovered:
+
+| Internal | Where | Why it is ROS-shaped |
+|---|---|---|
+| colcon volume layout, subpath mkdir | `docker.py` | `build/`, `install/`, `log/` are colcon's names |
+| `ardt dev compile-commands` | `cli.py` | merges colcon's per-package `compile_commands.json` |
+| the `ros_ci.builder` parity check | `checks.py` | reads a ROS pipeline's config section |
+| `ros_distro` and the `@DISTRO@` token | `config.py`, `render.py` | substitution is defined in terms of a ROS distro |
 
 ## Opening the editor
 

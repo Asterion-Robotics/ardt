@@ -2,7 +2,7 @@
 
 `ardt dev` renders the container a repo is developed in, then drives it. The everyday surface is one command — `ardt dev open` (or `up` on a headless machine) does whatever is missing: render, volumes, image build, start. [From clone to open container](quickstart.md) is the walkthrough; the table below is the full surface, mostly for debugging one step at a time.
 
-**Repos own no devcontainer.** The recipe and the editor wiring live in `ardt-dev` as package data. `ardt dev sync` writes them into a **gitignored** `.devcontainer/`, hashes them in a manifest, and refuses to clobber anything a human edited.
+**Repos own no devcontainer.** The recipe and the editor wiring live in ardt as package data — the mechanics in the `ardt-devcontainers` engine, the ROS-specific recipe in the `ardt-ros-dev` profile. `ardt dev sync` writes them into a **gitignored** `.devcontainer/`, hashes them in a manifest, and refuses to clobber anything a human edited.
 
 The container is a canonical colcon workspace: the repo at `/ws/src/<project>`, `.repos` imports at `/ws/src/external/`, colcon output at `/ws/{build,install,log}` — the same tree the CI recipe builds in ([parity](parity.md)).
 

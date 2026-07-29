@@ -3,24 +3,25 @@ requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project]
-name = "ardt-dev"
+name = "ardt-devcontainers"
 dynamic = ["version"]
-description = "ardt dev environments: render and drive the devcontainer a repo builds in"
+description = "ardt devcontainer engine: render and drive the container a repo is developed in"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
 authors = [{ name = "Thibault Poignonec", email = "t.poignonec@asterion-robotics.com" }]
 
-# Task-plane plugin: it renders files and shells out to docker compose. Nothing
-# here may import dagger (02, the two-plane rule) or any ROS package — profile
-# knowledge is data, not code.
+# The devcontainer plane: it renders files and shells out to docker compose.
+# Nothing here may import dagger (02, the two-plane rule), any ROS package, or
+# any profile plugin — repo-type knowledge arrives as data through
+# `ardt.dev_profiles`, and the dependency points this way, never back.
 dependencies = ["ardt-core"]
 
 [project.entry-points."ardt.commands"]
-dev = "ardt_dev.cli:dev"
+dev = "ardt_devcontainers.cli:dev"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/ardt_dev"]
+packages = ["src/ardt_devcontainers"]
 
 # The git tag is the only version that exists: no string in this repo states it,
 # so `pyproject.toml`, `__version__` and `ctx.version` cannot drift apart. Bump

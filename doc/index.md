@@ -18,7 +18,7 @@ ardt build         # colcon build
 ardt test          # colcon test + summary
 ```
 
-That is the everyday surface. [Getting started](getting-started.md) covers install variants, [the devcontainer quickstart](themes/devcontainer/quickstart.md) covers what `ardt dev open` sets up and how to debug it, and `ardt pipe run ros-ci` is the same build as a CI pipeline ([ROS 2 theme](themes/ros2/index.md)).
+That is the everyday surface. [Getting started](getting-started.md) covers install variants, [the devcontainer quickstart](devcontainer/quickstart.md) covers what `ardt dev open` sets up and how to debug it, and `ardt pipe run ros-ci` is the same build as a CI pipeline ([ROS 2 theme](themes/ros2/index.md)).
 
 ## The idea
 
@@ -37,10 +37,16 @@ demo
 
 ```{toctree}
 :maxdepth: 2
+:caption: The devcontainer plane
+
+devcontainer/index
+```
+
+```{toctree}
+:maxdepth: 2
 :caption: Themes
 
 themes/index
-themes/devcontainer/index
 themes/ros2/index
 themes/doc/index
 ```

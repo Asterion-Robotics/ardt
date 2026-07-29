@@ -18,12 +18,18 @@
 """Dev environments: ``ardt dev`` — the inner loop's half of the two planes.
 
 A repo's devcontainer is a *rendered artifact*, never repo content: the recipe
-and the editor wiring live here as package data and update with the pinned ardt
-version, exactly as the CI image recipe does in ``ardt-ros-pipelines``
+and the editor wiring live in ardt as package data and update with the pinned
+ardt version, exactly as the CI image recipe does in ``ardt-ros-pipelines``.
 ``ardt dev sync`` writes them into a gitignored
 ``.devcontainer/`` (plus the one editor file VS Code only reads from
 ``.vscode/``), so no repo carries — or reviews, or drifts on — a devcontainer
 file.
+
+This distribution is the **engine**, and it is domain-neutral: it knows how to
+render, hash, provision and drive, and nothing about what kind of repo it is
+rendering for. That knowledge is a :class:`~ardt_devcontainers.profiles.Profile`
+contributed through the ``ardt.dev_profiles`` entry-point group — ``ardt-ros-dev``
+ships the ``ros2`` one. The engine imports no profile plugin.
 
 The invariant that gives the whole thing its point: the container a developer
 works in and the image CI builds share a base image, an ardt install resolved
@@ -39,4 +45,4 @@ ARDT_PLUGIN_API = 1
 ARDT_CONFIG_SECTION = "dev"
 """Explicit config-section claim: package names group by theme, sections by plane."""
 
-__version__ = installed("ardt-dev")
+__version__ = installed("ardt-devcontainers")

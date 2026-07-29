@@ -1,29 +1,38 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 400" width="900" height="400" role="img" aria-labelledby="planes-title planes-desc">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 990 560" width="990" height="560" role="img" aria-labelledby="planes-title planes-desc">
   <title id="planes-title">ardt plugin planes</title>
-  <desc id="planes-desc">ardt-core sits beside two plugin planes. The pipeline plane (ardt pipe run) holds ardt-pipelines, ardt-ros-pipelines and ardt-doc-pipelines. The task plane (ardt build / test / doc) holds ardt-ros-tasks, ardt-doc-tasks and ardt-dev. Core connects to both planes; the pipeline plane runs tasks inside containers.</desc>
+  <desc id="planes-desc">ardt-core sits beside three plugin planes. Two of them stand up containers: the pipeline plane (ardt pipe run) holds ardt-pipelines, ardt-ros-pipelines and ardt-doc-pipelines; the devcontainer plane (ardt dev) holds ardt-devcontainers and ardt-ros-dev. The task plane (ardt build / test / doc) holds ardt-ros-tasks and ardt-doc-tasks. Core connects to all three; both container planes run the same tasks inside a container, which is what keeps CI and the dev container from drifting.</desc>
 
   <!--
     Hand-authored replacement for a `flowchart LR` mermaid diagram. Mermaid's
     dagre renderer lays out edges that terminate on a *subgraph* poorly, and
     sphinxcontrib-mermaid forces `height: 500px` on the emitted svg, so the
     original rendered as a stretched, overlapping mess. Coordinates below are
-    on a 900x400 canvas; the doc scales it to the content width.
+    on a 990x560 canvas; the doc scales it to the content width.
+  -->
+
+  <!--
+    Three bands, not two. The pipeline plane and the devcontainer plane are
+    *peers*: both stand up a container and run the task plane inside it, and
+    they differ only in engine (Dagger vs docker compose) and audience (CI vs a
+    human). This diagram used to draw ardt-devcontainers inside the task plane,
+    which held while `ardt dev` was one undivided distribution; it put the
+    engine at the head of the "runs tasks inside containers" arrow when it
+    belongs at the tail.
+
+    The two arrows converging on one task plane ARE the parity rule: the same
+    tasks, from the same `ardt:` pin, in both containers. `ardt dev doctor`
+    fails when they drift.
   -->
 
   <!--
     Palette: the Asterion brand blues (#0832F6 wordmark, #030189 and #010042
     from the report cover), matching asterion_sphinx_style. One hue, separated
-    by lightness, which is also why the two planes stay distinguishable under
-    any colour vision deficiency, where the previous purple/green pair did not.
+    by lightness, which is also why the planes stay distinguishable under any
+    colour vision deficiency, where the previous purple/green pair did not.
+    The two container planes share the lighter fill and the task plane takes
+    the darker one, so the grouping reads before any label does.
     Every text/background pairing below clears WCAG AA.
   -->
-
-  <defs>
-    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
-            markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M 0 0 L 10 5 L 0 10 z" fill="#030189"/>
-    </marker>
-  </defs>
 
   <style>
     .plane      { stroke-width: 1.5; }
@@ -32,52 +41,76 @@
     .node-name  { font-size: 14px; font-weight: 600; text-anchor: middle; }
     .node-sub   { font-size: 11px; text-anchor: middle; }
     .link       { fill: none; stroke: #8b93c9; stroke-width: 1.75; }
-    .link-label { font-size: 12.5px; fill: #030189; }
+    .feeds      { fill: none; stroke: #030189; stroke-width: 1.75; }
+    .head       { fill: #030189; }
+    .link-label { font-size: 12.5px; fill: #030189; text-anchor: middle; }
     text        { font-family: Lato, "Helvetica Neue", Helvetica, Arial, sans-serif; }
   </style>
 
   <!-- ── pipeline plane ────────────────────────────────────────────────── -->
-  <rect class="plane" x="290" y="20" width="580" height="140" rx="8"
+  <rect class="plane" x="280" y="24" width="580" height="140" rx="8"
         fill="#eef1ff" stroke="#0832f6"/>
-  <text class="plane-name" x="580" y="46" fill="#0832f6">pipeline plane · ardt pipe run</text>
+  <text class="plane-name" x="570" y="50" fill="#0832f6">pipeline plane · ardt pipe run</text>
 
-  <rect class="node" x="306" y="62" width="172" height="80" rx="6" stroke="#b9c4ff"/>
-  <text class="node-name" x="392" y="97"  fill="#030189">ardt-pipelines</text>
-  <text class="node-sub"  x="392" y="116" fill="#4a5bc8">@pipeline registry · Dagger</text>
+  <rect class="node" x="296" y="66" width="172" height="80" rx="6" stroke="#b9c4ff"/>
+  <text class="node-name" x="382" y="101" fill="#030189">ardt-pipelines</text>
+  <text class="node-sub"  x="382" y="120" fill="#4a5bc8">@pipeline registry · Dagger</text>
 
-  <rect class="node" x="494" y="62" width="172" height="80" rx="6" stroke="#b9c4ff"/>
-  <text class="node-name" x="580" y="107" fill="#030189">ardt-ros-pipelines</text>
+  <rect class="node" x="484" y="66" width="172" height="80" rx="6" stroke="#b9c4ff"/>
+  <text class="node-name" x="570" y="111" fill="#030189">ardt-ros-pipelines</text>
 
-  <rect class="node" x="682" y="62" width="172" height="80" rx="6" stroke="#b9c4ff"/>
-  <text class="node-name" x="768" y="107" fill="#030189">ardt-doc-pipelines</text>
+  <rect class="node" x="672" y="66" width="172" height="80" rx="6" stroke="#b9c4ff"/>
+  <text class="node-name" x="758" y="111" fill="#030189">ardt-doc-pipelines</text>
+
+  <!-- ── devcontainer plane ───────────────────────────────────────────── -->
+  <rect class="plane" x="280" y="204" width="580" height="140" rx="8"
+        fill="#eef1ff" stroke="#0832f6"/>
+  <text class="plane-name" x="570" y="230" fill="#0832f6">devcontainer plane · ardt dev</text>
+
+  <rect class="node" x="390" y="246" width="172" height="80" rx="6" stroke="#b9c4ff"/>
+  <text class="node-name" x="476" y="281" fill="#030189">ardt-devcontainers</text>
+  <text class="node-sub"  x="476" y="300" fill="#4a5bc8">render · docker compose</text>
+
+  <rect class="node" x="578" y="246" width="172" height="80" rx="6" stroke="#b9c4ff"/>
+  <text class="node-name" x="664" y="281" fill="#030189">ardt-ros-dev</text>
+  <text class="node-sub"  x="664" y="300" fill="#4a5bc8">the ros2 profile</text>
 
   <!-- ── task plane ───────────────────────────────────────────────────── -->
-  <rect class="plane" x="290" y="250" width="580" height="140" rx="8"
+  <rect class="plane" x="280" y="384" width="580" height="140" rx="8"
         fill="#dce2ff" stroke="#030189"/>
-  <text class="plane-name" x="580" y="276" fill="#010042">task plane · ardt build / test / doc</text>
+  <text class="plane-name" x="570" y="410" fill="#010042">task plane · ardt build / test / doc</text>
 
-  <rect class="node" x="306" y="292" width="172" height="80" rx="6" stroke="#a9b5ee"/>
-  <text class="node-name" x="392" y="337" fill="#010042">ardt-ros-tasks</text>
+  <rect class="node" x="390" y="426" width="172" height="80" rx="6" stroke="#a9b5ee"/>
+  <text class="node-name" x="476" y="471" fill="#010042">ardt-ros-tasks</text>
 
-  <rect class="node" x="494" y="292" width="172" height="80" rx="6" stroke="#a9b5ee"/>
-  <text class="node-name" x="580" y="337" fill="#010042">ardt-doc-tasks</text>
-
-  <rect class="node" x="682" y="292" width="172" height="80" rx="6" stroke="#a9b5ee"/>
-  <text class="node-name" x="768" y="337" fill="#010042">ardt-dev</text>
+  <rect class="node" x="578" y="426" width="172" height="80" rx="6" stroke="#a9b5ee"/>
+  <text class="node-name" x="664" y="471" fill="#010042">ardt-doc-tasks</text>
 
   <!-- ── ardt-core ────────────────────────────────────────────────────── -->
-  <rect x="24" y="150" width="200" height="100" rx="6"
+  <rect x="24" y="224" width="200" height="100" rx="6"
         fill="#010042"/>
-  <text class="node-name" x="124" y="185" fill="#ffffff">ardt-core</text>
-  <text class="node-sub"  x="124" y="205" fill="#c7ccef">cli · context</text>
-  <text class="node-sub"  x="124" y="222" fill="#c7ccef">config · runner</text>
+  <text class="node-name" x="124" y="259" fill="#ffffff">ardt-core</text>
+  <text class="node-sub"  x="124" y="279" fill="#c7ccef">cli · context</text>
+  <text class="node-sub"  x="124" y="296" fill="#c7ccef">config · runner</text>
 
   <!-- core to planes: undirected, matching the original mermaid link style -->
-  <path class="link" d="M 224 180 C 256 180, 258 90, 290 90"/>
-  <path class="link" d="M 224 220 C 256 220, 258 320, 290 320"/>
+  <path class="link" d="M 224 250 C 252 250, 252 94, 280 94"/>
+  <path class="link" d="M 224 274 L 280 274"/>
+  <path class="link" d="M 224 298 C 252 298, 252 454, 280 454"/>
 
-  <!-- pipeline plane to task plane -->
-  <path d="M 580 160 L 580 244" fill="none" stroke="#030189" stroke-width="1.75"
-        marker-end="url(#arrow)"/>
-  <text class="link-label" x="596" y="209">runs tasks inside containers</text>
+  <!-- Both container planes into the task plane, routed clear of the bands.
+       The outer route lands lower than the inner one so the two never cross;
+       which entry point each takes on the band's edge carries no meaning.
+
+       Each route ends in a straight horizontal run and the head is an explicit
+       triangle, not a marker. A marker orients itself on the path's end
+       *tangent*: on a curve turning this tightly it lands looking like a
+       detached diagonal blob, because the stroke is still visibly descending
+       where the head has already gone horizontal. Drawing both means the head
+       points where the stroke actually arrives, in every renderer. -->
+  <path class="feeds" d="M 860 94 Q 946 94 946 112 L 946 468 Q 946 486 928 486 L 872 486"/>
+  <path class="feeds" d="M 860 274 Q 906 274 906 292 L 906 404 Q 906 422 888 422 L 872 422"/>
+  <path class="head" d="M 860 486 L 876 480.5 L 876 491.5 Z"/>
+  <path class="head" d="M 860 422 L 876 416.5 L 876 427.5 Z"/>
+  <text class="link-label" x="690" y="366">both run these tasks inside a container</text>
 </svg>

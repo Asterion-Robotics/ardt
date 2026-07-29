@@ -21,7 +21,7 @@ Two rules shape this module:
 
 1. **Nothing is repo content.** Every file is generated, hashed in a manifest,
    and gitignored. A hand edit is detected and refused, not silently kept — the
-   fix is a template change in ardt-dev or a knob in ``dev:``.
+   fix is a template change in the profile plugin, or a knob in ``dev:``.
 2. **The structured files are built from data structures**, not string templates
    (compose, ``devcontainer.json`` and ``c_cpp_properties.json`` are dumped from
    dicts). Only the Dockerfile is a text template, because that is the artifact a
@@ -44,6 +44,7 @@ import yaml
 
 from ardt_core import dist
 from ardt_core.config import ArdtConfig
+from ardt_core.plugins import Registry
 
 from . import __version__
 from .config import (
@@ -63,6 +64,9 @@ USER = "ubuntu"
 host's uid 1000 maps straight through and bind-mounted files stay writable."""
 
 MANIFEST = f"{DEVCONTAINER_DIR}/.ardt-dev.json"
+"""Keeps its pre-split name on purpose: renaming it would make every repo
+already synced look un-generated, and the first `ardt dev sync` after an
+upgrade would refuse the whole render as hand-edited."""
 COMPOSE = f"{DEVCONTAINER_DIR}/compose.yaml"
 COMPOSE_HOST = f"{DEVCONTAINER_DIR}/compose.host.yaml"
 DEVCONTAINER = f"{DEVCONTAINER_DIR}/devcontainer.json"
@@ -103,9 +107,11 @@ CLAUDE_VOLUME = "ardt-claude"
 
 EXECUTABLE = frozenset({POST_CREATE, HOST_CONFIG})
 
-BASE_MODULES = ("ardt-core", "ardt-dev")
+BASE_MODULES = ("ardt-core", "ardt-devcontainers")
 """Installed in the container whatever the profile is: ``postCreate.sh`` hands
-over to ``ardt dev bootstrap``, so ardt-dev has to be in there with the core."""
+over to ``ardt dev bootstrap``, so the engine has to be in there with the core.
+The profile's own distribution joins them in :func:`requirements` — without it
+the container could not resolve the profile it was rendered from."""
 
 
 def _unique(*names: str) -> tuple[str, ...]:
@@ -115,7 +121,7 @@ def _unique(*names: str) -> tuple[str, ...]:
 
 _HOST_CONFIG_BODY = """\
 #!/usr/bin/env bash
-# Rendered by `ardt dev sync` (ardt-dev @VERSION@) — machine-owned, gitignored.
+# Rendered by `ardt dev sync` (ardt-devcontainers @VERSION@) — machine-owned, gitignored.
 #
 # initializeCommand: re-derive the host overlay, so one clone works on WSL2,
 # Linux and macOS without a per-machine edit, then create the volumes compose
@@ -169,8 +175,15 @@ class Render:
         return self.image or self.base_image
 
 
-def _template(name: str) -> str:
-    return (resources.files("ardt_dev.templates") / name).read_text(encoding="utf-8")
+def _template(package: str, name: str) -> str:
+    return (resources.files(package) / name).read_text(encoding="utf-8")
+
+
+ENGINE_TEMPLATES = "ardt_devcontainers.templates"
+"""Anchor for the templates the engine owns. The Dockerfile is the profile's
+(:attr:`~.profiles.Profile.templates_package`); ``postCreate.sh`` is not — it
+only hands over to ``ardt dev bootstrap``, which is where a profile's own
+create steps run."""
 
 
 def digest(text: str) -> str:
@@ -201,7 +214,7 @@ def requirements(
     stage. With a local checkout mounted, container-side paths replace them, the
     dev twin of ``ardt pipe run ros-ci --arg ardt_source=<dir>``.
     """
-    modules = _unique(*BASE_MODULES, *prof.ardt_modules, *dev.ardt_modules)
+    modules = _unique(*BASE_MODULES, prof.distribution, *prof.ardt_modules, *dev.ardt_modules)
     if ardt_source is not None:
         return tuple(dist.local_requirement(module, ARDT_SRC_MOUNT) for module in modules)
     return cfg.ardt.requirements(modules)
@@ -267,7 +280,7 @@ def _claude_block() -> str:
 
 def dockerfile(prof: Profile, dev: DevConfig, *, project: str, base_image: str, distro: str) -> str:
     return (
-        _template(prof.dockerfile)
+        _template(prof.templates_package, prof.dockerfile)
         .replace("@VERSION@", __version__)
         .replace("@BASE_IMAGE@", base_image)
         .replace("@USER@", USER)
@@ -288,7 +301,8 @@ class _Dumper(yaml.SafeDumper):
 
 def _yaml_document(data: dict[str, object], *, note: str = "") -> str:
     header = (
-        f"# Rendered by `ardt dev sync` (ardt-dev {__version__}) — machine-owned, gitignored.\n"
+        "# Rendered by `ardt dev sync` "
+        f"(ardt-devcontainers {__version__}) — machine-owned, gitignored.\n"
     )
     if note:
         header += f"# {note}\n"
@@ -414,10 +428,11 @@ def devcontainer(project: str, dev: DevConfig, prof: Profile) -> str:
         },
     }
     header = (
-        f"// Rendered by `ardt dev sync` (ardt-dev {__version__}) — machine-owned, gitignored.\n"
+        "// Rendered by `ardt dev sync` "
+        f"(ardt-devcontainers {__version__}) — machine-owned, gitignored.\n"
         "// Editor config ships with the container; the repo carries no .vscode/ of\n"
         "// its own (`ardt dev sync` renders the one file that cannot live here).\n"
-        "// Change ardt-dev's profile or `dev:` in ardt.yaml, never this file.\n"
+        "// Change the dev profile or `dev:` in ardt.yaml, never this file.\n"
     )
     return header + json.dumps(data, indent=2, ensure_ascii=False) + "\n"
 
@@ -459,11 +474,17 @@ def build(
     cfg: ArdtConfig,
     dev: DevConfig,
     *,
+    registry: Registry,
     facts: HostFacts | None = None,
     ardt_source: str | None = None,
 ) -> Render:
-    """Resolve everything and produce the file set. Pure: nothing is written."""
-    prof = profile(dev.profile)
+    """Resolve everything and produce the file set. Pure: nothing is written.
+
+    ``registry`` is where the profile comes from — ``ctx.registry`` in a command,
+    a hand-built one in a test. Injected rather than discovered here, so a render
+    never depends on what happens to be installed behind the caller's back.
+    """
+    prof = profile(dev.profile, registry)
     distro = ros_distro(cfg)
     base_image = resolve_base_image(cfg, dev, prof, distro)
     probed = facts or HostFacts.probe()
@@ -475,7 +496,9 @@ def build(
         COMPOSE: compose(project, dev, ardt_source=ardt_source, image=dev.image),
         COMPOSE_HOST: host_overlay(host),
         DEVCONTAINER: devcontainer(project, dev, prof),
-        POST_CREATE: _template("postCreate.sh.tmpl").replace("@VERSION@", __version__),
+        POST_CREATE: _template(ENGINE_TEMPLATES, "postCreate.sh.tmpl").replace(
+            "@VERSION@", __version__
+        ),
         HOST_CONFIG: _HOST_CONFIG_BODY.replace("@VERSION@", __version__),
         REQUIREMENTS: (
             "# Rendered by `ardt dev sync` from the `ardt:` section of this repo's config.\n"
