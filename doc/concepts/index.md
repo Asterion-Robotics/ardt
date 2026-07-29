@@ -18,7 +18,7 @@ ardt itself is a click CLI with a plugin loader and a typed context, and nothing
 Everything a developer actually runs arrives as a **plugin**, discovered through Python entry points and guarded by a plugin API version. What a plugin contributes places it in one of three planes, and the relation between them is the central idea of the platform.
 
 ```{image} plugin-planes.svg
-:alt: ardt-core beside three plugin planes. The pipeline plane (ardt-pipelines, ardt-ros-pipelines, ardt-doc-pipelines) and the devcontainer plane (ardt-devcontainers, ardt-ros-dev) each stand up a container and run the task plane (ardt-ros-tasks, ardt-doc-tasks) inside it.
+:alt: ardt-core beside three plugin planes, each ending in a dotted slot for a plugin you write yourself. The pipeline plane (ardt-pipelines, ardt-ros-pipelines, ardt-doc-pipelines, a custom pipeline) and the devcontainer plane (ardt-devcontainers, ardt-ros-dev, a custom profile) each stand up a container and run the task plane (ardt-ros-tasks, ardt-doc-tasks, a custom task) inside it.
 :width: 100%
 :align: center
 ```
@@ -26,6 +26,8 @@ Everything a developer actually runs arrives as a **plugin**, discovered through
 One plane holds the **tasks**, the commands that run where you type them. The other two each stand a container up and run those same tasks inside it: the pipeline plane for CI, driven by Dagger, and the devcontainer plane for the inner loop, driven by `docker compose`. Tasks never call either one back.
 
 That the two container planes run the *same* task plane, installed from the same `ardt:` pin, is what the parity rule is: the image CI builds and the container you work in cannot quietly diverge, and `ardt dev doctor` fails when they do. Core imports neither ROS nor Dagger, so the inner loop works with no engine installed.
+
+The dotted boxes are the extension points. A plugin of your own joins the plane it contributes to through the same entry points the shipped ones use, and core is none the wiser ([extending ardt](extending.md)).
 
 ```{toctree}
 :maxdepth: 1
