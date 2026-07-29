@@ -29,6 +29,7 @@ build container.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
@@ -122,7 +123,9 @@ def detect() -> CIInfo:
 
 def _gitlab() -> CIInfo:
     tag = env.get("CI_COMMIT_TAG")
-    branch = env.get("CI_COMMIT_BRANCH")
+    # CI_COMMIT_BRANCH is unset in merge-request pipelines; the source branch
+    # carries the ref there, so MR jobs are not anonymous.
+    branch = env.get("CI_COMMIT_BRANCH") or env.get("CI_MERGE_REQUEST_SOURCE_BRANCH_NAME")
     default_branch = env.get("CI_DEFAULT_BRANCH")
     return CIInfo(
         platform=Platform.GITLAB,
@@ -138,10 +141,35 @@ def _gitlab() -> CIInfo:
     )
 
 
+def _github_default_branch() -> str | None:
+    """The repository's default branch, from the event payload.
+
+    ``GITHUB_BASE_REF`` cannot answer "is this the default branch?": it is only
+    set on pull_request events (where it names the PR *target* while
+    ``GITHUB_REF_NAME`` is ``N/merge``), so a push to a ``master`` or
+    ``develop`` default was never recognized. ``repository.default_branch`` in
+    ``$GITHUB_EVENT_PATH`` is present on every event.
+    """
+    path = env.get("GITHUB_EVENT_PATH")
+    if not path:
+        return None
+    try:
+        payload: object = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    repository = cast("dict[object, object]", payload).get("repository")
+    if not isinstance(repository, dict):
+        return None
+    default = cast("dict[object, object]", repository).get("default_branch")
+    return default if isinstance(default, str) else None
+
+
 def _github() -> CIInfo:
     ref_type = env.get("GITHUB_REF_TYPE")
     ref_name = env.get("GITHUB_REF_NAME")
-    default_branch = env.get("GITHUB_BASE_REF") or "main"
+    default_branch = _github_default_branch() or env.get("GITHUB_BASE_REF") or "main"
     return CIInfo(
         platform=Platform.GITHUB,
         is_ci=True,

@@ -123,6 +123,10 @@ class Runner:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
+                # Compiler and colcon output routinely carries locale-mangled
+                # bytes; strict decoding would traceback on the first one.
+                encoding="utf-8",
+                errors="replace",
                 bufsize=1,
             )
         except FileNotFoundError as exc:

@@ -53,6 +53,18 @@ def test_gitlab_tag_build(monkeypatch: pytest.MonkeyPatch) -> None:
     assert info.project_path == "example-group/infra/ardt"
 
 
+def test_gitlab_merge_request_pipeline_keeps_the_source_ref(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CI_COMMIT_BRANCH is unset in MR pipelines; the source branch is the ref."""
+    monkeypatch.setenv("GITLAB_CI", "true")
+    monkeypatch.setenv("CI_MERGE_REQUEST_SOURCE_BRANCH_NAME", "feat/x")
+    monkeypatch.setenv("CI_DEFAULT_BRANCH", "main")
+    info = ci.detect()
+    assert info.ref == "feat/x"
+    assert info.is_default_branch is False
+
+
 def test_gitlab_default_branch(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("GITLAB_CI", "true")
     monkeypatch.setenv("CI_COMMIT_BRANCH", "main")
@@ -61,6 +73,21 @@ def test_gitlab_default_branch(monkeypatch: pytest.MonkeyPatch) -> None:
     assert info.is_tag is False
     assert info.is_default_branch is True
     assert info.ref == "main"
+
+
+def test_github_default_branch_comes_from_the_event_payload(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    """Regression: GITHUB_BASE_REF only exists on pull_request events, so a
+    push to a `develop` default branch was never recognized as default."""
+    event = tmp_path / "event.json"
+    event.write_text('{"repository": {"default_branch": "develop"}}', encoding="utf-8")
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.setenv("GITHUB_REF_TYPE", "branch")
+    monkeypatch.setenv("GITHUB_REF_NAME", "develop")
+    monkeypatch.setenv("GITHUB_EVENT_PATH", str(event))
+    info = ci.detect()
+    assert info.is_default_branch is True
 
 
 def test_github_tag_build(monkeypatch: pytest.MonkeyPatch) -> None:
