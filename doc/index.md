@@ -32,6 +32,7 @@ Reproducible dev containers, honest CI, versioned docs: these are common robotic
 
 getting-started
 concepts/index
+demo
 ```
 
 ```{toctree}
