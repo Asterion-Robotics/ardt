@@ -7,14 +7,8 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 ### Added
 
 - `ardt pipe run <name> --load`: put the built runtime image into the local docker daemon as the moving tag `<project>:<X.Y.Z>-dev` for the release being developed (a release load also gets the pinned `<project>:<version>`) — the local counterpart of `--publish`, which stays registry-only and errors loudly without one.
-
-## [0.2.0] - 2026-07-29
-
-### Changed
-
-### Fixed
-
-### Added
+- `ardt doc serve` (`--site` for the docs-ci output): local http preview of the built docs via the stdlib `http.server`, no new dependency. Needed because `file://` neither resolves directory URLs nor lets the version switcher fetch `versions.json`; `docs-ci` now ends with a pointer to it.
+- Docs point to the official demo repos ([`ardt_ros2_demo`](https://github.com/Asterion-Robotics/ardt_ros2_demo) on GitHub, mirrored on GitLab): a README paragraph and a new "Demo with a ROS 2 project" page.
 
 ## [0.2.0] - 2026-07-29
 
