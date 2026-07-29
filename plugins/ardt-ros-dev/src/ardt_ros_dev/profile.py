@@ -97,6 +97,7 @@ ROS2 = Profile(
         "charliermarsh.ruff",
         "redhat.vscode-yaml",
         "ms-iot.vscode-ros",
+        "mhutchie.git-graph",
         "anthropic.claude-code",
     ),
     settings={
