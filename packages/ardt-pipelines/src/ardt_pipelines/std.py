@@ -108,8 +108,19 @@ def image_ref(ctx: Context, name: str | None = None) -> str:
             )
     repository = f"{path}/{name}" if name else path
     # Registry repository paths must be lowercase (GitLab lowercases
-    # CI_REGISTRY_IMAGE; ghcr rejects uppercase). The tag is left untouched.
-    return f"{ctx.ci.registry}/{repository.lower()}:{ctx.version}"
+    # CI_REGISTRY_IMAGE; ghcr rejects uppercase).
+    return f"{ctx.ci.registry}/{repository.lower()}:{image_tag(ctx.version)}"
+
+
+def image_tag(version: str) -> str:
+    """The version as a pushable image tag.
+
+    PEP 440 allows ``+`` in local versions (``1.4.0.dev3+g0a1b2c3``, the
+    off-tag default) but the OCI tag grammar
+    (``[a-zA-Z0-9_][a-zA-Z0-9._-]{0,127}``) does not, so every registry
+    rejects the raw version. ``-`` is the conventional stand-in.
+    """
+    return version.replace("+", "-")
 
 
 GIT_TOKEN_SECRET = "git_token"

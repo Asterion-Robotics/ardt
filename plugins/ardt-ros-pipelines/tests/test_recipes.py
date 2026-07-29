@@ -86,6 +86,36 @@ def test_tasks_run_as_stages(tmp_path: Path) -> None:
     assert deps < build < test < results
 
 
+class TestRuntimeExecDeps:
+    """The shipped image installs its own exec dependencies.
+
+    Regression: the runtime stage was `base + COPY install/` alone, so every
+    rosdep-installed exec dependency existed only in the builder and the image
+    failed at `ros2 run` time unless the base happened to carry it.
+    """
+
+    def _runtime_stage(self, rendered: str) -> str:
+        return rendered.split("AS runtime", 1)[1]
+
+    def test_runtime_stage_resolves_exec_deps_from_the_install_space(self, tmp_path: Path) -> None:
+        stage = self._runtime_stage(render(tmp_path))
+        assert "rosdep install --from-paths /opt/ros/app --ignore-src" in stage
+        assert "--dependency-types exec" in stage
+
+    def test_skip_keys_reach_the_runtime_rosdep_pass(self, tmp_path: Path) -> None:
+        stage = self._runtime_stage(
+            render(tmp_path, rosdep_skip_keys=("rti-connext-dds", "gazebo"))
+        )
+        assert '--skip-keys "rti-connext-dds gazebo"' in stage
+
+    def test_no_skip_flag_without_keys(self, tmp_path: Path) -> None:
+        assert "--skip-keys" not in render(tmp_path)
+
+    def test_custom_install_base_is_scanned(self, tmp_path: Path) -> None:
+        stage = self._runtime_stage(render(tmp_path, install_base="/opt/app"))
+        assert "rosdep install --from-paths /opt/app" in stage
+
+
 def test_git_install_by_default(tmp_path: Path) -> None:
     rendered = render(tmp_path)
     for requirement in REQUIREMENTS:

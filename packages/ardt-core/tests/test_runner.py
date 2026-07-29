@@ -35,6 +35,18 @@ def test_successful_command(console: Console) -> None:
     assert "hi" in result.tail
 
 
+def test_non_utf8_output_is_replaced_not_fatal(console: Console) -> None:
+    """Regression: strict decoding tracebacked on the first locale-mangled
+    byte of compiler output; bad bytes must degrade to replacement chars."""
+    runner = Runner(console)
+    result = runner.run(
+        ["python3", "-c", "import sys; sys.stdout.buffer.write(b'ok \\xff bad\\n')"]
+    )
+    assert result.ok
+    assert "ok" in result.tail
+    assert "�" in result.tail
+
+
 def test_nonzero_exit_raises_with_command_and_code(console: Console) -> None:
     runner = Runner(console)
     with pytest.raises(RunnerError) as excinfo:

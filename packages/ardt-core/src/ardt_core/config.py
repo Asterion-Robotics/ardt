@@ -30,8 +30,9 @@ warning. That gives typo-safety without making core depend on its plugins.
 from __future__ import annotations
 
 import tomllib
+from collections.abc import Hashable
 from pathlib import Path
-from typing import TypeVar, cast
+from typing import Any, TypeVar, cast
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -100,6 +101,25 @@ class ArdtConfig(BaseModel):
         except ValidationError as exc:
             raise ConfigError(f"invalid `{name}:` section: {_first_error(exc)}") from exc
 
+    def raw(self, path: str) -> object | None:
+        """A dotted-path read of raw plugin-section data (``"tasks.ros.distro"``).
+
+        For *cross-section* reads: a plugin needing one value from a section
+        another plugin owns reads it as plain, unvalidated data — no import of
+        the owning plugin (validation is the owner's job), and malformed data
+        reads as absent. ``None`` when any segment is missing or not a mapping.
+        Core-owned sections (``project:``, ``check:``, ``ardt:``) are typed
+        fields, not raw data — read those directly.
+        """
+        parts = path.split(".")
+        extra = self.__pydantic_extra__ or {}
+        node: object = extra.get(parts[0])
+        for part in parts[1:]:
+            if not isinstance(node, dict):
+                return None
+            node = cast("dict[str, object]", node).get(part)
+        return node
+
     def unknown_sections(self, installed: frozenset[str]) -> tuple[list[str], list[str]]:
         """Split extra sections into ``(fatal, from_uninstalled_plugins)``."""
         extra = self.__pydantic_extra__ or {}
@@ -147,27 +167,65 @@ def find_project_root(start: Path) -> Path:
     Several projects under one ``src/`` (imported ``.repos`` deps can carry
     their own ``ardt.yaml``) is ambiguous from outside them and raises; running
     from *inside* a project resolves to that project before this rule is ever
-    consulted.
+    consulted. The convention itself only applies where a workspace is
+    plausible (:func:`_workspace_shaped`), so a stray ``~/src`` cannot capture
+    invocations from unrelated directories under ``~``.
     """
     start = start.resolve()
     for directory in (start, *start.parents):
         if _config_file_in(directory):
             return directory
-        src = directory if directory.name == "src" else directory / "src"
-        if src is not directory and _config_file_in(src):
-            return src  # a repo checked out as `src` itself
-        projects = _workspace_projects(src)
-        if len(projects) == 1:
-            return projects[0]
-        if len(projects) > 1:
-            listed = ", ".join(p.name for p in projects)
-            raise ConfigError(
-                f"several projects under {src}: {listed}",
-                hint="run ardt from inside the one you mean",
-            )
+        if _workspace_shaped(directory, start):
+            src = directory if directory.name == "src" else directory / "src"
+            if src != directory and _config_file_in(src):
+                return src  # a repo checked out as `src` itself
+            projects = _workspace_projects(src)
+            if len(projects) == 1:
+                return projects[0]
+            if len(projects) > 1:
+                listed = ", ".join(p.name for p in projects)
+                raise ConfigError(
+                    f"several projects under {src}: {listed}",
+                    hint="run ardt from inside the one you mean",
+                )
         if (directory / ".git").exists():
             return directory
     return start
+
+
+def workspace_root(project_root: Path) -> Path:
+    """The colcon workspace root for a project root — the ``/ws`` convention.
+
+    A repo living under a directory named ``src`` (``/ws/src/<repo>``) sits in
+    a colcon workspace, and colcon runs from the grandparent so ``build/``,
+    ``install/`` and ``log/`` land *beside* ``src/`` instead of inside the
+    repo. A repo checked out *as* ``src`` itself gets the parent for the same
+    reason. Any other checkout is its own workspace root — plain-repo behavior.
+
+    The one implementation of the rule: the same walk holds inside the
+    container (``/ws/src/<repo>`` -> ``/ws``) and for a host checkout, and the
+    ros-ci Dockerfile template hard-codes the identical convention.
+    """
+    if project_root.parent.name == "src":
+        return project_root.parent.parent
+    if project_root.name == "src":
+        return project_root.parent
+    return project_root
+
+
+def _workspace_shaped(directory: Path, start: Path) -> bool:
+    """Whether the ``src/`` convention may apply at this level of the walk.
+
+    The walk visits every ancestor up to ``/``, so an unconstrained convention
+    let a stray ``~/src/<repo-with-ardt.yaml>`` hijack an invocation from
+    anywhere under ``~``. The convention holds only where a colcon workspace is
+    plausible: the invocation directory itself (a fresh ``/ws`` holds nothing
+    but ``src/`` yet), a directory named ``src`` (the walk only reaches one
+    from inside it), or a directory whose colcon output dirs vouch for it.
+    """
+    if directory == start or directory.name == "src":
+        return True
+    return any((directory / name).is_dir() for name in ("build", "install", "log"))
 
 
 def load(root: Path) -> tuple[ArdtConfig, ConfigSource]:
@@ -186,9 +244,33 @@ def load(root: Path) -> tuple[ArdtConfig, ConfigSource]:
     return ArdtConfig(), ConfigSource()
 
 
+class _UniqueKeyLoader(yaml.SafeLoader):
+    """SafeLoader that refuses duplicate mapping keys.
+
+    PyYAML's default silently keeps the last duplicate, so a ``tasks:`` section
+    defined twice dropped the first block — the opposite of the typo-safety
+    this module promises.
+    """
+
+    def construct_mapping(self, node: yaml.MappingNode, deep: bool = False) -> dict[Hashable, Any]:
+        seen: set[str] = set()
+        for key_node, _value_node in node.value:
+            key = cast(
+                "object",
+                self.construct_object(key_node, deep=True),  # pyright: ignore[reportUnknownMemberType]
+            )
+            if isinstance(key, str):  # unhashables error in SafeLoader itself
+                if key in seen:
+                    raise yaml.constructor.ConstructorError(
+                        None, None, f"duplicate key `{key}`", key_node.start_mark
+                    )
+                seen.add(key)
+        return super().construct_mapping(node, deep)
+
+
 def _from_yaml(path: Path) -> ArdtConfig:
     try:
-        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+        raw = yaml.load(path.read_text(encoding="utf-8"), Loader=_UniqueKeyLoader)
     except OSError as exc:
         raise ConfigError(f"cannot read {path}: {exc}") from exc
     except yaml.YAMLError as exc:

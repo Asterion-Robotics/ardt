@@ -50,6 +50,16 @@ def test_docstring_is_the_fallback_doc() -> None:
     assert pipeline(name="d")(documented).doc == "From the docstring."
 
 
+def test_evaluated_generic_annotations_are_supported() -> None:
+    """Regression: a plugin module without `from __future__ import annotations`
+    hands the decorator the evaluated `list[str]`, whose __name__ is "list" —
+    the whole plugin used to be refused at import time."""
+    namespace: dict[str, object] = {}
+    exec("async def f(ctx, dag, names: list[str] = ()): ...", namespace)
+    definition = pipeline(name="evaluated")(namespace["f"])  # type: ignore[arg-type]
+    assert definition.params[0].annotation == "list[str]"
+
+
 def test_params_are_introspected() -> None:
     async def f(ctx, dag, count: int = 2, tags: list[str] = ()) -> None: ...  # type: ignore[assignment]
 
@@ -140,6 +150,11 @@ class TestCollect:
         b = pipeline(name="b")(_noop)
         found = collect({"m1": self._module("m1", a), "m2": self._module("m2", b)})
         assert set(found) == {"a", "b"}
+
+    def test_the_same_definition_reexported_is_not_a_duplicate(self) -> None:
+        shared = pipeline(name="shared")(_noop)
+        found = collect({"m1": self._module("m1", shared), "m2": self._module("m2", shared)})
+        assert found == {"shared": shared}
 
     def test_duplicate_name_is_an_error(self) -> None:
         first = pipeline(name="dup")(_noop)

@@ -80,6 +80,24 @@ def test_list_tags_matches_glob_newest_first(repo: Path) -> None:
     assert git_module.list_tags(repo / "nowhere-outside" / "..", "nomatch*") == []
 
 
+def test_path_exists_at_a_ref(repo: Path) -> None:
+    git("tag", "before", cwd=repo)
+    (repo / "doc").mkdir()
+    (repo / "doc" / "conf.py").write_text("x\n")
+    git("add", "doc", cwd=repo)
+    git("commit", "-qm", "doc", cwd=repo)
+    git("tag", "after", cwd=repo)
+    assert git_module.path_exists_at(repo, "after", "doc/conf.py")
+    assert not git_module.path_exists_at(repo, "before", "doc/conf.py")
+
+
+def test_is_shallow(repo: Path, tmp_path: Path) -> None:
+    assert git_module.is_shallow(repo) is False
+    clone = tmp_path / "shallow"
+    git("clone", "-q", "--depth", "1", f"file://{repo}", str(clone), cwd=tmp_path)
+    assert git_module.is_shallow(clone) is True
+
+
 def test_ref_exists(repo: Path) -> None:
     git("branch", "feature", cwd=repo)
     assert git_module.ref_exists(repo, "main")

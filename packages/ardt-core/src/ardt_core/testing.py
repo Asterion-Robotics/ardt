@@ -28,15 +28,28 @@ start failing the moment it runs inside GitLab/GitHub.
 
 from __future__ import annotations
 
+import contextlib
+import io
 import subprocess
+from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
 
 from ardt_core.ci import CIInfo, Platform
 from ardt_core.console import Console
+from ardt_core.context import Context
+from ardt_core.plugins import Registry
 
-__all__ = ["console", "git", "isolate_environment", "repo"]
+__all__ = [
+    "build_context",
+    "console",
+    "console_output",
+    "git",
+    "isolate_environment",
+    "repo",
+    "run_cli",
+]
 
 _CI_VARIABLES = (
     "GITLAB_CI",
@@ -73,6 +86,46 @@ def isolate_environment(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None
 def console() -> Console:
     """A local, non-CI console writing to a plain stream."""
     return Console(CIInfo(platform=Platform.LOCAL, is_ci=False))
+
+
+def build_context(root: Path, **kwargs: object) -> Context:
+    """A test Context: empty plugin registry, console captured in memory.
+
+    The console writes plainly to a ``StringIO`` (a non-TTY stream is plain by
+    construction); read it back with :func:`console_output`. Keyword arguments
+    pass through to :meth:`Context.build` (``dry_run=True`` is the usual one).
+    """
+    captured = Console(
+        CIInfo(platform=Platform.LOCAL, is_ci=False),
+        stream=io.StringIO(),
+    )
+    return Context.build(
+        cwd=root,
+        registry=Registry(plugins=[], problems=[]),
+        console=captured,
+        **kwargs,  # type: ignore[arg-type]
+    )
+
+
+def console_output(ctx: Context) -> str:
+    """Everything the context's console wrote (a :func:`build_context` context)."""
+    stream = ctx.console.stream
+    assert isinstance(stream, io.StringIO), "console_output needs a build_context() context"
+    return stream.getvalue()
+
+
+def run_cli(args: Sequence[str], cwd: Path) -> tuple[int, str, str]:
+    """Invoke the real CLI in-process: ``(exit_code, stdout, stderr)``.
+
+    Goes through :func:`ardt_core.cli.main`, so plugin discovery, option
+    injection and the JSON envelope all behave exactly as in production.
+    """
+    from ardt_core.cli import main  # deferred: importing testing must stay light
+
+    out, err = io.StringIO(), io.StringIO()
+    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+        code = main(["-C", str(cwd), *args])
+    return code, out.getvalue(), err.getvalue()
 
 
 def git(*args: str, cwd: Path) -> None:

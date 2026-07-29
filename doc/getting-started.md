@@ -3,7 +3,8 @@
 ## The five-minute path
 
 ```bash
-# 1. install ardt (uv is the only prerequisite — see below)
+# 1. install ardt (uv is the only prerequisite to install it; `ardt dev`
+#    additionally needs Docker and VS Code — see below)
 curl -LsSf https://raw.githubusercontent.com/Asterion-Robotics/ardt/main/install.sh | bash
 
 # 2. in a ROS 2 repo that has an ardt.yaml
@@ -20,7 +21,7 @@ The first `ardt dev open` takes minutes (image build + rosdep); after that, seco
 
 `ardt` is a CLI you call from any repo, so install it **once as a uv tool**: a persistent, isolated venv with `ardt` on your `PATH`. No `uv run` prefix, no project venv.
 
-The one-liner does that for you. [uv](https://docs.astral.sh/uv/) is the only prerequisite:
+The one-liner does that for you. [uv](https://docs.astral.sh/uv/) is the only prerequisite *to install ardt*; the devcontainer and pipeline planes additionally need Docker (and VS Code for `ardt dev open`) — the [devcontainer quickstart](themes/devcontainer/quickstart.md) lists those:
 
 ```bash
 curl -LsSf https://raw.githubusercontent.com/Asterion-Robotics/ardt/main/install.sh | bash
@@ -37,6 +38,11 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 :::
 
 ### From the index
+
+:::{admonition} Not yet available
+:class: warning
+Nothing is published to a package index yet, and the `ardt-cli` metapackage does not exist as a distribution today. Until it does, use the one-liner above or the by-hand forms below.
+:::
 
 Once the distributions are published, `ardt-cli` bundles them. It is a metapackage with no code of its own, and each theme is an extra, so nothing installs a toolchain your repos do not use:
 
@@ -80,6 +86,14 @@ The set of installed packages *is* the feature set: every command past `ardt inf
 `uvx ardt` is *run-without-install*: it re-resolves the package into a temporary environment on every invocation, cannot see an unpublished workspace, and forgets the plugins you `--with`-ed. Right for one-off runs of a published CLI, wrong for a daily driver.
 :::
 
+### Upgrade and uninstall
+
+Upgrading *is* re-running the installer: `uv tool install --force` replaces the previous install, honoring whatever `ardt.version` pin the current directory's `ardt.yaml` carries. Uninstalling removes the uv tool, which is named after the package owning the `ardt` entry point, not the command:
+
+```bash
+uv tool uninstall ardt-core
+```
+
 ## Two conventions every command honors
 
 `--dry-run`
@@ -91,3 +105,15 @@ The set of installed packages *is* the feature set: every command past `ardt inf
 ## Configure a repo
 
 One file per repo, `ardt.yaml` (or a `[tool.ardt]` table in `pyproject.toml`; the file wins), with one namespaced section per plugin. Nothing in it is required. See [Configuration](concepts/configuration.md).
+
+### A new repo, from scratch
+
+Nothing is required, so start minimal and grow. For a ROS 2 repo, two lines are enough:
+
+```yaml
+tasks:
+  ros:
+    distro: jazzy
+```
+
+From there `ardt deps` / `build` / `test`, `ardt dev open` and `ardt pipe run ros-ci` all work with defaults. The annotated [`ardt.example.yaml`](https://github.com/Asterion-Robotics/ardt/blob/main/ardt.example.yaml) is the full reference — copy it and uncomment what you need. Pin `ardt.version` as soon as CI matters: it is what makes pipeline builds reproducible.

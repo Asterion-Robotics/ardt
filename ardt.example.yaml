@@ -1,5 +1,7 @@
 # ardt.yaml — one file per repo. Sections are namespaced per plugin; unknown
 # sections are errors unless the owning plugin simply is not installed here.
+# Every key is optional: a repo with no config gets defaults everywhere.
+# Commented values show the default unless the comment says otherwise.
 
 project:
   name: my_robot # defaults to the project-root directory name
@@ -18,8 +20,10 @@ project:
 #     ardt-acme: # out-of-monorepo module: its own address + pin
 #       git: git+https://code.example.com/ardt-acme.git
 #       version: v1.2.0
+#       subdirectory: tooling/ardt-acme # package path in that repo; default its root
 
-# Exceptions to the ardt-shipped lint/format configs (repo hygiene).
+# Reserved for a future lint/format plane. Parsed for typo-safety, but nothing
+# consumes these keys yet.
 # check:
 #   ignore: []
 #   clang_format: path/to/.clang-format
@@ -28,16 +32,16 @@ project:
 # no `dev:` section gets the standard environment, and the whole `.devcontainer/`
 # is rendered (and gitignored) by `ardt dev sync`. The dev container's base image
 # defaults to `pipelines.ros_ci.builder` below — that is the parity rule, and
-# `ardt dev doctor` fails when the two drift apart.
+# `ardt dev doctor` fails when the two drift. The container workspace root is
+# always `/ws` (repo at /ws/src/<name>), matching the CI recipe.
 # dev:
 #   profile: ros2 # `ardt dev profiles` lists them
 #   image: registry.example.com/platform/base-images/ros2-dev@sha256:… # skips the local build
 #   base_image: ros:jazzy-ros-base # overrides the ros_ci builder (rarely wanted)
 #   apt_packages: [libeigen3-dev] # extra packages in the dev layer
 #   ardt_modules: [ardt-acme] # extra ardt modules installed in the container
-#   workspace_folder: /ws/src # the CI recipe's path, so CMake caches match
 #   gui: false # headless repo: no display sockets, no host GPU
-#   claude_code: false
+#   claude_code: false # skip the Claude Code CLI install and its login volume
 #   isolate_build_dirs: false # share build/ install/ log/ with the host checkout
 #   extensions: [ms-vscode.hexeditor] # extra VS Code extension ids
 #   mounts: ["/mnt/data:/data:ro"] # extra compose volume entries, verbatim
@@ -46,10 +50,15 @@ project:
 tasks:
   # ardt-doc-tasks — the `tasks.doc:` subsection.
   # doc:
+  #   source_dir: doc # the sphinx project directory (holds conf.py)
+  #   doxygen: auto # run doxygen before sphinx; `auto` = when C/C++ sources exist
+  #   doxygen_input: [include, src] # dirs doxygen scans; empty = the whole repo
+  #   strict: true # warnings are errors (sphinx -W --keep-going)
   #   style: [asterion_sphinx_style] # house style; a plain sphinx extension,
   #                                  # installed via pipelines.docs_ci.pip_packages
   ros:
     distro: jazzy
+    # source_base: /opt/ros # prefix sourced before colcon runs ({distro} appended)
     repos_file: my_robot.repos # imported by `ardt deps` before rosdep runs
     repos_target: src/external
     rosdep_skip_keys: # deps never installed (also: `ardt deps --skip-key KEY`)
@@ -59,22 +68,34 @@ tasks:
     build_args:
       - --cmake-args
       - -DCMAKE_BUILD_TYPE=RelWithDebInfo
+    # test_args: [--retest-until-pass, "2"] # extra arguments for colcon test
     symlink_install: true
+    # merge_install: false # colcon --merge-install
 
 # ardt-ros-pipelines — the `pipelines.ros_ci:` subsection.
 # pipelines:
 #   ros_ci:
-#     base_image: ros:jazzy-ros-base
+#     builder: ros:jazzy-ros-base # build+test stage base (process — never ships);
+#                                 # also the dev container's parity default
+#     base_image: ros:jazzy-ros-base # FROM of the SHIPPED runtime image
+#     base_dockerfile: base.Dockerfile # in-repo base extension, spliced when present
+#     install_base: /opt/ros/app # where the workspace installs inside the image
+#     strip_dev_files: true # remove headers/static libs/CMake exports before shipping
+#     cmd: ["ros2", "launch", "my_robot", "bringup.launch.py"] # shipped image CMD
+#     image: runtime # sub-image under the registry project path; default the path itself
 #     platforms: [linux/amd64]
 #     git_host: code.asterion-robotics.com # auth for private `.repos` deps:
 #     git_ssh_port: 5022                   # CI job token, or a local ssh agent
+#     git_token_user: gitlab-ci-token # username the job token authenticates as
 
 # ardt-doc-pipelines — the `pipelines.docs_ci:` subsection.
 #   docs_ci:
 #     builder: python:3.12-slim # docs toolchain container (never ships)
+#     apt_packages: [git, doxygen, graphviz] # installed into the builder; [] for prebuilt
 #     ardt_modules: [ardt-acme] # ardt modules the docs need importable (autodoc)
 #     pip_packages: # everything else: a sphinx style, a private doc dependency
 #       - "asterion-sphinx-style @ git+https://github.com/Asterion-Robotics/asterion-sphinx-style.git@v0.1.0"
+#     default: v1.2.0 # version the root redirect targets; default the working tree
 #     versions:
 #       branches: [main] # historical versions joining the site (+ working tree)
 #       tags: "v*"

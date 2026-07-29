@@ -20,14 +20,24 @@
 A plugin provides any subset of three entry-point groups:
 
 ===================  ==========================================================
-``ardt.commands``     click commands/groups mounted at the top level
-``ardt.pipelines``    a module exposing ``@pipeline`` functions
-``ardt.templates``    scaffold sets for ``ardt new``
+``ardt.commands``     must load to a :class:`click.Command` (command or group),
+                      mounted at the top level; anything else refuses the plugin
+``ardt.pipelines``    must load to a *module* exposing ``@pipeline`` functions
+                      (checked by ``ardt_pipelines.collect``)
+``ardt.templates``    scaffold sets for ``ardt new`` (contract not yet enforced)
 ===================  ==========================================================
 
 Every plugin distribution declares ``ARDT_PLUGIN_API`` on its root package: an
 incompatible or undeclared API version is **refused loudly and skipped whole**
 — never half-loaded, never a traceback, and never fatal to the rest of the CLI.
+
+Loading is two-speed. Commands load at discovery (almost every invocation,
+``--help`` included, needs them) with the whole-or-nothing rule above. Pipeline
+and template entry points defer until :meth:`Registry.load_deferred` — pipeline
+modules import the Dagger SDK, which no ``ardt build`` should pay for. A
+deferred load failure is reported as a :class:`Problem` and the group stays
+empty; the plugin's already-mounted commands remain (the one place a plugin can
+be observed part-loaded, and only when its own pipeline module is broken).
 
 A root package may also declare ``ARDT_CONFIG_SECTION`` — the ``ardt.yaml``
 section it claims. Without it the section is derived from the distribution
@@ -43,6 +53,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from importlib import metadata
 
+import click
+
 ARDT_PLUGIN_API = 1
 """Bumped with core majors. Plugins declaring another value are refused."""
 
@@ -50,11 +62,6 @@ COMMANDS_GROUP = "ardt.commands"
 PIPELINES_GROUP = "ardt.pipelines"
 TEMPLATES_GROUP = "ardt.templates"
 GROUPS = (COMMANDS_GROUP, PIPELINES_GROUP, TEMPLATES_GROUP)
-
-
-def _empty() -> dict[str, object]:
-    """A typed empty dict — bare ``dict`` as a default_factory infers Unknown."""
-    return {}
 
 
 @dataclass
@@ -70,9 +77,16 @@ class Plugin:
     section: str = ""
     """The ``ardt.yaml`` section this plugin claims: the root package's
     ``ARDT_CONFIG_SECTION``, else derived from the distribution name."""
-    commands: dict[str, object] = field(default_factory=_empty)
-    pipelines: dict[str, object] = field(default_factory=_empty)
-    templates: dict[str, object] = field(default_factory=_empty)
+    commands: dict[str, object] = field(default_factory=dict[str, object])
+    pipelines: dict[str, object] = field(default_factory=dict[str, object])
+    """Empty until :meth:`Registry.load_deferred` runs."""
+    templates: dict[str, object] = field(default_factory=dict[str, object])
+    """Empty until :meth:`Registry.load_deferred` runs."""
+    deferred: list[metadata.EntryPoint] = field(
+        default_factory=list[metadata.EntryPoint], repr=False
+    )
+    """Pipeline/template entry points not yet loaded; drained by
+    :meth:`Registry.load_deferred`."""
 
 
 def derived_section(distribution: str) -> str:
@@ -105,6 +119,34 @@ class Registry:
         for plugin in self.plugins:
             merged.update(plugin.commands)
         return merged
+
+    def load_deferred(self) -> None:
+        """Load the pipeline/template entry points. Idempotent.
+
+        Called by the consumers that need those groups (``ardt pipe``,
+        ``ardt plugins``); everything else never imports a pipeline module.
+        A failure empties the plugin's deferred groups and becomes a
+        :class:`Problem` — the CLI stays alive, ``ardt plugins`` explains.
+        """
+        for plugin in self.plugins:
+            entry_points, plugin.deferred = plugin.deferred, []
+            for entry_point in entry_points:
+                try:
+                    loaded: object = entry_point.load()
+                except Exception as exc:
+                    plugin.pipelines.clear()
+                    plugin.templates.clear()
+                    self.problems.append(
+                        Problem(
+                            plugin.name,
+                            f"entry point `{entry_point.name}` failed: {_brief(exc)}",
+                        )
+                    )
+                    break
+                target = (
+                    plugin.pipelines if entry_point.group == PIPELINES_GROUP else plugin.templates
+                )
+                target[entry_point.name] = loaded
 
 
 def _root_package(entry_point: metadata.EntryPoint) -> str:
@@ -147,6 +189,21 @@ def discover(entry_points: Iterable[metadata.EntryPoint] | None = None) -> Regis
         if problem is not None:
             problems.append(problem)
 
+    # Cross-plugin command collisions: :meth:`Registry.commands` merges in this
+    # same order, so the later plugin wins — silently, unless reported here.
+    owners: dict[str, str] = {}
+    for plugin in plugins:
+        for command in plugin.commands:
+            if command in owners:
+                problems.append(
+                    Problem(
+                        plugin.name,
+                        f"command `{command}` is also provided by `{owners[command]}`; "
+                        f"`{plugin.name}`'s wins",
+                    )
+                )
+            owners[command] = plugin.name
+
     return Registry(plugins=plugins, problems=problems)
 
 
@@ -175,19 +232,28 @@ def _load_distribution(
     section = declared if isinstance(declared, str) and declared else derived_section(name)
     plugin = Plugin(name=name, version=_version(name), api=api, module=root, section=section)
 
-    # Load whole-or-nothing: one bad entry point disqualifies the distribution,
-    # so a plugin never contributes half its commands.
+    # Commands load whole-or-nothing: one bad entry point disqualifies the
+    # distribution, so a plugin never contributes half its commands. Pipeline
+    # and template entry points defer (Registry.load_deferred): pipeline
+    # modules import the Dagger SDK, which most invocations never need.
     for entry_point in entry_points:
+        if entry_point.group != COMMANDS_GROUP:
+            plugin.deferred.append(entry_point)
+            continue
         try:
             loaded: object = entry_point.load()
         except Exception as exc:
             return None, Problem(name, f"entry point `{entry_point.name}` failed: {_brief(exc)}")
-        target = {
-            COMMANDS_GROUP: plugin.commands,
-            PIPELINES_GROUP: plugin.pipelines,
-            TEMPLATES_GROUP: plugin.templates,
-        }[entry_point.group]
-        target[entry_point.name] = loaded
+        # An entry point aimed at the wrong attribute used to vanish silently
+        # (the CLI filtered non-click objects); wrong type is a refusal like
+        # any other, so the author hears about it instead of missing a command.
+        if not isinstance(loaded, click.Command):
+            return None, Problem(
+                name,
+                f"entry point `{entry_point.name}` must load to a click.Command, "
+                f"got {type(loaded).__name__}",
+            )
+        plugin.commands[entry_point.name] = loaded
 
     return plugin, None
 

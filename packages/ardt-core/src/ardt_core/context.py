@@ -25,7 +25,6 @@ implementation, not two that drift.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from functools import cached_property
 from pathlib import Path
 
 from . import ci as ci_module
@@ -41,14 +40,18 @@ from .plugins import Registry, discover
 from .runner import Runner
 
 
-def _empty_dict() -> dict[str, object]:
-    """A typed empty dict — bare ``dict`` as a default_factory infers Unknown."""
-    return {}
-
-
-@dataclass
+@dataclass(slots=True)
 class Context:
-    """Everything a command needs to know about where and how it is running."""
+    """Everything a command needs to know about where and how it is running.
+
+    The write contract (``slots=True`` makes inventing attributes an
+    ``AttributeError``; a policy test in the workspace ``tests/`` sweeps for
+    the rest): every field except ``publish`` is *identity* — set once by
+    :meth:`build`, never reassigned, because every command and plugin aliases
+    this one instance and a mid-run rewrite is visible to all of them.
+    Commands may set ``publish`` and call :meth:`emit`; nothing else writes.
+    Tests may inject identity fields (``ctx.ci = …``) on instances they own.
+    """
 
     project_root: Path
     cfg: ArdtConfig
@@ -61,7 +64,10 @@ class Context:
     dry_run: bool = False
     publish: bool = False
     json_output: bool = False
-    _emitted: dict[str, object] = field(default_factory=_empty_dict, repr=False)
+    _emitted: dict[str, object] = field(default_factory=dict[str, object], repr=False)
+    _version: str | None = field(default=None, repr=False)
+    """Manual cache for :attr:`version` — ``cached_property`` needs an instance
+    ``__dict__``, which ``slots=True`` removes."""
 
     @classmethod
     def build(
@@ -73,14 +79,20 @@ class Context:
         json_output: bool = False,
         verbose: int = 0,
         registry: Registry | None = None,
+        console: Console | None = None,
     ) -> Context:
-        """Assemble the context. The only place the pieces are wired together."""
+        """Assemble the context. The only place the pieces are wired together.
+
+        ``registry`` and ``console`` are injection points for tests (a fake
+        plugin set, a capturing stream); production callers pass neither.
+        """
         cwd = (cwd or Path.cwd()).resolve()
         root = config_module.find_project_root(cwd)
         cfg, source = config_module.load(root)
 
         ci = ci_module.detect()
-        console = Console(ci, verbose=verbose)
+        if console is None:
+            console = Console(ci, verbose=verbose)
         plugin_registry = registry if registry is not None else discover()
 
         _report_plugin_problems(console, plugin_registry)
@@ -105,10 +117,12 @@ class Context:
         """The project name: ``project.name`` from config, else the root directory name."""
         return self.cfg.project.name or self.project_root.name
 
-    @cached_property
+    @property
     def version(self) -> str:
-        """The version of the working tree, per the single tag policy."""
-        return version_module.compute(self.git)
+        """The version of the working tree, per the single tag policy. Cached."""
+        if self._version is None:
+            self._version = version_module.compute(self.git)
+        return self._version
 
     @property
     def is_release(self) -> bool:

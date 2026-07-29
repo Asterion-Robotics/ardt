@@ -6,7 +6,7 @@ The project root is found by walking up from the working directory to the first 
 
 ## Namespaced sections
 
-Core owns `project:`, `check:` and `ardt:`. Everything else belongs to a plugin, which claims its section and parses it into its own pydantic model — core never knows their shape.
+Core owns `project:` and `ardt:`, plus the reserved `check:` section (parsed for typo-safety; nothing consumes it yet). Everything else belongs to a plugin, which claims its section and parses it into its own pydantic model — core never knows their shape.
 
 ```yaml
 project:

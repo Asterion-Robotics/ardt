@@ -24,7 +24,6 @@ three host shapes, and the refusal to clobber a file ardt did not write.
 
 from __future__ import annotations
 
-import io
 import json
 from dataclasses import replace
 from pathlib import Path
@@ -33,22 +32,17 @@ import pytest
 import yaml
 
 from ardt_core.config import ArdtConfig
-from ardt_core.context import Context
-from ardt_core.errors import ArdtError
-from ardt_core.plugins import Registry
+from ardt_core.errors import ArdtError, ConfigError
+from ardt_core.testing import build_context
 from ardt_dev import host as host_module
+from ardt_dev import manifest as manifest_module
 from ardt_dev import profiles as profiles_module
 from ardt_dev import render as render_module
 from ardt_dev.config import ci_builder, dev_config, ros_distro
 from ardt_dev.host import HostFacts
 from ardt_dev.profiles import ROS2, profile
 
-
-def context(root: Path, **kwargs: object) -> Context:
-    ctx = Context.build(cwd=root, registry=Registry(plugins=[], problems=[]), **kwargs)  # type: ignore[arg-type]
-    ctx.console._stream = io.StringIO()  # capture; keep it plain
-    ctx.console._plain = True
-    return ctx
+context = build_context
 
 
 def plan(
@@ -66,7 +60,7 @@ def plan(
     )
 
 
-LINUX = HostFacts(system="Linux", display=":1", dri=True)
+LINUX = HostFacts(system="Linux", display=":1", dri=True, x11_socket=True)
 WSL = HostFacts(system="Linux", wsl_kernel=True, wslg=True, dxg=True, display=":0")
 MAC = HostFacts(system="Darwin")
 
@@ -90,11 +84,20 @@ def test_wsl2_without_wslg_says_so_instead_of_mounting_nothing() -> None:
     assert any("wsl --update" in note for note in host.notes)
 
 
-def test_linux_mounts_the_x11_socket_when_present(tmp_path: Path) -> None:
+def test_linux_mounts_the_x11_socket_when_present() -> None:
     host = host_module.detect(LINUX)
     assert host.kind == host_module.LINUX
     assert host.environment["DISPLAY"] == ":1"
+    assert "/tmp/.X11-unix:/tmp/.X11-unix" in host.volumes
     assert "/dev/dri" in host.devices
+
+
+def test_linux_without_an_x_socket_notes_it_instead_of_wiring_a_dead_display() -> None:
+    """Regression: detect() used to probe the real /tmp/.X11-unix, so this
+    branch was untestable and the test above failed on headless machines."""
+    host = host_module.detect(HostFacts(system="Linux", display=":1"))
+    assert not host.gui
+    assert any("Wayland-only" in note for note in host.notes)
 
 
 def test_macos_has_no_display_and_no_host_networking() -> None:
@@ -367,12 +370,19 @@ def test_a_profile_without_cpp_renders_no_vscode_file(monkeypatch: pytest.Monkey
     assert render_module.CPP_PROPERTIES in plan(ArdtConfig()).files
 
 
-def test_workspace_folder_reaches_every_file_that_needs_it() -> None:
+def test_the_fixed_workspace_root_reaches_every_file_that_needs_it() -> None:
+    files = plan(ArdtConfig()).files
+    assert "/ws/install/setup.bash" in files[render_module.DOCKERFILE]
+    assert "..:/ws/src/demo:cached" in files[render_module.COMPOSE]
+    assert '"workspaceFolder": "/ws"' in files[render_module.DEVCONTAINER]
+
+
+def test_workspace_folder_is_not_a_knob() -> None:
+    """The workspace root is a fixed convention: the CI recipe hard-codes /ws,
+    and a configurable dev-side path silently broke the parity rule."""
     cfg = ArdtConfig.model_validate({"dev": {"workspace_folder": "/opt/ws"}})
-    files = plan(cfg).files
-    assert "/opt/ws/install/setup.bash" in files[render_module.DOCKERFILE]
-    assert "..:/opt/ws/src/demo:cached" in files[render_module.COMPOSE]
-    assert '"workspaceFolder": "/opt/ws"' in files[render_module.DEVCONTAINER]
+    with pytest.raises(ConfigError, match="workspace_folder"):
+        dev_config(cfg)
 
 
 def test_compose_build_paths_resolve_from_the_devcontainer_dir() -> None:
@@ -409,8 +419,8 @@ def test_unknown_profile_names_the_ones_that_exist() -> None:
 
 def test_sync_writes_the_render_and_gitignores_it(repo: Path) -> None:
     ctx = context(repo)
-    result = render_module.write(repo, plan(ctx.cfg))
-    assert render_module.ensure_gitignored(repo) == list(render_module.GITIGNORE_ENTRIES)
+    result = manifest_module.write(repo, plan(ctx.cfg))
+    assert manifest_module.ensure_gitignored(repo) == list(manifest_module.GITIGNORE_ENTRIES)
     assert (repo / render_module.DOCKERFILE).is_file()
     # The .vscode/ half lands outside .devcontainer/, and is ignored on its own.
     assert (repo / render_module.CPP_PROPERTIES).is_file()
@@ -426,73 +436,73 @@ def test_sync_writes_the_render_and_gitignores_it(repo: Path) -> None:
 
 
 def test_gitignore_entries_are_added_once(repo: Path) -> None:
-    assert render_module.ensure_gitignored(repo) == list(render_module.GITIGNORE_ENTRIES)
-    assert render_module.ensure_gitignored(repo) == []
-    assert render_module.is_gitignored(repo)
+    assert manifest_module.ensure_gitignored(repo) == list(manifest_module.GITIGNORE_ENTRIES)
+    assert manifest_module.ensure_gitignored(repo) == []
+    assert manifest_module.is_gitignored(repo)
 
 
 def test_a_partially_ignored_repo_gets_only_what_it_lacks(repo: Path) -> None:
     """The .vscode/ entry is new; a repo synced by an older ardt-dev has only the first."""
     (repo / ".gitignore").write_text(".devcontainer/\n")
-    assert render_module.ensure_gitignored(repo) == [render_module.CPP_PROPERTIES]
+    assert manifest_module.ensure_gitignored(repo) == [render_module.CPP_PROPERTIES]
     assert (repo / ".gitignore").read_text().count(".devcontainer/") == 1
 
 
 def test_a_pre_vscode_manifest_is_read_not_treated_as_hand_edits(repo: Path) -> None:
     """Older ardt-dev keyed the manifest by bare file name, not by repo path."""
     ctx = context(repo)
-    render_module.write(repo, plan(ctx.cfg))
-    path = repo / render_module.MANIFEST
+    manifest_module.write(repo, plan(ctx.cfg))
+    path = repo / manifest_module.MANIFEST
     data = json.loads(path.read_text())
     data["generated"] = {Path(k).name: v for k, v in data["generated"].items()}
     path.write_text(json.dumps(data))
     # Same files on disk, legacy keys: nothing is a conflict, nothing is stale.
-    state = render_module.audit(repo, plan(ctx.cfg))
+    state = manifest_module.audit(repo, plan(ctx.cfg))
     assert state.conflicts == []
     assert render_module.DOCKERFILE in state.unchanged
 
 
 def test_a_second_sync_is_a_no_op(repo: Path) -> None:
     ctx = context(repo)
-    render_module.write(repo, plan(ctx.cfg))
-    again = render_module.write(repo, plan(ctx.cfg))
+    manifest_module.write(repo, plan(ctx.cfg))
+    again = manifest_module.write(repo, plan(ctx.cfg))
     assert again.written == []
     assert render_module.DOCKERFILE in again.unchanged
 
 
 def test_a_hand_edit_is_refused_not_silently_kept(repo: Path) -> None:
     ctx = context(repo)
-    render_module.write(repo, plan(ctx.cfg))
+    manifest_module.write(repo, plan(ctx.cfg))
     (repo / render_module.DOCKERFILE).write_text("FROM scratch\n")
     with pytest.raises(ArdtError, match="did not generate"):
-        render_module.write(repo, plan(ctx.cfg))
-    assert render_module.audit(repo, plan(ctx.cfg)).conflicts == [render_module.DOCKERFILE]
+        manifest_module.write(repo, plan(ctx.cfg))
+    assert manifest_module.audit(repo, plan(ctx.cfg)).conflicts == [render_module.DOCKERFILE]
 
 
 def test_force_overwrites_a_hand_edit(repo: Path) -> None:
     ctx = context(repo)
-    render_module.write(repo, plan(ctx.cfg))
+    manifest_module.write(repo, plan(ctx.cfg))
     (repo / render_module.DOCKERFILE).write_text("FROM scratch\n")
-    result = render_module.write(repo, plan(ctx.cfg), force=True)
+    result = manifest_module.write(repo, plan(ctx.cfg), force=True)
     assert result.conflicts == []
     assert "FROM scratch" not in (repo / render_module.DOCKERFILE).read_text()
 
 
 def test_a_stale_render_of_ours_refreshes_without_force(repo: Path) -> None:
     ctx = context(repo)
-    render_module.write(repo, plan(ctx.cfg))
+    manifest_module.write(repo, plan(ctx.cfg))
     # Same content ardt wrote, but from an older tool: still ours to replace.
     stale = plan(ctx.cfg, facts=MAC)
-    result = render_module.write(repo, stale)
+    result = manifest_module.write(repo, stale)
     assert render_module.COMPOSE_HOST in result.written
 
 
 def test_host_config_rewrites_only_the_overlay(repo: Path) -> None:
     ctx = context(repo)
     linux_plan = plan(ctx.cfg, facts=LINUX)
-    render_module.write(repo, linux_plan)
+    manifest_module.write(repo, linux_plan)
     mac_plan = plan(ctx.cfg, facts=MAC)
-    result = render_module.write(repo, mac_plan, force=True, only=mac_plan.host_files)
+    result = manifest_module.write(repo, mac_plan, force=True, only=mac_plan.host_files)
     assert result.written == [render_module.COMPOSE_HOST]
     overlay = (repo / render_module.COMPOSE_HOST).read_text()
     assert "LOCALHOST" in overlay
@@ -502,8 +512,8 @@ def test_host_config_rewrites_only_the_overlay(repo: Path) -> None:
 
 def test_manifest_records_what_the_render_was_resolved_from(repo: Path) -> None:
     ctx = context(repo)
-    render_module.write(repo, plan(ctx.cfg, facts=WSL, ardt_source="../../ardt"))
-    data = json.loads((repo / render_module.MANIFEST).read_text())
+    manifest_module.write(repo, plan(ctx.cfg, facts=WSL, ardt_source="../../ardt"))
+    data = json.loads((repo / manifest_module.MANIFEST).read_text())
     assert data["profile"] == "ros2"
     assert data["host"] == "wsl2"
     assert data["ardt_source"] == "../../ardt"

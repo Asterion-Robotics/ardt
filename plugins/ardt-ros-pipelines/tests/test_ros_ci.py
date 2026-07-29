@@ -28,18 +28,9 @@ import json
 from pathlib import Path
 
 from ardt_core.config import ArdtConfig
+from ardt_core.testing import run_cli
 
-
-def run(args: list[str], cwd: Path) -> tuple[int, str, str]:
-    import contextlib
-    import io
-
-    from ardt_core.cli import main
-
-    out, err = io.StringIO(), io.StringIO()
-    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-        code = main(["-C", str(cwd), *args])
-    return code, out.getvalue(), err.getvalue()
+run = run_cli
 
 
 class TestConfig:

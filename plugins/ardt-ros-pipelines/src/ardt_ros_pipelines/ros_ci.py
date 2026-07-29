@@ -75,7 +75,9 @@ class RosCiConfig(BaseModel):
     builder: str = "ros:jazzy-ros-base"
     """Base of the build+test stage (process — never ships)."""
     base_image: str = "ros:jazzy-ros-base"
-    """Base (``FROM``) of the SHIPPED runtime image."""
+    """Base (``FROM``) of the SHIPPED runtime image. It need not carry the
+    workspace's runtime closure: the runtime stage installs the built
+    packages' exec dependencies itself, via its own rosdep pass."""
     base_dockerfile: str = "base.Dockerfile"
     """Optional in-repo base extension: a single-stage Dockerfile starting
     ``FROM ${BASE_IMAGE}`` (kernel modules, vendor drivers…). When present it is
@@ -126,6 +128,20 @@ def _git_credentials(
     return std.git_credentials(dag, ctx, host=cfg.git_host)
 
 
+def _rosdep_skip_keys(ctx: Context) -> tuple[str, ...]:
+    """``tasks.ros.rosdep_skip_keys``, read raw.
+
+    The runtime stage runs its own rosdep pass and must skip the same keys the
+    build stage's ``ardt deps`` skips. The section belongs to ``ardt-ros-tasks``
+    (which this plugin must not import), so it is read as plain data and treated
+    as absent when malformed — the task plugin owns validation.
+    """
+    keys = ctx.cfg.raw("tasks.ros.rosdep_skip_keys")
+    if not isinstance(keys, list):
+        return ()
+    return tuple(key for key in keys if isinstance(key, str))  # pyright: ignore[reportUnknownVariableType]
+
+
 def _ardt_dist(ctx: Context, ardt_source: str) -> DistConfig:
     """The repo's ``ardt:`` section, with a ``--arg ardt_source=git+…`` swap."""
     section = ctx.cfg.ardt
@@ -155,6 +171,7 @@ def _build_context(
         git_host=cfg.git_host,
         git_ssh_port=cfg.git_ssh_port,
         git_token_user=cfg.git_token_user,
+        rosdep_skip_keys=_rosdep_skip_keys(ctx),
     )
     context = src.with_new_file(recipes.RENDERED_NAME, rendered)
     if local_ardt:
@@ -179,7 +196,9 @@ async def ros_ci(ctx: Context, dag: dagger.Client, ardt_source: str = "") -> Non
     # Export the JUnit XMLs (CI renders them) and the rendered Dockerfile
     # (the audit/`docker build` escape hatch ships with every run).
     export_dir = ctx.project_root / JUNIT_EXPORT_DIR
-    await build_stage.directory(recipes.RESULTS_DIR).export(str(export_dir))
+    # wipe: stale JUnit XMLs from a previous run must not survive into this
+    # run's reports.
+    await build_stage.directory(recipes.RESULTS_DIR).export(str(export_dir), wipe=True)
     rendered_path = export_dir / recipes.RENDERED_NAME
     rendered_path.parent.mkdir(parents=True, exist_ok=True)
     rendered_path.write_text(rendered, encoding="utf-8")

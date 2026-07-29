@@ -33,14 +33,15 @@ UV_STUB = '#!/bin/sh\nprintf \'%s\\n\' "$@" > "$STUB_LOG"\n'
 ARDT_STUB = '#!/bin/sh\necho "ardt, version 0.0.0-stub"\n'
 
 
-def run_install(
+def run_install_requirements(
     tmp_path: Path,
     *,
     ci: bool,
     ardt_yaml: str | None = None,
     env_modules: str | None = None,
+    env_ref: str | None = None,
 ) -> list[str]:
-    """Run install.sh in a scratch dir; return the installed module names."""
+    """Run install.sh in a scratch dir; return the recorded requirement strings."""
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir(exist_ok=True)
     log = tmp_path / "uv-args.txt"
@@ -55,10 +56,26 @@ def run_install(
         env["CI"] = "true"
     if env_modules is not None:
         env["ARDT_MODULES"] = env_modules
+    if env_ref is not None:
+        env["ARDT_REF"] = env_ref
     subprocess.run(
         ["bash", str(INSTALL_SH)], cwd=tmp_path, env=env, check=True, capture_output=True
     )
-    return [line.split(" @ ")[0] for line in log.read_text().splitlines() if " @ " in line]
+    return [line for line in log.read_text().splitlines() if " @ " in line]
+
+
+def run_install(
+    tmp_path: Path,
+    *,
+    ci: bool,
+    ardt_yaml: str | None = None,
+    env_modules: str | None = None,
+) -> list[str]:
+    """Like :func:`run_install_requirements`, reduced to the module names."""
+    requirements = run_install_requirements(
+        tmp_path, ci=ci, ardt_yaml=ardt_yaml, env_modules=env_modules
+    )
+    return [line.split(" @ ")[0] for line in requirements]
 
 
 BUNDLE = ["ardt-core", "ardt-pipelines", "ardt-ros-tasks", "ardt-ros-pipelines"]
@@ -105,3 +122,34 @@ def test_extra_already_in_bundle_is_not_duplicated(tmp_path: Path) -> None:
 def test_env_overrides_config_and_bundle(tmp_path: Path) -> None:
     yaml = "ardt:\n  install_extras: [ardt-doc-tasks]\n  install_skip: [ardt-core]\n"
     assert run_install(tmp_path, ci=True, ardt_yaml=yaml, env_modules="ardt-core") == ["ardt-core"]
+
+
+def test_pin_reaches_every_requirement(tmp_path: Path) -> None:
+    yaml = "ardt:\n  version: v0.3.0\n"
+    requirements = run_install_requirements(tmp_path, ci=True, ardt_yaml=yaml)
+    assert requirements and all("@v0.3.0#subdirectory=" in line for line in requirements)
+
+
+def test_module_pin_does_not_shadow_the_top_level_pin(tmp_path: Path) -> None:
+    """Regression: a deeper `modules.<name>.version:` before `version:` won the old parse."""
+    yaml = (
+        "ardt:\n"
+        "  modules:\n"
+        "    ardt-acme:\n"
+        "      git: git+https://code.example.com/ardt-acme.git\n"
+        "      version: v9.9.9\n"
+        "  version: v0.3.0\n"
+    )
+    requirements = run_install_requirements(tmp_path, ci=True, ardt_yaml=yaml)
+    assert requirements and all("@v0.3.0#subdirectory=" in line for line in requirements)
+
+
+def test_nested_list_keys_inside_modules_are_ignored(tmp_path: Path) -> None:
+    yaml = "ardt:\n  modules:\n    ardt-acme:\n      install_extras: [ardt-bogus]\n"
+    assert run_install(tmp_path, ci=True, ardt_yaml=yaml) == BUNDLE
+
+
+def test_env_ref_overrides_the_pin(tmp_path: Path) -> None:
+    yaml = "ardt:\n  version: v0.3.0\n"
+    requirements = run_install_requirements(tmp_path, ci=True, ardt_yaml=yaml, env_ref="v1.2.3")
+    assert requirements and all("@v1.2.3#subdirectory=" in line for line in requirements)

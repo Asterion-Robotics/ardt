@@ -25,6 +25,7 @@ fallback (GitLab's registry would reject it anyway).
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -57,16 +58,28 @@ class TestImageRef:
     def test_ci_ref_is_namespaced_by_the_project_path(self, repo: Path) -> None:
         """GitLab only accepts pushes under $CI_REGISTRY_IMAGE = registry/<group>/<project>."""
         ctx = _context(repo, _ci("example-group/my_robot"))
-        assert std.image_ref(ctx) == f"{REGISTRY}/example-group/my_robot:{ctx.version}"
+        assert (
+            std.image_ref(ctx) == f"{REGISTRY}/example-group/my_robot:{std.image_tag(ctx.version)}"
+        )
 
     def test_name_appends_a_sub_image(self, repo: Path) -> None:
         ctx = _context(repo, _ci("example-group/my_robot"))
-        assert std.image_ref(ctx, "slim") == f"{REGISTRY}/example-group/my_robot/slim:{ctx.version}"
+        assert (
+            std.image_ref(ctx, "slim")
+            == f"{REGISTRY}/example-group/my_robot/slim:{std.image_tag(ctx.version)}"
+        )
 
     def test_repository_path_is_lowercased(self, repo: Path) -> None:
         """Registries reject uppercase repository paths; GitLab lowercases its own."""
         ctx = _context(repo, _ci("Example-Group/My_Robot"))
         assert std.image_ref(ctx).startswith(f"{REGISTRY}/example-group/my_robot:")
+
+    def test_dev_version_yields_a_pushable_tag(self, repo: Path) -> None:
+        """Off-tag versions carry a PEP 440 `+local` part; registries reject it in tags."""
+        ctx = _context(repo, _ci("example-group/my_robot"))
+        assert "+" in ctx.version  # the fixture repo has no tag: a local version
+        tag = std.image_ref(ctx).rsplit(":", 1)[1]
+        assert re.fullmatch(r"[a-zA-Z0-9_][a-zA-Z0-9._-]{0,127}", tag), tag
 
     @pytest.mark.parametrize(
         "remote",
@@ -80,12 +93,16 @@ class TestImageRef:
         """The same full name locally as on CI — the parity rule."""
         git("remote", "add", "origin", remote, cwd=repo)
         ctx = _context(repo, _ci())
-        assert std.image_ref(ctx) == f"{REGISTRY}/example-group/my_robot:{ctx.version}"
+        assert (
+            std.image_ref(ctx) == f"{REGISTRY}/example-group/my_robot:{std.image_tag(ctx.version)}"
+        )
 
     def test_ci_project_path_wins_over_the_remote(self, repo: Path) -> None:
         git("remote", "add", "origin", "https://code.example.com/other/place.git", cwd=repo)
         ctx = _context(repo, _ci("example-group/my_robot"))
-        assert std.image_ref(ctx) == f"{REGISTRY}/example-group/my_robot:{ctx.version}"
+        assert (
+            std.image_ref(ctx) == f"{REGISTRY}/example-group/my_robot:{std.image_tag(ctx.version)}"
+        )
 
     def test_unresolvable_path_is_a_clean_error(self, repo: Path) -> None:
         """No flat fallback: a ref outside the project namespace could never push."""
@@ -96,7 +113,7 @@ class TestImageRef:
 
     def test_dry_run_renders_a_placeholder_instead(self, repo: Path) -> None:
         ctx = _context(repo, _ci(), dry_run=True)
-        assert std.image_ref(ctx) == f"{REGISTRY}/<project-path>:{ctx.version}"
+        assert std.image_ref(ctx) == f"{REGISTRY}/<project-path>:{std.image_tag(ctx.version)}"
 
     def test_no_registry_is_a_clean_error(self, repo: Path) -> None:
         ctx = _context(repo, _ci(registry=None))

@@ -21,6 +21,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # The canonical colcon workspace, identical to the dev container's: this repo
 # is ONE entry under /ws/src, `.repos` imports land grouped in /ws/src/external,
 # and colcon runs from /ws so build/install/log land beside the sources.
+# (The /ws rule's one implementation is ardt_core.config.workspace_root; this
+# template hard-codes the same convention.)
 # WORKDIR anchors ardt in this repo's config, not in the workspace root.
 COPY . /ws/src/@PROJECT@
 WORKDIR /ws/src/@PROJECT@
@@ -44,4 +46,18 @@ RUN mkdir -p /results && cd /ws/build \
 FROM @RUNTIME_FROM@ AS runtime
 
 COPY --from=build @INSTALL_BASE@ @INSTALL_BASE@
+# 5b) exec dependencies install HERE, not in the build stage: the runtime image
+# starts from the configured base alone, and everything rosdep put into the
+# builder would otherwise be missing at runtime. The install space's
+# share/*/package.xml files are the manifest rosdep scans; --ignore-src skips
+# the workspace's own (already copied) packages. An unresolvable key fails the
+# image build — the earliest moment it can be caught.
+RUN apt-get update \
+ && { command -v rosdep >/dev/null 2>&1 \
+      || apt-get install -y --no-install-recommends python3-rosdep; } \
+ && { [ -f /etc/ros/rosdep/sources.list.d/20-default.list ] || rosdep init; } \
+ && rosdep update --rosdistro ${ROS_DISTRO} \
+ && rosdep install --from-paths @INSTALL_BASE@ --ignore-src -y \
+      --rosdistro ${ROS_DISTRO} --dependency-types exec@RUNTIME_SKIP@ \
+ && rm -rf /var/lib/apt/lists/* /root/.ros/rosdep
 @CMD@

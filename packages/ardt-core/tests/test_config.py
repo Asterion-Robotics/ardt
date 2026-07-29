@@ -162,9 +162,42 @@ def test_find_project_root_resolves_a_colcon_workspace(tmp_path: Path) -> None:
     assert config.find_project_root(nested) == repo
 
 
+def test_find_project_root_ignores_a_stray_src_on_the_walk(tmp_path: Path) -> None:
+    """Regression: the convention applied at every ancestor, so a stray
+    `~/src/<repo>` hijacked invocations from anywhere under `~`."""
+    write(tmp_path, "src/someproj/ardt.yaml", "{}\n")
+    unrelated = tmp_path / "documents" / "notes"
+    unrelated.mkdir(parents=True)
+    assert config.find_project_root(unrelated) == unrelated.resolve()
+
+
 def test_find_project_root_accepts_a_repo_checked_out_as_src(tmp_path: Path) -> None:
     write(tmp_path, "src/ardt.yaml", "{}\n")
     assert config.find_project_root(tmp_path) == (tmp_path / "src").resolve()
+
+
+def test_raw_reads_dotted_paths_tolerantly() -> None:
+    cfg = config.ArdtConfig.model_validate({"tasks": {"ros": {"distro": "kilted"}}})
+    assert cfg.raw("tasks.ros.distro") == "kilted"
+    assert cfg.raw("tasks.ros") == {"distro": "kilted"}
+    assert cfg.raw("tasks.ros.nope") is None
+    assert cfg.raw("tasks.ros.distro.deeper") is None  # scalar mid-path
+    assert cfg.raw("ghost.anything") is None
+
+
+def test_workspace_root_convention(tmp_path: Path) -> None:
+    ws = tmp_path / "ws"
+    assert config.workspace_root(ws / "src" / "repo") == ws
+    assert config.workspace_root(ws / "src") == ws
+    assert config.workspace_root(tmp_path / "plain") == tmp_path / "plain"
+
+
+def test_duplicate_yaml_keys_are_rejected(tmp_path: Path) -> None:
+    """Regression: PyYAML silently kept the last duplicate, dropping the first
+    `tasks:` block — the opposite of the typo-safety this module promises."""
+    write(tmp_path, "ardt.yaml", "tasks:\n  ros:\n    distro: jazzy\ntasks:\n  doc: {}\n")
+    with pytest.raises(ConfigError, match="duplicate key"):
+        config.load(tmp_path)
 
 
 def test_find_project_root_refuses_to_guess_between_projects(tmp_path: Path) -> None:
