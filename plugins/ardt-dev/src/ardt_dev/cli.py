@@ -31,65 +31,25 @@ from pathlib import Path
 
 import click
 
-from ardt_core import env as env_module
 from ardt_core.cli import pass_ardt
 from ardt_core.config import workspace_root
 from ardt_core.context import Context
 from ardt_core.errors import ArdtError
 
+from . import checks as checks_module
+from . import docker as docker_module
 from . import host as host_module
 from . import manifest as manifest_module
 from . import render as render_module
-from .config import DEVCONTAINER_DIR, WORKSPACE_FOLDER, ci_builder, dev_config, ros_distro
+from .config import DEVCONTAINER_DIR, WORKSPACE_FOLDER, dev_config, ros_distro
 from .config import source_folder as container_source_folder
-from .host import HostFacts
 from .profiles import DISTRO, PROFILES, profile
 from .render import (
-    COMPOSE,
     COMPOSE_HOST,
-    IN_CONTAINER_ENV,
     POST_CREATE,
     USER,
     Render,
 )
-
-
-def _daemon_status(ctx: Context) -> tuple[bool, str]:
-    """Probe the docker daemon: ``(reachable, detail)``.
-
-    The one probe both :func:`_require_docker` and ``doctor`` use, so their
-    diagnoses cannot drift. The unreachable detail is the everyday WSL2 trap:
-    Docker Desktop stopped, or its WSL integration off for this very distro,
-    and every `docker` call dies with a socket error the user has seen ten
-    times without ever reading.
-    """
-    probe = ctx.runner.run(
-        ["docker", "info", "--format", "{{.ServerVersion}}"], check=False, quiet=True
-    )
-    if probe.ok:
-        return True, f"daemon up (server {probe.tail.strip()})"
-    if HostFacts.probe().wsl_kernel:
-        return False, (
-            "WSL2: start Docker Desktop on Windows and check Settings > Resources > "
-            "WSL integration is enabled for THIS distro — or install Docker Engine "
-            "inside the distro"
-        )
-    return False, (
-        "start the daemon (`sudo systemctl start docker`) and check your user "
-        "is in the `docker` group"
-    )
-
-
-def _require_docker(ctx: Context) -> None:
-    """Fail with a diagnosis, not a stack trace, when docker cannot run."""
-    ctx.runner.require(
-        "docker", hint="install Docker Engine, or enable Docker Desktop's WSL integration"
-    )
-    if ctx.dry_run:
-        return
-    ok, detail = _daemon_status(ctx)
-    if not ok:
-        raise ArdtError("docker is installed but its daemon is not reachable", hint=detail)
 
 
 @click.group()
@@ -203,73 +163,19 @@ def host_config(ctx: Context) -> None:
             ctx.console.warn(note)
 
 
-def _ensure_volumes(ctx: Context, plan: Render) -> list[str]:
-    """Create what compose will not create itself, and return what was touched.
-
-    Two gaps, both by design elsewhere: an ``external:`` volume is compose's cue
-    that something else owns it (which is exactly what keeps `--purge`
-    repo-scoped), and Docker refuses to mount a subpath that does not exist
-    rather than creating it (moby#47842). Both are fixed with a `docker volume
-    create` and one throwaway `mkdir` container, all idempotent.
-    """
-    touched: list[str] = []
-    for name in plan.shared_volumes:
-        ctx.runner.run(["docker", "volume", "create", name], quiet=True)
-        touched.append(name)
-    if plan.colcon_volume:
-        ctx.runner.run(["docker", "volume", "create", plan.colcon_volume], quiet=True)
-        # The provisioning image is the one this repo pulls anyway, so this
-        # costs no extra download.
-        ctx.runner.run(
-            [
-                "docker",
-                "run",
-                "--rm",
-                "-v",
-                f"{plan.colcon_volume}:/volume",
-                plan.provision_image,
-                "mkdir",
-                "-p",
-                *[f"/volume/{name}" for name in render_module.COLCON_DIRS],
-            ],
-            quiet=True,
-        )
-        touched.append(plan.colcon_volume)
-    return touched
-
-
 @dev.command(name="volumes")
 @pass_ardt
 def volumes(ctx: Context) -> None:
     """Create the shared caches and the colcon volume's subpaths. Idempotent."""
-    _require_docker(ctx)
+    docker_module.require_docker(ctx)
     plan = _plan(ctx, ardt_source=_remembered_source(ctx))
-    touched = _ensure_volumes(ctx, plan)
+    touched = docker_module.ensure_volumes(ctx, plan)
     ctx.emit(volumes=touched, shared=list(plan.shared_volumes))
     if ctx.json_output:
         return
     for name in touched:
         scope = "shared" if name in plan.shared_volumes else "this repo"
         ctx.console.info(f"  {name:32} ({scope})")
-
-
-def _compose_argv(ctx: Context) -> list[str]:
-    for name in (COMPOSE, COMPOSE_HOST):
-        if not (ctx.project_root / name).is_file():
-            # Under --dry-run the file may legitimately not exist yet: the
-            # implicit sync plans it but must not write. The plan still prints.
-            if ctx.dry_run:
-                continue
-            raise ArdtError(f"{name} is missing", hint="run `ardt dev sync` first")
-    _require_docker(ctx)
-    return [
-        "docker",
-        "compose",
-        "-f",
-        str(ctx.project_root / COMPOSE),
-        "-f",
-        str(ctx.project_root / COMPOSE_HOST),
-    ]
 
 
 def _ensure_synced(ctx: Context) -> Render:
@@ -301,7 +207,7 @@ def _ensure_synced(ctx: Context) -> Render:
 def up(ctx: Context, build: bool, no_bootstrap: bool) -> None:
     """Start the dev container, rendering and provisioning whatever is missing first."""
     plan = _ensure_synced(ctx)
-    compose = _compose_argv(ctx)
+    compose = docker_module.compose_argv(ctx)
     source = container_source_folder(ctx.project)
     if build:
         with ctx.console.section("docker compose build"):
@@ -309,7 +215,7 @@ def up(ctx: Context, build: bool, no_bootstrap: bool) -> None:
     # Before `up`, not after: compose fails on a missing external volume, and
     # the container fails to start on a missing subpath.
     ctx.console.step("provisioning docker volumes (shared caches + this repo's colcon volume)")
-    _ensure_volumes(ctx, plan)
+    docker_module.ensure_volumes(ctx, plan)
     with ctx.console.section("compose up — the first run builds the dev image (minutes)"):
         ctx.runner.run([*compose, "up", "-d"])
     if no_bootstrap:
@@ -375,7 +281,7 @@ def _open_editor(ctx: Context, plan: Render, workspace: str) -> str:
 def open_command(ctx: Context, build: bool) -> None:
     """Open VS Code attached to the dev container, rendering and starting it if needed."""
     plan = _ensure_synced(ctx)
-    compose = _compose_argv(ctx)
+    compose = docker_module.compose_argv(ctx)
     cfg = dev_config(ctx.cfg)
 
     if build:
@@ -387,7 +293,7 @@ def open_command(ctx: Context, build: bool) -> None:
         with ctx.console.section("docker compose build"):
             ctx.runner.run([*compose, "build"])
     ctx.console.step("provisioning docker volumes (shared caches + this repo's colcon volume)")
-    _ensure_volumes(ctx, plan)
+    docker_module.ensure_volumes(ctx, plan)
     # Start it ourselves so --build is deterministic. VS Code still owns
     # postCreate: it runs postCreateCommand the first time it attaches,
     # whoever created the container.
@@ -406,7 +312,7 @@ def open_command(ctx: Context, build: bool) -> None:
 def shell(ctx: Context) -> None:
     """Open a login shell in the running dev container, at the workspace root."""
     argv = [
-        *_compose_argv(ctx),
+        *docker_module.compose_argv(ctx),
         "exec",
         "-u",
         USER,
@@ -441,7 +347,7 @@ def down(ctx: Context, purge: bool, purge_shared: bool) -> None:
     machine takes the separate --purge-shared, because it is a separate decision.
     """
     plan = _plan(ctx, ardt_source=_remembered_source(ctx))
-    argv = [*_compose_argv(ctx), "down"]
+    argv = [*docker_module.compose_argv(ctx), "down"]
     if purge:
         argv.append("--volumes")
     ctx.runner.run(argv)
@@ -457,7 +363,7 @@ def down(ctx: Context, purge: bool, purge_shared: bool) -> None:
 @pass_ardt
 def bootstrap(ctx: Context) -> None:
     """Prepare the container: volume ownership, then the profile's create steps."""
-    if not _in_container():
+    if not docker_module.in_container():
         raise ArdtError(
             "`ardt dev bootstrap` runs inside the dev container",
             hint="use `ardt dev up` from the host, which runs it for you",
@@ -474,11 +380,6 @@ def bootstrap(ctx: Context) -> None:
             ctx.runner.run(command)
     ctx.emit(profile=cfg.profile, bootstrap_steps=len(prof.bootstrap))
     ctx.console.success("container ready — `ardt build`, then `ardt test`")
-
-
-def _in_container() -> bool:
-    """The image sets the marker; /.dockerenv covers a container ardt was pip-installed into."""
-    return env_module.flag(IN_CONTAINER_ENV) or Path("/.dockerenv").exists()
 
 
 def _claim_volume_dirs(ctx: Context) -> None:
@@ -539,56 +440,7 @@ def compile_commands(ctx: Context) -> None:
 def doctor(ctx: Context) -> None:
     """Check the dev environment against CI: base image, ardt pin, render, host."""
     plan = _plan(ctx, ardt_source=_remembered_source(ctx))
-    checks: list[tuple[str, str, str]] = []  # (level, label, detail)
-
-    def check(level: str, label: str, detail: str) -> None:
-        checks.append((level, label, detail))
-
-    builder = ci_builder(ctx.cfg)
-    if builder is None:
-        check(
-            "warn",
-            "CI parity",
-            "repo sets no pipelines.ros_ci.builder — nothing to compare the dev base against",
-        )
-    elif builder == plan.base_image:
-        check("ok", "CI parity", f"dev base == ros_ci.builder ({builder})")
-    else:
-        check("fail", "CI parity", f"dev base {plan.base_image} != ros_ci.builder {builder}")
-
-    if ctx.cfg.ardt.version:
-        check("ok", "ardt pin", f"{ctx.cfg.ardt.git}@{ctx.cfg.ardt.version}")
-    else:
-        check("warn", "ardt pin", "ardt.version unset: container and CI both track HEAD")
-    if plan.ardt_source:
-        check("warn", "ardt source", f"local checkout {plan.ardt_source} (not the pin)")
-
-    state = manifest_module.audit(ctx.project_root, plan)
-    if state.conflicts:
-        check("fail", "render", f"hand-edited: {', '.join(sorted(state.conflicts))}")
-    elif state.written:
-        check("warn", "render", f"stale, run `ardt dev sync`: {', '.join(sorted(state.written))}")
-    else:
-        check("ok", "render", f"{len(state.unchanged)} files match this ardt-dev")
-
-    missing = manifest_module.missing_gitignore_entries(ctx.project_root)
-    check(
-        "fail" if missing else "ok",
-        "gitignore",
-        f"NOT ignored: {', '.join(missing)}" if missing else "the whole render is ignored",
-    )
-
-    check("ok", "host", f"{plan.host.kind}, gui {'on' if plan.host.gui else 'off'}")
-    for note in plan.host.notes:
-        check("warn", "host", note)
-
-    if not _in_container():
-        if ctx.runner.which("docker") is None:
-            check("fail", "docker", "not on PATH")
-        else:
-            ok, detail = _daemon_status(ctx)
-            check("ok" if ok else "fail", "docker", detail)
-
+    checks = checks_module.run_checks(ctx, plan)
     ctx.emit(checks=[{"level": lvl, "check": label, "detail": d} for lvl, label, d in checks])
     if not ctx.json_output:
         for level, label, detail in checks:
