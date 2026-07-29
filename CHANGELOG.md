@@ -4,21 +4,29 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-29
+
 ### Changed
 
 - **Breaking:** `ardt-dev` is split in two. The devcontainer engine becomes **`ardt-devcontainers`** under `packages/` (module `ardt_devcontainers`), a platform plane beside `ardt-core` and `ardt-pipelines`; the ROS 2 profile becomes **`ardt-ros-dev`** under `plugins/` (module `ardt_ros_dev`), a data-only theme plugin. The `ardt dev` verb, the `dev:` config section and every rendered file are unchanged.
 
   **To upgrade a repo:** bump its `ardt:` pin to a release containing the split, re-run `ardt dev sync`, and rebuild the dev image. The rendered `.devcontainer/ardt-requirements.txt` installs modules by monorepo subdirectory, so a host ardt that has the split would otherwise emit `packages/ardt-devcontainers` for a pinned rev where that path does not exist. This is the existing "host ardt ≈ pinned ardt" contract that `ardt dev doctor` already checks; the failure is loud, and an un-synced repo keeps working against its old pin until you re-sync. Workstations that installed via `install.sh` get both new modules from the default bundle; a repo pinning modules by hand (`ardt.modules`, `install_extras`, `install_skip`, `docs_ci.ardt_modules`) must rename `ardt-dev` to the two new names.
 
+- The devcontainer is documented as a **plane**, not a theme: `doc/themes/devcontainer/` moved to `doc/devcontainer/`, `doc/themes/index.md` became a themes-by-planes matrix, and `plane` joined the concepts vocabulary. Only the docs move; no package, command or config key changes. Links to the old `themes/devcontainer/…` URLs break, though previously published versions of the site keep their own paths.
+
 ### Added
 
-- `ardt.dev_profiles`, a fourth plugin entry-point group: a distribution contributes a `Profile` and `ardt dev` renders for that kind of repo without the engine importing anything of it. Third-party profiles no longer need a PR against ardt. The `Profile` contract is **provisional** until a second profile exists — it may change in a minor release, with `ARDT_PLUGIN_API` bumped when it does.
+- `ardt.dev_profiles`, a fourth plugin entry-point group: a distribution contributes a `Profile` and `ardt dev` renders for that kind of repo without the engine importing anything of it. Third-party profiles no longer need a PR against ardt. The `Profile` contract is **provisional** until a second profile exists: it may change in a minor release, with `ARDT_PLUGIN_API` bumped when it does.
 - `Registry.load_deferred(groups)` loads deferred entry points per group, so resolving a dev profile no longer imports pipeline modules (and no longer pays for Dagger on a laptop).
 - `ardt plugins` reports each plugin's `dev_profiles`, and `ardt dev profiles` names the distribution each profile comes from.
-
+- The `ros2` dev profile puts the workspace install space on `c_cpp_properties.json`'s `includePath`, ahead of the distro's, so a package built in the workspace shadows the installed copy of the same name (both colcon layouts are covered). It also ships the `mhutchie.git-graph` extension.
 - `ardt pipe run <name> --load`: put the built runtime image into the local docker daemon as the moving tag `<project>:<X.Y.Z>-dev` for the release being developed (a release load also gets the pinned `<project>:<version>`) — the local counterpart of `--publish`, which stays registry-only and errors loudly without one.
 - `ardt doc serve` (`--site` for the docs-ci output): local http preview of the built docs via the stdlib `http.server`, no new dependency. Needed because `file://` neither resolves directory URLs nor lets the version switcher fetch `versions.json`; `docs-ci` now ends with a pointer to it.
 - Docs point to the official demo repos ([`ardt_ros2_demo`](https://github.com/Asterion-Robotics/ardt_ros2_demo) on GitHub, mirrored on GitLab): a README paragraph and a new "Demo with a ROS 2 project" page.
+
+### Fixed
+
+- `docs-ci`: a historical ref that fails to build no longer fails the whole site. It is reported by name, left out of the site, and listed under `skipped` in the `--json` envelope; the working-tree build still fails the run. The site builds every ref inside one builder whose module set comes from the working tree, so a ref only builds while its `conf.py` imports distributions the current tree still ships. That is what the `ardt-dev` rename broke, and an old ref cannot be repaired, so failing the run over it would cost every other version of the site. Follow-up in [#19](https://github.com/Asterion-Robotics/ardt/issues/19): list the broken version with a placeholder page and make the failure mode configurable.
 
 ## [0.2.0] - 2026-07-29
 
