@@ -37,13 +37,9 @@ from .registry import PipelineDef
 
 
 def run_pipeline(ctx: Context, definition: PipelineDef, bound: dict[str, object]) -> None:
-    """Execute one pipeline. Under ``--dry-run``, print the plan and stop."""
+    """Execute one pipeline. ``--dry-run`` never reaches the engine: the CLI
+    prints the plan and returns before this module is even imported."""
     rendered = " ".join(f"{k}={v!r}" for k, v in bound.items()) or "(no args)"
-    if ctx.dry_run:
-        ctx.console.info(f"[dry-run] pipe run {definition.name} {rendered}")
-        ctx.console.info(f"[dry-run] publish={ctx.publish} version={ctx.version}")
-        return
-
     ctx.console.step(f"pipeline {definition.name} ({rendered})")
     try:
         asyncio.run(_execute(ctx, definition, bound))

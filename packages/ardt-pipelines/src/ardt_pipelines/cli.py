@@ -71,13 +71,13 @@ def list_command(ctx: Context) -> None:
         ctx.console.info("no pipelines registered")
         return
     for definition in sorted(pipelines.values(), key=lambda d: d.name):
-        rendered = " ".join(
-            f"{p.name}={'<required>' if p.required else repr(p.default)}" for p in definition.params
-        )
         summary = definition.doc.splitlines()[0] if definition.doc else ""
-        ctx.console.info(f"{definition.name}  {rendered}".rstrip())
+        ctx.console.info(definition.name)
         if summary:
             ctx.console.info(f"    {summary}")
+        for param in definition.params:
+            spec = "(required)" if param.required else f"(default: {param.default!r})"
+            ctx.console.info(f"    --arg {param.name}=<{param.annotation}> {spec}")
 
 
 @pipe.command(name="run")
@@ -108,9 +108,33 @@ def run_command(ctx: Context, name: str, args: tuple[str, ...], publish: bool) -
 
     ctx.publish = publish
     bound = definition.bind(parsed)
+    if ctx.dry_run:
+        _print_plan(ctx, definition, bound)
+        return
     # Imported here, not at module top: the engine imports the Dagger SDK, and
     # this `pipe` group is an eagerly-loaded command — a top-level import would
     # put dagger back on every invocation's startup path.
     from . import engine
 
     engine.run_pipeline(ctx, definition, bound)
+
+
+def _print_plan(ctx: Context, definition: PipelineDef, bound: dict[str, object]) -> None:
+    """The ``--dry-run`` plan: everything resolvable without the engine.
+
+    Handled here, before the engine module is even imported, so a dry-run
+    needs neither the Dagger SDK nor a docker daemon.
+    """
+    rendered = " ".join(f"{k}={v!r}" for k, v in bound.items()) or "(no args)"
+    ctx.console.info(f"[dry-run] pipe run {definition.name} {rendered}")
+    if definition.doc:
+        ctx.console.info(f"[dry-run]   {definition.doc.splitlines()[0]}")
+    for param in definition.params:
+        if param.name in bound:
+            value, source = bound[param.name], "--arg"
+        else:
+            value, source = param.default, "default"
+        ctx.console.info(f"[dry-run]   {param.name}={value!r} ({source})")
+    ctx.console.info(
+        f"[dry-run] publish={ctx.publish} version={ctx.version} release={ctx.is_release}"
+    )
