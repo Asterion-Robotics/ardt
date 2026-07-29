@@ -239,6 +239,7 @@ def plugins_command(ctx: Context) -> None:
                 "commands": sorted(p.commands),
                 "pipelines": sorted(p.pipelines),
                 "templates": sorted(p.templates),
+                "dev_profiles": sorted(p.dev_profiles),
             }
             for p in registry.plugins
         ],
@@ -255,6 +256,11 @@ def plugins_command(ctx: Context) -> None:
                 f"commands: {', '.join(sorted(plugin.commands))}" if plugin.commands else "",
                 f"pipelines: {', '.join(sorted(plugin.pipelines))}" if plugin.pipelines else "",
                 f"templates: {', '.join(sorted(plugin.templates))}" if plugin.templates else "",
+                (
+                    f"dev_profiles: {', '.join(sorted(plugin.dev_profiles))}"
+                    if plugin.dev_profiles
+                    else ""
+                ),
             )
             if part
         )

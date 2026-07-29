@@ -168,24 +168,81 @@ def test_entry_point_load_failure_disqualifies_whole_plugin(
     assert "entry point `bad` failed" in registry.problems[0].reason
 
 
-def test_all_three_groups_are_collected(monkeypatch: pytest.MonkeyPatch, fake_package) -> None:
-    fake_package("acme_plugin", plugins.ARDT_PLUGIN_API)
-    _version_ok(monkeypatch)
-    eps = [
+def _four_group_entry_points() -> list[FakeEntryPoint]:
+    return [
         FakeEntryPoint(
             "cmd", plugins.COMMANDS_GROUP, "acme_plugin.cli", click.Command("cmd"), dist="acme"
         ),
         FakeEntryPoint("pipe", plugins.PIPELINES_GROUP, "acme_plugin.pipe", object(), dist="acme"),
         FakeEntryPoint("tset", plugins.TEMPLATES_GROUP, "acme_plugin.tpl", object(), dist="acme"),
+        FakeEntryPoint(
+            "prof", plugins.DEV_PROFILES_GROUP, "acme_plugin.profile", object(), dist="acme"
+        ),
     ]
 
-    registry = discover(eps)
+
+def test_all_four_groups_are_collected(monkeypatch: pytest.MonkeyPatch, fake_package) -> None:
+    fake_package("acme_plugin", plugins.ARDT_PLUGIN_API)
+    _version_ok(monkeypatch)
+
+    registry = discover(_four_group_entry_points())
     plugin = registry.plugins[0]
     assert set(plugin.commands) == {"cmd"}
-    assert plugin.pipelines == {} and plugin.templates == {}  # deferred
+    # Deferred: only `ardt.commands` loads at discovery.
+    assert plugin.pipelines == {} and plugin.templates == {} and plugin.dev_profiles == {}
     registry.load_deferred()
     assert set(plugin.pipelines) == {"pipe"}
     assert set(plugin.templates) == {"tset"}
+    assert set(plugin.dev_profiles) == {"prof"}
+
+
+def test_a_single_group_can_be_loaded_without_the_others(
+    monkeypatch: pytest.MonkeyPatch, fake_package
+) -> None:
+    """`ardt dev` resolves a profile without importing any pipeline module.
+
+    The pipeline entry point here explodes on load: asking for dev profiles
+    alone must never touch it, or every laptop render would pay for dagger.
+    """
+    fake_package("acme_plugin", plugins.ARDT_PLUGIN_API)
+    _version_ok(monkeypatch)
+    eps = _four_group_entry_points()
+    eps[1] = FakeEntryPoint(
+        "pipe", plugins.PIPELINES_GROUP, "acme_plugin.pipe", RuntimeError("dagger"), dist="acme"
+    )
+
+    registry = discover(eps)
+    registry.load_deferred([plugins.DEV_PROFILES_GROUP])
+    plugin = registry.plugins[0]
+    assert set(plugin.dev_profiles) == {"prof"}
+    assert registry.problems == []  # the bomb was never loaded
+    assert plugin.pipelines == {} and plugin.templates == {}
+
+    # What stayed deferred is still there for a wider call (`ardt plugins`),
+    # where the bomb goes off and abandons the rest of *that* call's groups.
+    registry.load_deferred()
+    assert "entry point `pipe` failed" in registry.problems[0].reason
+    assert plugin.templates == {}
+    # But not a group an earlier call already handed to a consumer.
+    assert set(plugin.dev_profiles) == {"prof"}
+
+
+def test_a_failed_group_does_not_empty_the_groups_it_was_not_asked_for(
+    monkeypatch: pytest.MonkeyPatch, fake_package
+) -> None:
+    fake_package("acme_plugin", plugins.ARDT_PLUGIN_API)
+    _version_ok(monkeypatch)
+    eps = _four_group_entry_points()
+    eps[3] = FakeEntryPoint(
+        "prof", plugins.DEV_PROFILES_GROUP, "acme_plugin.profile", RuntimeError("boom"), dist="acme"
+    )
+
+    registry = discover(eps)
+    registry.load_deferred([plugins.PIPELINES_GROUP])
+    registry.load_deferred([plugins.DEV_PROFILES_GROUP])
+    plugin = registry.plugins[0]
+    assert plugin.dev_profiles == {}
+    assert set(plugin.pipelines) == {"pipe"}  # loaded earlier, and not collateral
 
 
 def test_pipeline_groups_do_not_load_at_discovery(

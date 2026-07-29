@@ -17,27 +17,38 @@
 
 """Plugin discovery via standard Python entry points — no bespoke mechanism.
 
-A plugin provides any subset of three entry-point groups:
+A plugin provides any subset of four entry-point groups:
 
-===================  ==========================================================
-``ardt.commands``     must load to a :class:`click.Command` (command or group),
-                      mounted at the top level; anything else refuses the plugin
-``ardt.pipelines``    must load to a *module* exposing ``@pipeline`` functions
-                      (checked by ``ardt_pipelines.collect``)
-``ardt.templates``    scaffold sets for ``ardt new`` (contract not yet enforced)
-===================  ==========================================================
+=====================  ========================================================
+``ardt.commands``       must load to a :class:`click.Command` (command or group),
+                        mounted at the top level; anything else refuses the plugin
+``ardt.pipelines``      must load to a *module* exposing ``@pipeline`` functions
+                        (checked by ``ardt_pipelines.collect``)
+``ardt.templates``      scaffold sets for ``ardt new`` (contract not yet enforced)
+``ardt.dev_profiles``   dev profiles for ``ardt dev`` (checked by
+                        ``ardt_devcontainers.profiles.profiles``)
+=====================  ========================================================
 
 Every plugin distribution declares ``ARDT_PLUGIN_API`` on its root package: an
 incompatible or undeclared API version is **refused loudly and skipped whole**
 — never half-loaded, never a traceback, and never fatal to the rest of the CLI.
 
 Loading is two-speed. Commands load at discovery (almost every invocation,
-``--help`` included, needs them) with the whole-or-nothing rule above. Pipeline
-and template entry points defer until :meth:`Registry.load_deferred` — pipeline
-modules import the Dagger SDK, which no ``ardt build`` should pay for. A
-deferred load failure is reported as a :class:`Problem` and the group stays
-empty; the plugin's already-mounted commands remain (the one place a plugin can
-be observed part-loaded, and only when its own pipeline module is broken).
+``--help`` included, needs them) with the whole-or-nothing rule above. The other
+three groups defer until :meth:`Registry.load_deferred` — pipeline modules
+import the Dagger SDK, which no ``ardt build`` should pay for. A deferred load
+failure is reported as a :class:`Problem` and the group stays empty; the
+plugin's already-mounted commands remain (the one place a plugin can be observed
+part-loaded, and only when its own pipeline module is broken).
+
+Deferred loading is *per group*: ``ardt dev`` asks for ``ardt.dev_profiles``
+alone, so resolving a dev profile never imports a pipeline module (and so never
+drags Dagger onto a laptop). ``ardt plugins`` asks for all of them, which is the
+whole point of that command.
+
+Core never type-checks what a deferred entry point loaded to — that contract
+belongs to the consumer plane (``ardt-pipelines`` for pipelines,
+``ardt-devcontainers`` for dev profiles), and core must not depend on either.
 
 A root package may also declare ``ARDT_CONFIG_SECTION`` — the ``ardt.yaml``
 section it claims. Without it the section is derived from the distribution
@@ -61,7 +72,16 @@ ARDT_PLUGIN_API = 1
 COMMANDS_GROUP = "ardt.commands"
 PIPELINES_GROUP = "ardt.pipelines"
 TEMPLATES_GROUP = "ardt.templates"
-GROUPS = (COMMANDS_GROUP, PIPELINES_GROUP, TEMPLATES_GROUP)
+DEV_PROFILES_GROUP = "ardt.dev_profiles"
+GROUPS = (COMMANDS_GROUP, PIPELINES_GROUP, TEMPLATES_GROUP, DEV_PROFILES_GROUP)
+
+DEFERRED_GROUPS: dict[str, str] = {
+    PIPELINES_GROUP: "pipelines",
+    TEMPLATES_GROUP: "templates",
+    DEV_PROFILES_GROUP: "dev_profiles",
+}
+"""Group -> the :class:`Plugin` attribute :meth:`Registry.load_deferred` fills.
+Everything not here loads at discovery (only ``ardt.commands`` does)."""
 
 
 @dataclass
@@ -82,10 +102,13 @@ class Plugin:
     """Empty until :meth:`Registry.load_deferred` runs."""
     templates: dict[str, object] = field(default_factory=dict[str, object])
     """Empty until :meth:`Registry.load_deferred` runs."""
+    dev_profiles: dict[str, object] = field(default_factory=dict[str, object])
+    """Empty until :meth:`Registry.load_deferred` runs. Validated on consumption
+    by ``ardt_devcontainers.profiles``, not here."""
     deferred: list[metadata.EntryPoint] = field(
         default_factory=list[metadata.EntryPoint], repr=False
     )
-    """Pipeline/template entry points not yet loaded; drained by
+    """Entry points of the :data:`DEFERRED_GROUPS` not yet loaded; drained by
     :meth:`Registry.load_deferred`."""
 
 
@@ -120,22 +143,33 @@ class Registry:
             merged.update(plugin.commands)
         return merged
 
-    def load_deferred(self) -> None:
-        """Load the pipeline/template entry points. Idempotent.
+    def load_deferred(self, groups: Iterable[str] | None = None) -> None:
+        """Load deferred entry points, by default all of them. Idempotent.
 
         Called by the consumers that need those groups (``ardt pipe``,
-        ``ardt plugins``); everything else never imports a pipeline module.
-        A failure empties the plugin's deferred groups and becomes a
-        :class:`Problem` — the CLI stays alive, ``ardt plugins`` explains.
+        ``ardt dev``, ``ardt plugins``); everything else never imports a
+        pipeline module. A failure empties the groups being loaded for that
+        plugin and becomes a :class:`Problem` — the CLI stays alive, and
+        ``ardt plugins`` explains.
+
+        ``groups`` narrows the load to a subset of :data:`DEFERRED_GROUPS`:
+        ``ardt dev`` passes ``[DEV_PROFILES_GROUP]`` so that finding a dev
+        profile never imports a pipeline module, and so never pays for Dagger.
+        Whatever is left unloaded stays deferred for a later, wider call.
         """
+        wanted = frozenset(groups) if groups is not None else frozenset(DEFERRED_GROUPS)
         for plugin in self.plugins:
-            entry_points, plugin.deferred = plugin.deferred, []
-            for entry_point in entry_points:
+            selected = [ep for ep in plugin.deferred if ep.group in wanted]
+            plugin.deferred = [ep for ep in plugin.deferred if ep.group not in wanted]
+            for entry_point in selected:
                 try:
                     loaded: object = entry_point.load()
                 except Exception as exc:
-                    plugin.pipelines.clear()
-                    plugin.templates.clear()
+                    # Abandon what this call was loading, and only that: a group
+                    # drained by an earlier, narrower call is already in a
+                    # consumer's hands and is not this plugin's fault to undo.
+                    for group in {ep.group for ep in selected} & frozenset(DEFERRED_GROUPS):
+                        getattr(plugin, DEFERRED_GROUPS[group]).clear()
                     self.problems.append(
                         Problem(
                             plugin.name,
@@ -143,9 +177,7 @@ class Registry:
                         )
                     )
                     break
-                target = (
-                    plugin.pipelines if entry_point.group == PIPELINES_GROUP else plugin.templates
-                )
+                target: dict[str, object] = getattr(plugin, DEFERRED_GROUPS[entry_point.group])
                 target[entry_point.name] = loaded
 
 
@@ -233,9 +265,9 @@ def _load_distribution(
     plugin = Plugin(name=name, version=_version(name), api=api, module=root, section=section)
 
     # Commands load whole-or-nothing: one bad entry point disqualifies the
-    # distribution, so a plugin never contributes half its commands. Pipeline
-    # and template entry points defer (Registry.load_deferred): pipeline
-    # modules import the Dagger SDK, which most invocations never need.
+    # distribution, so a plugin never contributes half its commands. Every other
+    # group defers (Registry.load_deferred): pipeline modules import the Dagger
+    # SDK, which most invocations never need.
     for entry_point in entry_points:
         if entry_point.group != COMMANDS_GROUP:
             plugin.deferred.append(entry_point)
