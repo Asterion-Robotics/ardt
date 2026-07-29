@@ -9,14 +9,15 @@ tasks:
 
 pipelines:
   docs_ci:
-    # doc/conf.py autodocs the *installed* distributions and imports all seven,
+    # doc/conf.py autodocs the *installed* distributions and imports all eight,
     # so the builder needs the whole workspace, not just the task plane.
     # `[testing]` because autodoc executes what it documents and
     # `ardt_core.testing` imports pytest at module scope.
     ardt_modules:
       - ardt-core[testing]
       - ardt-pipelines
-      - ardt-dev
+      - ardt-devcontainers
+      - ardt-ros-dev
       - ardt-ros-tasks
       - ardt-ros-pipelines
       - ardt-doc-pipelines

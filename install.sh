@@ -55,10 +55,10 @@ pinned_ref() {
     ' ardt.yaml
 }
 
-# The default module set is contextual, because "no ardt-dev on a runner" is a
-# property of where the install runs, not of any one repo: GitHub Actions and
-# GitLab CI both export CI=true, so runners get the bundle below and
-# workstations add ardt-dev on top.
+# The default module set is contextual, because "no devcontainer tooling on a
+# runner" is a property of where the install runs, not of any one repo: GitHub
+# Actions and GitLab CI both export CI=true, so runners get the bundle below
+# and workstations add the dev engine and its ros2 profile on top.
 #
 # What is IN the bundle is policy, not necessity -- documented so the choice
 # can be revisited instead of rediscovered:
@@ -66,12 +66,16 @@ pinned_ref() {
 #   - ardt-ros-tasks, ardt-ros-pipelines: included because ardt is a robotics
 #     toolchain and nearly every consumer repo is a ROS 2 repo; the default
 #     serves that majority. A non-ROS repo sheds them with `install_skip`.
+#   - ardt-devcontainers, ardt-ros-dev: the devcontainer engine and the
+#     profile that drives it for a ROS 2 repo. Two modules, not one, since
+#     the split -- a non-ROS workstation skips the profile and keeps the
+#     engine. Both are useless on a runner, which never opens a container.
 #   - doc plugins: excluded because `ardt doc build` pulls sphinx and breathe,
 #     which most repos never invoke. A repo whose CI builds docs opts in with
 #     `install_extras` (see ardt.example.yaml).
 default_bundle() {
     printf '%s' 'ardt-core ardt-pipelines ardt-ros-tasks ardt-ros-pipelines'
-    [ -z "${CI:-}" ] && printf ' %s' 'ardt-dev'
+    [ -z "${CI:-}" ] && printf ' %s' 'ardt-devcontainers ardt-ros-dev'
     printf '\n'
 }
 

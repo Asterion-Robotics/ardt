@@ -49,7 +49,7 @@ class WriteResult:
 def _manifest_key(name: str) -> str:
     """Read a pre-``.vscode/`` manifest, whose keys were bare file names.
 
-    Without this every repo synced by an older ardt-dev would see its whole
+    Without this every repo synced by an older engine would see its whole
     render reported as hand-edited on the next `ardt dev sync` — the keys, not
     the contents, changed.
     """
@@ -125,7 +125,7 @@ def write(
     manifest_path.write_text(
         json.dumps(
             {
-                "tool": f"ardt-dev {__version__}",
+                "tool": f"ardt-devcontainers {__version__}",
                 "profile": render.profile.name,
                 "host": render.host.kind,
                 "base_image": render.base_image,

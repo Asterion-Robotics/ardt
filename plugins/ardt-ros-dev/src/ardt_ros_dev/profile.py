@@ -15,89 +15,27 @@
 
 # Author: Thibault Poignonec <t.poignonec@asterion-robotics.com>
 
-"""Dev profiles — the per-repo-type knowledge, expressed as data.
+"""The ROS 2 dev profile, expressed as data.
 
-A profile answers: which base image, which extra apt packages, which ardt
-modules the container needs, what to run once the container exists, and which
-editor extensions make the language work. It is deliberately *data*: ardt-dev
-imports no ROS package and no pipeline plugin, so a laptop install stays tiny.
+Moved here verbatim from the engine when the devcontainer plane was split from
+the profiles that drive it. Every rationale below is load-bearing and was paid
+for in image size or debugging time, so it travels with the data.
 
-Adding a profile is adding an entry to :data:`PROFILES` (plus a Dockerfile
-template). When a domain plugin needs its own (say, an SDK builder base and a
-plugin export layout), the same table is what an ``ardt.dev_profiles`` entry
-point would populate — that indirection is not worth building for one profile.
+The rule that keeps the numbers honest: this layer is strictly *additive* over
+what the CI build stage installs, so the container a developer works in and the
+image CI builds cannot drift.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-
-from ardt_core.errors import ArdtError
-
-DISTRO = "@DISTRO@"
-"""Token replaced with the repo's ROS distro at render time."""
-
-CXX_STANDARD = "@CXX_STANDARD@"
-"""Token replaced with :func:`cxx_standard` for the repo's ROS distro."""
-
-CXX_STANDARDS: dict[str, str] = {
-    "humble": "c++17",
-    "jazzy": "c++17",
-    "kilted": "c++17",
-    "lyrical": "c++20",
-    "rolling": "c++20",
-}
-"""What each distro targets, per its own "Code style and language versions" page
-(``docs.ros.org/en/<distro>/The-ROS2-Project/Contributing/Code-Style-Language-Versions``):
-c++20 from lyrical and rolling on, c++17 before. Note REP 2000's "minimum
-language requirements" tables still say C++17 for rolling — that page is the
-one that tracks the switch, so it is the one quoted here. A line per distro."""
-
-CXX_STANDARD_DEFAULT = "c++20"
-"""For a distro not in the table. The newest entry's value, not the oldest: an
-unknown distro is far likelier to be a future one than a forgotten past one."""
-
-
-def cxx_standard(distro: str) -> str:
-    """The C++ standard editor tooling should assume for ``distro``."""
-    return CXX_STANDARDS.get(distro, CXX_STANDARD_DEFAULT)
-
-
-@dataclass(frozen=True)
-class Profile:
-    """Everything that differs between one kind of repo and another."""
-
-    name: str
-    summary: str
-    dockerfile: str
-    """Template file name in :mod:`ardt_dev.templates`."""
-    default_base_image: str
-    """Used when the repo pins no ``pipelines.ros_ci.builder`` and no
-    ``dev.base_image``. May contain the :data:`DISTRO` token."""
-    ardt_modules: tuple[str, ...]
-    """ardt distributions installed in the container. The first two of the ROS
-    profile are exactly ``ardt_ros_pipelines.recipes.ARDT_MODULES`` — the same
-    modules CI's build stage installs, from the same ``ardt:`` pin."""
-    apt_groups: tuple[tuple[str, tuple[str, ...]], ...]
-    """``(label, packages)`` — labels become comments in the rendered recipe, so
-    a human debugging the image can see why each group is there."""
-    bootstrap: tuple[tuple[str, ...], ...]
-    """Commands ``ardt dev bootstrap`` runs inside the container, in order."""
-    extensions: tuple[str, ...]
-    settings: dict[str, object] = field(default_factory=dict)
-    container_env: dict[str, str] = field(default_factory=dict)
-    cpp_properties: dict[str, object] | None = None
-    """The single ``configurations[]`` entry of ``.vscode/c_cpp_properties.json``,
-    or None for a profile with no C/C++ in it. Strings may carry :data:`DISTRO`.
-
-    Unlike :attr:`settings`, this cannot ride along in ``devcontainer.json``:
-    cpptools only reads its configuration from that path in the workspace."""
-
+from ardt_devcontainers.profiles import CXX_STANDARD, DISTRO, Profile
 
 ROS2 = Profile(
     name="ros2",
     summary="ROS 2 workspace: colcon toolchain, rviz2/rqt, clangd, gdb",
+    distribution="ardt-ros-dev",
     dockerfile="ros2.Dockerfile.tmpl",
+    templates_package="ardt_ros_dev.templates",
     default_base_image=f"ros:{DISTRO}-ros-base",
     ardt_modules=("ardt-core", "ardt-ros-tasks", "ardt-doc-tasks"),
     apt_groups=(
@@ -190,17 +128,3 @@ ROS2 = Profile(
         "compileCommands": "${workspaceFolder}/build/compile_commands.json",
     },
 )
-
-PROFILES: dict[str, Profile] = {ROS2.name: ROS2}
-
-
-def profile(name: str) -> Profile:
-    """Look up a profile, or fail with the list of the ones that exist."""
-    found = PROFILES.get(name)
-    if found is None:
-        known = ", ".join(sorted(PROFILES))
-        raise ArdtError(
-            f"unknown dev profile `{name}`",
-            hint=f"set `dev.profile:` to one of: {known}",
-        )
-    return found

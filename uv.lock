@@ -9,10 +9,11 @@ resolution-markers = [
 [manifest]
 members = [
     "ardt-core",
-    "ardt-dev",
+    "ardt-devcontainers",
     "ardt-doc-pipelines",
     "ardt-doc-tasks",
     "ardt-pipelines",
+    "ardt-ros-dev",
     "ardt-ros-pipelines",
     "ardt-ros-tasks",
     "ardt-workspace",
@@ -87,8 +88,8 @@ requires-dist = [
 provides-extras = ["testing"]
 
 [[package]]
-name = "ardt-dev"
-source = { editable = "plugins/ardt-dev" }
+name = "ardt-devcontainers"
+source = { editable = "packages/ardt-devcontainers" }
 dependencies = [
     { name = "ardt-core" },
 ]
@@ -150,6 +151,20 @@ requires-dist = [
 ]
 
 [[package]]
+name = "ardt-ros-dev"
+source = { editable = "plugins/ardt-ros-dev" }
+dependencies = [
+    { name = "ardt-core" },
+    { name = "ardt-devcontainers" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "ardt-core", editable = "packages/ardt-core" },
+    { name = "ardt-devcontainers", editable = "packages/ardt-devcontainers" },
+]
+
+[[package]]
 name = "ardt-ros-pipelines"
 source = { editable = "plugins/ardt-ros-pipelines" }
 dependencies = [
@@ -181,10 +196,11 @@ source = { virtual = "." }
 [package.dev-dependencies]
 dev = [
     { name = "ardt-core" },
-    { name = "ardt-dev" },
+    { name = "ardt-devcontainers" },
     { name = "ardt-doc-pipelines" },
     { name = "ardt-doc-tasks" },
     { name = "ardt-pipelines" },
+    { name = "ardt-ros-dev" },
     { name = "ardt-ros-pipelines" },
     { name = "ardt-ros-tasks" },
     { name = "pre-commit" },
@@ -199,10 +215,11 @@ dev = [
 [package.metadata.requires-dev]
 dev = [
     { name = "ardt-core", editable = "packages/ardt-core" },
-    { name = "ardt-dev", editable = "plugins/ardt-dev" },
+    { name = "ardt-devcontainers", editable = "packages/ardt-devcontainers" },
     { name = "ardt-doc-pipelines", editable = "plugins/ardt-doc-pipelines" },
     { name = "ardt-doc-tasks", editable = "plugins/ardt-doc-tasks" },
     { name = "ardt-pipelines", editable = "packages/ardt-pipelines" },
+    { name = "ardt-ros-dev", editable = "plugins/ardt-ros-dev" },
     { name = "ardt-ros-pipelines", editable = "plugins/ardt-ros-pipelines" },
     { name = "ardt-ros-tasks", editable = "plugins/ardt-ros-tasks" },
     { name = "pre-commit", specifier = ">=4.0" },
