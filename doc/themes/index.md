@@ -11,8 +11,4 @@ The planes are platform packages, documented on their own: [tasks](../concepts/t
 
 Install the themes a repo needs and nothing else: the CLI's feature set is exactly the set of plugins present. A cell may be empty, as the documentation theme's devcontainer cell is — building docs needs no dev container of its own kind, it happens in whichever one you are already in.
 
-:::{note}
-**"Devcontainer" is a plane here, not a theme**, though it was listed as one until recently. That held while `ardt dev` was a single distribution that looked like a theme plugin. It is now the `ardt-devcontainers` engine plus whatever profiles are installed, and the ROS-specific half of it is `ardt-ros-dev`, a cell of the ROS 2 row above.
-:::
-
 The recurring pattern across all of them: **repos own no build files.** The devcontainer recipe, the CI Dockerfile and the sphinx configuration live in the plugin as package data and update by bumping the pinned ardt version, never by editing files across N repos.
