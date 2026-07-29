@@ -36,7 +36,6 @@ from .dist import ARDT_GIT, DistConfig, ModulePin
 from .errors import (
     ArdtError,
     ConfigError,
-    PluginError,
     RunnerError,
     ToolNotFoundError,
 )
@@ -61,7 +60,6 @@ __all__ = [
     "ModulePin",
     "Platform",
     "Plugin",
-    "PluginError",
     "Registry",
     "Result",
     "Runner",

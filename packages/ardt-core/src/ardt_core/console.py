@@ -56,7 +56,6 @@ class Console:
         self.quiet = quiet
         self._plain = not self._stream.isatty()
         self._rich = RichConsole(file=self._stream, stderr=True, no_color=self._plain)
-        self._section_depth = 0
 
     @property
     def plain(self) -> bool:
@@ -105,11 +104,9 @@ class Console:
         key = _section_key(title)
         started = time.time()
         self._open_section(key, title, started)
-        self._section_depth += 1
         try:
             yield
         finally:
-            self._section_depth -= 1
             self._close_section(key, started)
 
     def _open_section(self, key: str, title: str, started: float) -> None:

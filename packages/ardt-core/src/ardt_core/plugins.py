@@ -64,16 +64,6 @@ TEMPLATES_GROUP = "ardt.templates"
 GROUPS = (COMMANDS_GROUP, PIPELINES_GROUP, TEMPLATES_GROUP)
 
 
-def _empty() -> dict[str, object]:
-    """A typed empty dict — bare ``dict`` as a default_factory infers Unknown."""
-    return {}
-
-
-def _no_entry_points() -> list[metadata.EntryPoint]:
-    """Same workaround as :func:`_empty`, for the deferred list."""
-    return []
-
-
 @dataclass
 class Plugin:
     """A successfully loaded plugin distribution."""
@@ -87,12 +77,14 @@ class Plugin:
     section: str = ""
     """The ``ardt.yaml`` section this plugin claims: the root package's
     ``ARDT_CONFIG_SECTION``, else derived from the distribution name."""
-    commands: dict[str, object] = field(default_factory=_empty)
-    pipelines: dict[str, object] = field(default_factory=_empty)
+    commands: dict[str, object] = field(default_factory=dict[str, object])
+    pipelines: dict[str, object] = field(default_factory=dict[str, object])
     """Empty until :meth:`Registry.load_deferred` runs."""
-    templates: dict[str, object] = field(default_factory=_empty)
+    templates: dict[str, object] = field(default_factory=dict[str, object])
     """Empty until :meth:`Registry.load_deferred` runs."""
-    deferred: list[metadata.EntryPoint] = field(default_factory=_no_entry_points, repr=False)
+    deferred: list[metadata.EntryPoint] = field(
+        default_factory=list[metadata.EntryPoint], repr=False
+    )
     """Pipeline/template entry points not yet loaded; drained by
     :meth:`Registry.load_deferred`."""
 

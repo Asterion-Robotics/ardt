@@ -40,11 +40,6 @@ from .plugins import Registry, discover
 from .runner import Runner
 
 
-def _empty_dict() -> dict[str, object]:
-    """A typed empty dict — bare ``dict`` as a default_factory infers Unknown."""
-    return {}
-
-
 @dataclass(slots=True)
 class Context:
     """Everything a command needs to know about where and how it is running.
@@ -69,7 +64,7 @@ class Context:
     dry_run: bool = False
     publish: bool = False
     json_output: bool = False
-    _emitted: dict[str, object] = field(default_factory=_empty_dict, repr=False)
+    _emitted: dict[str, object] = field(default_factory=dict[str, object], repr=False)
     _version: str | None = field(default=None, repr=False)
     """Manual cache for :attr:`version` — ``cached_property`` needs an instance
     ``__dict__``, which ``slots=True`` removes."""

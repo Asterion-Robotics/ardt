@@ -45,10 +45,6 @@ class ConfigError(ArdtError):
     """The repo's ``ardt.yaml`` (or ``[tool.ardt]``) is missing, malformed or unknown."""
 
 
-class PluginError(ArdtError):
-    """A plugin could not be loaded, or declares an incompatible API version."""
-
-
 class RunnerError(ArdtError):
     """A subprocess exited non-zero."""
 

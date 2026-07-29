@@ -28,7 +28,6 @@ subprocesses. ``tests/test_no_environ_access.py`` enforces it.
 from __future__ import annotations
 
 import os
-from collections.abc import Mapping
 
 
 def get(name: str, default: str | None = None) -> str | None:
@@ -60,8 +59,3 @@ def base_environ() -> dict[str, str]:
 def home() -> str | None:
     """The user's home directory, if the environment names one."""
     return get("HOME") or get("USERPROFILE")
-
-
-def snapshot() -> Mapping[str, str]:
-    """Read-only view of the environment (diagnostics only)."""
-    return dict(os.environ)
