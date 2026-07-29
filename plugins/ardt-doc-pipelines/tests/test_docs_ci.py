@@ -26,7 +26,7 @@ import pytest
 
 from ardt_core.config import ArdtConfig
 from ardt_core.context import Context
-from ardt_core.testing import git, run_cli
+from ardt_core.testing import build_context, console_output, git, run_cli
 from ardt_doc_pipelines import docs_ci
 
 run = run_cli
@@ -190,3 +190,66 @@ class TestCliDiscovery:
         code, _, err = run(["pipe", "run", "docs-ci", "--dry-run"], repo)
         assert code == 0
         assert "[dry-run] pipe run docs-ci" in err
+
+
+class TestHistoricalRefsFailSoft:
+    """A broken historical ref leaves the site short one version, not empty.
+
+    Old refs are immutable: docs-ci builds them all inside ONE builder whose
+    module set comes from the working tree, so a ref whose `conf.py` imports a
+    since-renamed distribution can never be repaired. Failing the whole run over
+    it would cost every *other* version of the site.
+    """
+
+    class _Built:
+        """Stands in for the lazy `dagger.Directory` a build returns.
+
+        `sync()` is the only place a lazy handle can fail: without forcing it,
+        the error would not surface until the final export, which is the whole
+        site failing rather than one version.
+        """
+
+        def __init__(self, boom: Exception | None = None) -> None:
+            self.boom = boom
+            self.synced = False
+
+        async def sync(self) -> TestHistoricalRefsFailSoft._Built:
+            self.synced = True
+            if self.boom is not None:
+                raise self.boom
+            return self
+
+    def test_a_good_ref_is_forced_and_kept(self, repo: Path) -> None:
+        import asyncio
+
+        ctx = build_context(repo)
+        built = self._Built()
+        result = asyncio.run(docs_ci._build_historical(ctx, "v1.0.0", built))
+        assert result is built
+        assert built.synced, "the build must be forced here, not deferred to export"
+
+    def test_a_broken_ref_is_reported_and_dropped(self, repo: Path) -> None:
+        import asyncio
+
+        import dagger
+
+        ctx = build_context(repo)
+        boom = dagger.DaggerError("No module named 'ardt_dev'\nsecond line ignored")
+        assert asyncio.run(docs_ci._build_historical(ctx, "v0.2.0", self._Built(boom))) is None
+        err = console_output(ctx)
+        assert "v0.2.0" in err
+        assert "leaving it out of the site" in err
+        assert "No module named 'ardt_dev'" in err
+        assert "second line ignored" not in err  # first line only, like other reports
+
+    def test_a_non_dagger_error_still_propagates(self, repo: Path) -> None:
+        """Only build failures are tolerated; a bug in the pipeline must not be."""
+        import asyncio
+
+        ctx = build_context(repo)
+        with pytest.raises(RuntimeError, match="not a build failure"):
+            asyncio.run(
+                docs_ci._build_historical(
+                    ctx, "v1.0.0", self._Built(RuntimeError("not a build failure"))
+                )
+            )

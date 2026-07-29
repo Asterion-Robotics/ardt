@@ -27,9 +27,14 @@ pipelines:
       - "asterion-sphinx-style>=0.1.0"
     versions:
       # Every release joins the site, each built from git history with its own
-      # doc/ and conf.py. `ardt doc build` fails hard on a ref that carries no
-      # doc/ tree and one failing ref fails the whole site, so every tag matched
-      # here must postdate the docs landing on main.
+      # doc/ and conf.py — but all of them inside ONE builder, whose module set
+      # comes from the working tree. So a ref only builds while its conf.py
+      # imports modules the current tree still ships: the devcontainer split
+      # renaming `ardt_dev` made every pre-split tag unbuildable, for instance.
+      #
+      # That needs no glob floor here. A historical ref that fails is reported
+      # and left out of the site (docs_ci._build_historical); only the working
+      # tree fails the run. So `v*` can stay `v*` across any future rename.
       tags: "v*"
       # `branches: [main]` would add an unreleased "dev" version alongside the
       # releases. Off for now: it doubles the build and the tag is the thing
