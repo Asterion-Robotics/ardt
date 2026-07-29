@@ -31,9 +31,18 @@ repos:
         language: system
         files: \.py$
 
+  # install.sh runs unreviewed on user machines via `curl | bash` — the highest
+  # blast radius of any file here, so it is the one file that gets shell lint.
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.11.0.1
+    hooks:
+      - id: shellcheck
+        files: ^install\.sh$
+
   # Pinned deliberately, and it must track the `ruff` dev-dependency in
   # pyproject.toml: two ruff versions disagreeing is a green commit that fails
-  # CI, which is worse than no hook at all.
+  # CI, which is worse than no hook at all (tests/test_delivery_pins.py holds
+  # the two together).
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.15.22
     hooks:
