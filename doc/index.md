@@ -37,8 +37,10 @@ demo
 
 ```{toctree}
 :maxdepth: 2
-:caption: The devcontainer plane
+:caption: Tools
 
+tools/cli
+tools/pipelines
 devcontainer/index
 ```
 

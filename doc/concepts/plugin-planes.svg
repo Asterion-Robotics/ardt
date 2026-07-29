@@ -1,13 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 990 560" width="990" height="560" role="img" aria-labelledby="planes-title planes-desc">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 560" width="1160" height="560" role="img" aria-labelledby="planes-title planes-desc">
   <title id="planes-title">ardt plugin planes</title>
-  <desc id="planes-desc">ardt-core sits beside three plugin planes. Two of them stand up containers: the pipeline plane (ardt pipe run) holds ardt-pipelines, ardt-ros-pipelines and ardt-doc-pipelines; the devcontainer plane (ardt dev) holds ardt-devcontainers and ardt-ros-dev. The task plane (ardt build / test / doc) holds ardt-ros-tasks and ardt-doc-tasks. Core connects to all three; both container planes run the same tasks inside a container, which is what keeps CI and the dev container from drifting.</desc>
+  <desc id="planes-desc">ardt-core sits beside three plugin planes, each ending in a dotted placeholder for a plugin you write yourself. Two of them stand up containers: the pipeline plane (ardt pipe run) holds ardt-pipelines, ardt-ros-pipelines, ardt-doc-pipelines and a custom pipeline; the devcontainer plane (ardt dev) holds ardt-devcontainers, ardt-ros-dev and a custom profile. The task plane (ardt build / test / doc) holds ardt-ros-tasks, ardt-doc-tasks and a custom task. Core connects to all three; both container planes run the same tasks inside a container, which is what keeps CI and the dev container from drifting.</desc>
 
   <!--
     Hand-authored replacement for a `flowchart LR` mermaid diagram. Mermaid's
     dagre renderer lays out edges that terminate on a *subgraph* poorly, and
     sphinxcontrib-mermaid forces `height: 500px` on the emitted svg, so the
     original rendered as a stretched, overlapping mess. Coordinates below are
-    on a 990x560 canvas; the doc scales it to the content width.
+    on a 1160x560 canvas; the doc scales it to the content width.
   -->
 
   <!--
@@ -25,20 +25,29 @@
   -->
 
   <!--
-    Palette: the Asterion brand blues (#0832F6 wordmark, #030189 and #010042
-    from the report cover), matching asterion_sphinx_style. One hue, separated
-    by lightness, which is also why the planes stay distinguishable under any
-    colour vision deficiency, where the previous purple/green pair did not.
-    The two container planes share the lighter fill and the task plane takes
-    the darker one, so the grouping reads before any label does.
-    Every text/background pairing below clears WCAG AA.
+    Every band ends in a *dotted* slot: a plugin someone else writes. It is
+    drawn, rather than left to the prose, because the planes are extension
+    points first and a package list second — a reader who only looks at the
+    picture should still see where their own pipeline, profile or task goes.
+
+    The slot takes the same stroke colour as the real nodes beside it and
+    differs only in dash and italics. A darker stroke would read as *more*
+    prominent than the packages ardt actually ships, since those are outlined
+    in a deliberately light blue; hierarchy here is carried by weight, not by
+    contrast.
+
+    Nodes sit on a 188px pitch (172 wide, 16 apart). The pipeline plane fills
+    four of them; the other two centre three in the same band, which is how
+    this diagram already handled unequal plane sizes.
   -->
 
   <style>
     .plane      { stroke-width: 1.5; }
     .plane-name { font-weight: 600; font-size: 15px; text-anchor: middle; }
     .node       { fill: #ffffff; stroke-width: 1.25; }
+    .slot       { fill: #ffffff; stroke-width: 1.25; stroke-dasharray: 6 5; }
     .node-name  { font-size: 14px; font-weight: 600; text-anchor: middle; }
+    .slot-name  { font-size: 14px; font-style: italic; text-anchor: middle; }
     .node-sub   { font-size: 11px; text-anchor: middle; }
     .link       { fill: none; stroke: #8b93c9; stroke-width: 1.75; }
     .feeds      { fill: none; stroke: #030189; stroke-width: 1.75; }
@@ -48,9 +57,9 @@
   </style>
 
   <!-- ── pipeline plane ────────────────────────────────────────────────── -->
-  <rect class="plane" x="280" y="24" width="580" height="140" rx="8"
+  <rect class="plane" x="280" y="24" width="768" height="140" rx="8"
         fill="#eef1ff" stroke="#0832f6"/>
-  <text class="plane-name" x="570" y="50" fill="#0832f6">pipeline plane · ardt pipe run</text>
+  <text class="plane-name" x="664" y="50" fill="#0832f6">pipeline plane · ardt pipe run</text>
 
   <rect class="node" x="296" y="66" width="172" height="80" rx="6" stroke="#b9c4ff"/>
   <text class="node-name" x="382" y="101" fill="#030189">ardt-pipelines</text>
@@ -62,10 +71,13 @@
   <rect class="node" x="672" y="66" width="172" height="80" rx="6" stroke="#b9c4ff"/>
   <text class="node-name" x="758" y="111" fill="#030189">ardt-doc-pipelines</text>
 
+  <rect class="slot" x="860" y="66" width="172" height="80" rx="6" stroke="#b9c4ff"/>
+  <text class="slot-name" x="946" y="111" fill="#4a5bc8">Some custom pipeline</text>
+
   <!-- ── devcontainer plane ───────────────────────────────────────────── -->
-  <rect class="plane" x="280" y="204" width="580" height="140" rx="8"
+  <rect class="plane" x="280" y="204" width="768" height="140" rx="8"
         fill="#eef1ff" stroke="#0832f6"/>
-  <text class="plane-name" x="570" y="230" fill="#0832f6">devcontainer plane · ardt dev</text>
+  <text class="plane-name" x="664" y="230" fill="#0832f6">devcontainer plane · ardt dev</text>
 
   <rect class="node" x="390" y="246" width="172" height="80" rx="6" stroke="#b9c4ff"/>
   <text class="node-name" x="476" y="281" fill="#030189">ardt-devcontainers</text>
@@ -75,16 +87,22 @@
   <text class="node-name" x="664" y="281" fill="#030189">ardt-ros-dev</text>
   <text class="node-sub"  x="664" y="300" fill="#4a5bc8">the ros2 profile</text>
 
+  <rect class="slot" x="766" y="246" width="172" height="80" rx="6" stroke="#b9c4ff"/>
+  <text class="slot-name" x="852" y="291" fill="#4a5bc8">Some custom profile</text>
+
   <!-- ── task plane ───────────────────────────────────────────────────── -->
-  <rect class="plane" x="280" y="384" width="580" height="140" rx="8"
+  <rect class="plane" x="280" y="384" width="768" height="140" rx="8"
         fill="#dce2ff" stroke="#030189"/>
-  <text class="plane-name" x="570" y="410" fill="#010042">task plane · ardt build / test / doc</text>
+  <text class="plane-name" x="664" y="410" fill="#010042">task plane · ardt build / test / doc</text>
 
   <rect class="node" x="390" y="426" width="172" height="80" rx="6" stroke="#a9b5ee"/>
   <text class="node-name" x="476" y="471" fill="#010042">ardt-ros-tasks</text>
 
   <rect class="node" x="578" y="426" width="172" height="80" rx="6" stroke="#a9b5ee"/>
   <text class="node-name" x="664" y="471" fill="#010042">ardt-doc-tasks</text>
+
+  <rect class="slot" x="766" y="426" width="172" height="80" rx="6" stroke="#a9b5ee"/>
+  <text class="slot-name" x="852" y="471" fill="#2c3573">Some custom task</text>
 
   <!-- ── ardt-core ────────────────────────────────────────────────────── -->
   <rect x="24" y="224" width="200" height="100" rx="6"
@@ -108,9 +126,9 @@
        detached diagonal blob, because the stroke is still visibly descending
        where the head has already gone horizontal. Drawing both means the head
        points where the stroke actually arrives, in every renderer. -->
-  <path class="feeds" d="M 860 94 Q 946 94 946 112 L 946 468 Q 946 486 928 486 L 872 486"/>
-  <path class="feeds" d="M 860 274 Q 906 274 906 292 L 906 404 Q 906 422 888 422 L 872 422"/>
-  <path class="head" d="M 860 486 L 876 480.5 L 876 491.5 Z"/>
-  <path class="head" d="M 860 422 L 876 416.5 L 876 427.5 Z"/>
-  <text class="link-label" x="690" y="366">both run these tasks inside a container</text>
+  <path class="feeds" d="M 1048 94 Q 1134 94 1134 112 L 1134 468 Q 1134 486 1116 486 L 1060 486"/>
+  <path class="feeds" d="M 1048 274 Q 1094 274 1094 292 L 1094 404 Q 1094 422 1076 422 L 1060 422"/>
+  <path class="head" d="M 1048 486 L 1064 480.5 L 1064 491.5 Z"/>
+  <path class="head" d="M 1048 422 L 1064 416.5 L 1064 427.5 Z"/>
+  <text class="link-label" x="823" y="366">both run these tasks inside a container</text>
 </svg>
