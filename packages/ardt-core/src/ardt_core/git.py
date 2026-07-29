@@ -127,6 +127,16 @@ def ref_exists(cwd: Path, ref: str) -> bool:
     return _run(["rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"], cwd) is not None
 
 
+def path_exists_at(cwd: Path, ref: str, path: str) -> bool:
+    """True when ``path`` exists in the tree of ``ref``."""
+    return _run(["cat-file", "-e", f"{ref}:{path}"], cwd) is not None
+
+
+def is_shallow(cwd: Path) -> bool:
+    """True in a shallow clone — CI depth limits hide tags and history."""
+    return _run(["rev-parse", "--is-shallow-repository"], cwd) == "true"
+
+
 def _branch(cwd: Path) -> str | None:
     branch = _run(["rev-parse", "--abbrev-ref", "HEAD"], cwd)
     if branch in (None, "HEAD"):  # detached

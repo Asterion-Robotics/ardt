@@ -199,7 +199,9 @@ async def ros_ci(ctx: Context, dag: dagger.Client, ardt_source: str = "") -> Non
     # Export the JUnit XMLs (CI renders them) and the rendered Dockerfile
     # (the audit/`docker build` escape hatch ships with every run).
     export_dir = ctx.project_root / JUNIT_EXPORT_DIR
-    await build_stage.directory(recipes.RESULTS_DIR).export(str(export_dir))
+    # wipe: stale JUnit XMLs from a previous run must not survive into this
+    # run's reports.
+    await build_stage.directory(recipes.RESULTS_DIR).export(str(export_dir), wipe=True)
     rendered_path = export_dir / recipes.RENDERED_NAME
     rendered_path.parent.mkdir(parents=True, exist_ok=True)
     rendered_path.write_text(rendered, encoding="utf-8")

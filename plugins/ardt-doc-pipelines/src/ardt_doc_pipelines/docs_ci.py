@@ -117,6 +117,8 @@ class DocTaskConfig(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     style: list[str] = Field(default_factory=list)
+    source_dir: str = "doc"
+    """Where each ref's sphinx project lives — the preflight looks for its conf.py."""
 
 
 class TasksSection(BaseModel):
@@ -150,7 +152,12 @@ def working_tree_name(ctx: Context) -> str:
 
 
 def historical_refs(ctx: Context, cfg: DocsCiConfig) -> list[str]:
-    """The configured refs that exist, minus the working tree's own name."""
+    """The configured refs that exist and carry doc config, minus the working tree's name."""
+    if (cfg.versions.branches or cfg.versions.tags) and git_module.is_shallow(ctx.project_root):
+        ctx.console.warn(
+            "docs-ci: shallow clone — historical versions may be silently missing "
+            "(fetch the full history: `fetch-depth: 0` on GitHub, `GIT_DEPTH: 0` on GitLab)"
+        )
     refs: list[str] = []
     for branch in cfg.versions.branches:
         if git_module.ref_exists(ctx.project_root, branch):
@@ -159,11 +166,31 @@ def historical_refs(ctx: Context, cfg: DocsCiConfig) -> list[str]:
             ctx.console.warn(f"docs-ci: configured branch `{branch}` does not exist; skipped")
     if cfg.versions.tags:
         refs.extend(git_module.list_tags(ctx.project_root, cfg.versions.tags))
+
+    # Preflight each ref for doc config: a ref without it would abort the whole
+    # site with an opaque engine error mid-build. Warn-and-skip, like the
+    # missing-branch path above — one bad old tag must not kill every version.
+    conf = f"{ctx.cfg.section_as('tasks', TasksSection).doc.source_dir}/conf.py"
+
     current = working_tree_name(ctx)
     unique: list[str] = []
+    owners: dict[str, str] = {}
     for ref in refs:
-        if site_name(ref) != current and ref not in unique:
-            unique.append(ref)
+        name = site_name(ref)
+        if name == current:
+            continue
+        if name in owners:
+            if owners[name] != ref:
+                ctx.console.warn(
+                    f"docs-ci: `{ref}` and `{owners[name]}` both map to site path `{name}`; "
+                    f"keeping `{owners[name]}`"
+                )
+            continue
+        if not git_module.path_exists_at(ctx.project_root, ref, conf):
+            ctx.console.warn(f"docs-ci: `{ref}` has no {conf}; skipped")
+            continue
+        owners[name] = ref
+        unique.append(ref)
     return unique
 
 
@@ -309,6 +336,8 @@ async def docs_ci(ctx: Context, dag: dagger.Client, ardt_source: str = "") -> No
     site = site.with_new_file("versions.json", versions_json(names, default))
     site = site.with_new_file("index.html", redirect_html(default))
 
-    await site.export(str(ctx.project_root / SITE_DIR))
+    # wipe: a version removed from the config must also leave public/ — a stale
+    # directory would otherwise ride along into the Pages artifact forever.
+    await site.export(str(ctx.project_root / SITE_DIR), wipe=True)
     ctx.emit(site_dir=SITE_DIR, versions=names, default=default)
     ctx.console.success(f"site at {SITE_DIR}/ ({', '.join(names)}; default -> {default})")

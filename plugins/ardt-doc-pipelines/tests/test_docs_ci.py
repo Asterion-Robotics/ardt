@@ -24,6 +24,8 @@ import io
 import json
 from pathlib import Path
 
+import pytest
+
 from ardt_core.config import ArdtConfig
 from ardt_core.context import Context
 from ardt_core.testing import git
@@ -117,7 +119,14 @@ class TestVersionSelection:
         git("tag", "v1.0.0", cwd=repo)
         assert docs_ci.working_tree_name(self._ctx(repo)) == "v1.0.0"
 
+    def _with_doc_config(self, repo: Path) -> None:
+        (repo / "doc").mkdir()
+        (repo / "doc" / "conf.py").write_text("project = 'x'\n")
+        git("add", "doc", cwd=repo)
+        git("commit", "-qm", "doc config", cwd=repo)
+
     def test_historical_refs_filter_missing_and_current(self, repo: Path) -> None:
+        self._with_doc_config(repo)
         git("tag", "v0.1.0", cwd=repo)
         git("branch", "stable", cwd=repo)
         # move HEAD past the tag so the working tree is `main`, not `v0.1.0`
@@ -130,6 +139,38 @@ class TestVersionSelection:
         )
         # `main` is the working tree -> dropped; `ghost` does not exist -> warned+dropped.
         assert docs_ci.historical_refs(ctx, cfg) == ["stable", "v0.1.0"]
+
+    def test_ref_without_doc_config_is_skipped_not_fatal(
+        self, repo: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Regression: one old tag without doc/conf.py aborted the entire site
+        with a raw engine error that never named the ref."""
+        git("tag", "v0.0.1", cwd=repo)  # tagged BEFORE doc config existed
+        self._with_doc_config(repo)
+        git("tag", "v0.1.0", cwd=repo)
+        (repo / "next.txt").write_text("x\n")
+        git("add", "next.txt", cwd=repo)
+        git("commit", "-qm", "next", cwd=repo)
+        ctx = self._ctx(repo)
+        cfg = docs_ci.DocsCiConfig.model_validate({"versions": {"tags": "v*"}})
+        assert docs_ci.historical_refs(ctx, cfg) == ["v0.1.0"]
+        assert "`v0.0.1` has no doc/conf.py" in capsys.readouterr().err
+
+    def test_site_name_collisions_warn_and_keep_the_first(
+        self, repo: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        self._with_doc_config(repo)
+        git("branch", "feature/x", cwd=repo)
+        git("branch", "feature-x", cwd=repo)
+        (repo / "next.txt").write_text("x\n")
+        git("add", "next.txt", cwd=repo)
+        git("commit", "-qm", "next", cwd=repo)
+        ctx = self._ctx(repo)
+        cfg = docs_ci.DocsCiConfig.model_validate(
+            {"versions": {"branches": ["feature/x", "feature-x"]}}
+        )
+        assert docs_ci.historical_refs(ctx, cfg) == ["feature/x"]
+        assert "both map to site path `feature-x`" in capsys.readouterr().err
 
     def test_branch_with_slash_becomes_flat_site_name(self) -> None:
         assert docs_ci.site_name("feature/x") == "feature-x"
