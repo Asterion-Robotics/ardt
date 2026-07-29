@@ -6,6 +6,14 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 
 ### Changed
 
+### Fixed
+
+### Added
+
+## [0.2.0] - 2026-07-29
+
+### Changed
+
 - **Breaking:** the `dev.workspace_folder` key is rejected; the container workspace root is always `/ws` (the CI recipe hard-codes the same path, and the parity rule rests on the two never drifting).
 - The shipped runtime image installs its own exec dependencies via a rosdep pass over the install space, honoring `tasks.ros.rosdep_skip_keys`; the base image no longer needs to carry the workspace's runtime closure.
 - `ardt build` / `ardt test` no longer forward unknown options to colcon; pass-through requires the `--` separator.
