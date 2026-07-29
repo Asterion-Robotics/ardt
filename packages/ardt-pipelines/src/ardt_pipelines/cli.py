@@ -90,8 +90,13 @@ def list_command(ctx: Context) -> None:
     help="Set a pipeline parameter (repeatable).",
 )
 @click.option("--publish", is_flag=True, help="Allow the pipeline to push artifacts.")
+@click.option(
+    "--load",
+    is_flag=True,
+    help="Put the built image into the local docker daemon (image-producing pipelines).",
+)
 @pass_ardt
-def run_command(ctx: Context, name: str, args: tuple[str, ...], publish: bool) -> None:
+def run_command(ctx: Context, name: str, args: tuple[str, ...], publish: bool, load: bool) -> None:
     """Run a pipeline by name."""
     pipelines = _pipelines(ctx)
     definition = pipelines.get(name)
@@ -107,6 +112,7 @@ def run_command(ctx: Context, name: str, args: tuple[str, ...], publish: bool) -
         parsed[key] = value
 
     ctx.publish = publish
+    ctx.load = load
     bound = definition.bind(parsed)
     if ctx.dry_run:
         _print_plan(ctx, definition, bound)
@@ -136,5 +142,6 @@ def _print_plan(ctx: Context, definition: PipelineDef, bound: dict[str, object])
             value, source = param.default, "default"
         ctx.console.info(f"[dry-run]   {param.name}={value!r} ({source})")
     ctx.console.info(
-        f"[dry-run] publish={ctx.publish} version={ctx.version} release={ctx.is_release}"
+        f"[dry-run] publish={ctx.publish} load={ctx.load} "
+        f"version={ctx.version} release={ctx.is_release}"
     )

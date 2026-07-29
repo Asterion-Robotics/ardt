@@ -10,6 +10,8 @@ ardt pipe run docs-ci      # the versioned docs site into public/
 
 Because a pipeline is ordinary versioned Python, running it on a laptop is byte-for-byte what CI does. CI YAML shrinks to a shim that picks a pipeline name and decides `--publish`.
 
+An image-producing pipeline has two artifact destinations, each an explicit flag: `--publish` pushes the multi-arch image to the registry (and errors when none is configured), `--load` puts the native-arch image into the local docker daemon as the *moving* tag `<project>:<X.Y.Z>-dev` (the release being developed) — each load overwrites it, so stale predecessors dangle for `docker image prune` instead of one tag per commit piling up (a release load additionally gets the pinned `<project>:<version>`). The exported `Dockerfile.rendered` stays the third, ardt-free route: `docker build -f pipeline-reports/Dockerfile.rendered .` reproduces the image with nothing installed.
+
 ## The one rule
 
 **Pipelines orchestrate, tasks build.** A pipeline never re-implements build logic; it starts a container and calls `ardt build` inside it. Consequences worth stating explicitly:

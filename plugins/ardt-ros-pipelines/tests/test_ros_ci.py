@@ -27,8 +27,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from ardt_core.config import ArdtConfig
 from ardt_core.testing import run_cli
+from ardt_ros_pipelines import ros_ci
 
 run = run_cli
 
@@ -75,6 +78,11 @@ class TestCliDiscovery:
         names = {p["name"] for p in json.loads(out)["data"]["pipelines"]}
         assert "ros-ci" in names
 
+    def test_load_flag_reaches_the_dry_run_plan(self, repo: Path) -> None:
+        code, _, err = run(["pipe", "run", "ros-ci", "--dry-run", "--load"], repo)
+        assert code == 0
+        assert "load=True" in err
+
     def test_dry_run_needs_no_engine(self, repo: Path) -> None:
         code, _, err = run(["pipe", "run", "ros-ci", "--dry-run"], repo)
         assert code == 0
@@ -84,6 +92,25 @@ class TestCliDiscovery:
         code, _, err = run(["pipe", "run", "ros-ci", "--arg", "novalue"], repo)
         assert code == 1
         assert "KEY=VALUE" in err
+
+
+class TestNativeVariant:
+    """--load picks the one variant this machine can run."""
+
+    def test_single_platform_taken_at_face_value(self) -> None:
+        variant = object()
+        assert ros_ci._native_variant(["linux/riscv64"], [variant]) is variant  # type: ignore[arg-type]
+
+    def test_multi_platform_picks_the_native_arch(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(ros_ci.platform, "machine", lambda: "x86_64")
+        amd, arm = object(), object()
+        picked = ros_ci._native_variant(["linux/arm64", "linux/amd64"], [arm, amd])  # type: ignore[arg-type]
+        assert picked is amd
+
+    def test_no_native_match_yields_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(ros_ci.platform, "machine", lambda: "x86_64")
+        a, b = object(), object()
+        assert ros_ci._native_variant(["linux/arm64", "linux/arm/v7"], [a, b]) is None  # type: ignore[arg-type]
 
 
 class TestGitCredentials:

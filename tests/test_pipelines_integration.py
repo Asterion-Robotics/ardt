@@ -24,13 +24,14 @@ first run downloads the engine image (slow once, cached after).
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 import pytest
 
 from ardt_core.context import Context
 from ardt_core.plugins import Registry
-from ardt_pipelines import pipeline
+from ardt_pipelines import pipeline, std
 from ardt_pipelines.engine import run_pipeline
 
 pytestmark = pytest.mark.integration
@@ -73,12 +74,22 @@ def test_ros_ci_end_to_end_on_a_fixture_package(repo: Path) -> None:
     git("commit", "-qm", "fixture package", cwd=repo)
 
     ctx = Context.build(cwd=repo, registry=Registry(plugins=[], problems=[]))
+    ctx.load = True  # exercise the daemon-load path end to end
     run_pipeline(ctx, ros_ci, ros_ci.bind({"ardt_source": str(ARDT_ROOT)}))
 
     assert ctx.emitted["tests_ok"] is True
     reports = repo / "pipeline-reports"
     assert (reports / "Dockerfile.rendered").is_file()
     assert list(reports.rglob("*.xml")), "no JUnit results were staged"
+
+    loaded = ctx.emitted["loaded"]
+    # the moving per-release-line tag; the fixture repo is never a release
+    assert loaded == [f"proj:{std.dev_tag(ctx.version)}"]
+    assert loaded[0].endswith("-dev")
+    try:
+        subprocess.run(["docker", "image", "inspect", *loaded], check=True, capture_output=True)
+    finally:
+        subprocess.run(["docker", "rmi", *loaded], check=False, capture_output=True)
 
 
 def test_trivial_pipeline_against_real_engine(repo: Path) -> None:
