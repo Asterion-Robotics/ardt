@@ -31,7 +31,7 @@ from __future__ import annotations
 import inspect
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
-from types import ModuleType
+from types import GenericAlias, ModuleType
 from typing import Any
 
 from ardt_core.errors import ArdtError
@@ -86,6 +86,10 @@ def _annotation_name(annotation: object) -> str:
         return "str"
     if isinstance(annotation, str):  # `from __future__ import annotations`
         return annotation.replace(" ", "")
+    # A module without the future import hands us the evaluated `list[str]`,
+    # whose __name__ is just "list" — str() keeps the parameter.
+    if isinstance(annotation, GenericAlias):
+        return str(annotation).replace(" ", "")
     return getattr(annotation, "__name__", str(annotation))
 
 
@@ -166,6 +170,8 @@ def collect(modules: Mapping[str, Any]) -> dict[str, PipelineDef]:
             )
         for attribute in vars(module).values():
             if isinstance(attribute, PipelineDef):
+                if found.get(attribute.name) is attribute:
+                    continue  # the same definition re-exported, not a conflict
                 if attribute.name in found:
                     raise ArdtError(
                         f"pipeline `{attribute.name}` is defined by two plugins",
