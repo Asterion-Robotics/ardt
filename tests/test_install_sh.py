@@ -26,7 +26,12 @@ import stat
 import subprocess
 from pathlib import Path
 
-INSTALL_SH = Path(__file__).resolve().parents[1] / "install.sh"
+import pytest
+
+from ardt_core import dist
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+INSTALL_SH = REPO_ROOT / "install.sh"
 
 UV_STUB = '#!/bin/sh\nprintf \'%s\\n\' "$@" > "$STUB_LOG"\n'
 # Satisfies the trailing `command -v ardt` / `ardt --version` checks.
@@ -158,3 +163,47 @@ def test_env_ref_overrides_the_pin(tmp_path: Path) -> None:
     yaml = "ardt:\n  version: v0.3.0\n"
     requirements = run_install_requirements(tmp_path, ci=True, ardt_yaml=yaml, env_ref="v1.2.3")
     assert requirements and all("@v1.2.3#subdirectory=" in line for line in requirements)
+
+
+def monorepo_modules() -> list[str]:
+    """Every first-party distribution, discovered from the checkout itself."""
+    return sorted(
+        path.name
+        for root in ("packages", "plugins")
+        for path in (REPO_ROOT / root).iterdir()
+        if (path / "pyproject.toml").is_file()
+    )
+
+
+def installed_subdirectory(tmp_path: Path, module: str) -> str:
+    """The `#subdirectory=` install.sh emits for ``module``."""
+    (requirement,) = run_install_requirements(tmp_path, ci=True, env_modules=module)
+    return requirement.partition("#subdirectory=")[2]
+
+
+@pytest.mark.parametrize("module", monorepo_modules())
+def test_subdirectory_matches_the_checkout(tmp_path: Path, module: str) -> None:
+    """Regression: install.sh kept emitting `plugins/ardt-devcontainers` after the
+    devcontainer engine was promoted to a `packages/` plane, so every workstation
+    install died on a subdirectory that does not exist.
+
+    install.sh cannot import `ardt_core.dist` -- it runs before any ardt exists --
+    so it carries its own copy of the platform-vs-plugin split. This pins that copy
+    to the only ground truth there is, the layout on disk, for every module in the
+    monorepo; a new package under `packages/` fails here until install.sh knows it.
+    """
+    assert installed_subdirectory(tmp_path, module) == f"{module_root(module)}/{module}"
+
+
+def module_root(module: str) -> str:
+    return "packages" if (REPO_ROOT / "packages" / module).is_dir() else "plugins"
+
+
+@pytest.mark.parametrize("module", monorepo_modules())
+def test_subdirectory_agrees_with_ardt_core_dist(tmp_path: Path, module: str) -> None:
+    """The shell copy and `ardt_core.dist.subdirectory` must not drift apart: the
+    installer writes the requirement once, then `ardt dev sync` rewrites it from
+    Python into `.devcontainer/ardt-requirements.txt`. Disagreement means a repo
+    that installs cleanly and then fails to build its dev image, or the reverse.
+    """
+    assert installed_subdirectory(tmp_path, module) == dist.subdirectory(module)

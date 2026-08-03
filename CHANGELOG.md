@@ -4,6 +4,10 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 
 ## [Unreleased]
 
+### Fixed
+
+- `install.sh` still resolved `ardt-devcontainers` to `plugins/ardt-devcontainers`, the path it had before 0.3.0 promoted the devcontainer engine to a `packages/` plane. Every default (non-CI) install failed on `has no subdirectory plugins/ardt-devcontainers`; CI installs were unaffected, since the runner bundle carries neither dev module. The installer's copy of the platform-vs-plugin split is now pinned to the checkout layout and to `ardt_core.dist` by `tests/test_install_sh.py`, for every module in the monorepo.
+
 ## [0.3.0] - 2026-07-29
 
 ### Changed

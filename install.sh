@@ -128,11 +128,16 @@ resolve_modules() {
     printf '%s\n' "${modules% }"
 }
 
-# packages/ for the platform, plugins/ for everything else -- the same split
-# `ardt_core.dist.subdirectory` makes.
+# packages/ for the platform planes -- the CLI, the Dagger plane, the
+# devcontainer plane -- and plugins/ for theme knowledge. This list is the same
+# split `ardt_core.dist._PACKAGES` makes, and it has to be duplicated here: the
+# installer runs before any ardt exists to ask. The two are held together by
+# tests/test_install_sh.py, which reads _PACKAGES and asserts the paths this
+# emits agree with it -- the check that was missing when the devcontainer
+# engine moved from plugins/ to packages/ and this arm was left behind.
 subdirectory() {
     case "$1" in
-        ardt-core | ardt-pipelines) printf 'packages/%s' "$1" ;;
+        ardt-core | ardt-pipelines | ardt-devcontainers) printf 'packages/%s' "$1" ;;
         *) printf 'plugins/%s' "$1" ;;
     esac
 }
