@@ -94,6 +94,30 @@ class TestCliDiscovery:
         assert "KEY=VALUE" in err
 
 
+class TestPlatformSelection:
+    """--arg platforms=… narrows one run; empty keeps the config."""
+
+    def test_override_wins(self) -> None:
+        from ardt_ros_pipelines.ros_ci import RosCiConfig
+
+        cfg = RosCiConfig(platforms=["linux/amd64", "linux/arm64"])
+        assert ros_ci._selected_platforms(cfg, ["linux/amd64"]) == ["linux/amd64"]
+
+    def test_empty_keeps_the_config(self) -> None:
+        from ardt_ros_pipelines.ros_ci import RosCiConfig
+
+        cfg = RosCiConfig(platforms=["linux/amd64", "linux/arm64"])
+        assert ros_ci._selected_platforms(cfg, ()) == ["linux/amd64", "linux/arm64"]
+
+    def test_arg_reaches_the_dry_run_plan(self, repo: Path) -> None:
+        """The registry's comma-split list[str] coercion, end to end."""
+        code, _, err = run(
+            ["pipe", "run", "ros-ci", "--dry-run", "--arg", "platforms=linux/amd64"], repo
+        )
+        assert code == 0
+        assert "platforms=['linux/amd64']" in err
+
+
 class TestNativeVariant:
     """--load picks the one variant this machine can run."""
 

@@ -59,7 +59,9 @@ a local checkout into the build; a ``git+…`` URL swaps the monorepo address.
 
 from __future__ import annotations
 
+import asyncio
 import platform
+from collections.abc import Sequence
 from pathlib import Path
 
 import dagger
@@ -169,6 +171,16 @@ def _native_variant(
     return None
 
 
+def _selected_platforms(cfg: RosCiConfig, override: Sequence[str]) -> list[str]:
+    """``--arg platforms=…`` narrows ONE run; empty keeps the config.
+
+    The MR gate is the intended user: ``--arg platforms=linux/amd64`` skips
+    the emulated arm64 build entirely, while the tag pipeline runs the config
+    default and publishes the full manifest list.
+    """
+    return list(override) if override else list(cfg.platforms)
+
+
 def _ardt_dist(ctx: Context, ardt_source: str) -> DistConfig:
     """The repo's ``ardt:`` section, with a ``--arg ardt_source=git+…`` swap."""
     section = ctx.cfg.ardt
@@ -208,8 +220,14 @@ def _build_context(
 
 
 @pipeline(name="ros-ci", doc="deps/build/test as image stages; publish the result on --publish")
-async def ros_ci(ctx: Context, dag: dagger.Client, ardt_source: str = "") -> None:
+async def ros_ci(
+    ctx: Context,
+    dag: dagger.Client,
+    ardt_source: str = "",
+    platforms: list[str] = (),
+) -> None:
     cfg = _config(ctx)
+    build_platforms = _selected_platforms(cfg, platforms)
     secrets, ssh = _git_credentials(ctx, dag, cfg)
     context, rendered = _build_context(ctx, dag, cfg, ardt_source)
 
@@ -248,20 +266,23 @@ async def ros_ci(ctx: Context, dag: dagger.Client, ardt_source: str = "") -> Non
             dockerfile=recipes.RENDERED_NAME,
             platform=dagger.Platform(p),
             target=recipes.RUNTIME_TARGET,
-            # Non-native platforms rebuild the build stage, deps layer included.
+            # Non-native platforms rebuild the build stage, deps layer included
+            # (the deps layer is a cache hit on a warm engine unless a manifest
+            # changed — see the recipe's manifests-first COPY).
             secrets=secrets,
             ssh=ssh,
         )
-        for p in cfg.platforms
+        for p in build_platforms
     ]
-    for variant in variants:
-        await variant.sync()
+    # gather, not a sequential loop: the engine overlaps one arch's
+    # network-bound apt with the other's CPU-bound (emulated) compile.
+    await asyncio.gather(*(variant.sync() for variant in variants))
 
     if ctx.load:
-        native = _native_variant(cfg.platforms, variants)
+        native = _native_variant(build_platforms, variants)
         if native is None:
             ctx.console.warn(
-                f"--load skipped: none of {cfg.platforms} matches this machine "
+                f"--load skipped: none of {build_platforms} matches this machine "
                 "(the daemon can hold a foreign-arch image but cannot run it)"
             )
         else:
