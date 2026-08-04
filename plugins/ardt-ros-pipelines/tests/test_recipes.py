@@ -119,6 +119,40 @@ def test_tasks_run_as_stages(tmp_path: Path) -> None:
     assert deps < build < test < results
 
 
+class TestManifestsFirst:
+    """The deps layer must survive a source-only edit.
+
+    Regression: `COPY .` preceded the deps layer, so any code change re-ran
+    apt + rosdep + vcs import — under QEMU on the arm64 leg, the single most
+    expensive re-run in the pipeline.
+    """
+
+    def test_manifest_copy_precedes_deps_full_copy_follows(self, tmp_path: Path) -> None:
+        rendered = render(tmp_path, project="demo")
+        manifests = rendered.index("COPY --parents")
+        # "&& ardt deps" is the invocation; a bare "ardt deps" would match the
+        # comment explaining the manifests-first ordering, above the COPY.
+        deps = rendered.index("&& ardt deps")
+        full = rendered.index("COPY . /ws/src/demo")
+        build = rendered.index("ardt build --no-symlink-install")
+        assert manifests < deps < full < build
+
+    def test_manifest_patterns(self, tmp_path: Path) -> None:
+        """package.xml (colcon discovery), COLCON_IGNORE (pruning), *.repos
+        (vcs import), ardt.yaml (the config `ardt deps` runs against)."""
+        rendered = render(tmp_path)
+        line = next(l for l in rendered.splitlines() if l.startswith("COPY --parents"))
+        for pattern in ("./**/package.xml", "./**/COLCON_IGNORE", "./*.repos", "./ardt.yaml"):
+            assert pattern in line
+        assert line.endswith("/ws/src/demo/")
+
+    def test_staleness_caveat_is_documented(self, tmp_path: Path) -> None:
+        """vcs clones branch HEADs; a cached deps layer will not see drift.
+        The rendered file must carry the warning, since it is the artifact a
+        human debugs from."""
+        assert "vcs import` clones branch HEADs" in render(tmp_path)
+
+
 class TestRuntimeExecDeps:
     """The shipped image installs its own exec dependencies.
 
@@ -274,7 +308,8 @@ class TestGitAuth:
         )
         assert "username=gitlab-ci-token" in rendered
         # auth is configured in the same RUN, before the vcs import runs
-        assert rendered.index("elif [ -f /run/secrets/") < rendered.index("ardt deps")
+        # ("&& ardt deps" is the invocation, not the comment mentioning it)
+        assert rendered.index("elif [ -f /run/secrets/") < rendered.index("&& ardt deps")
 
     def test_token_read_at_use_time_never_baked(self, tmp_path: Path) -> None:
         rendered = render(tmp_path, git_host="code.example.com")

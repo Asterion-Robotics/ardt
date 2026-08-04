@@ -26,13 +26,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # (The /ws rule's one implementation is ardt_core.config.workspace_root; this
 # template hard-codes the same convention.)
 # WORKDIR anchors ardt in this repo's config, not in the workspace root.
-COPY . /ws/src/@PROJECT@
+#
+# MANIFESTS FIRST: only the files `ardt deps` actually reads land before the
+# deps layer -- package manifests, COLCON_IGNORE markers, the `.repos` list
+# and ardt.yaml -- so a source edit no longer invalidates apt/rosdep/vcs.
+# The full source lands after the deps layer. `--parents` preserves relative
+# paths (stable in dockerfile:1; verified against the pinned engine).
+# THE CAVEAT THE CACHE INHERITS: `vcs import` clones branch HEADs, so a
+# cached deps layer does not see upstream drift. Pin commits or tags in the
+# `.repos` file, or touch it to force a re-import.
+COPY --parents ./**/package.xml ./**/COLCON_IGNORE ./*.repos ./ardt.yaml /ws/src/@PROJECT@/
 WORKDIR /ws/src/@PROJECT@
 
 # 1) deps (exclusions come from ardt.yaml: tasks.ros.exclude_packages / rosdep_skip_keys)
 RUN @GIT_MOUNTS@apt-get update && rosdep update --rosdistro ${ROS_DISTRO}@GIT_AUTH@ \
  && ardt deps \
  && rm -rf /var/lib/apt/lists/*
+# 1b) the full source, AFTER the deps layer: a code edit invalidates from here
+# down, not the dependency install above
+COPY . /ws/src/@PROJECT@
 # 2) build (real files, not symlinks: the install base must survive the stage copy)
 RUN ardt build --no-symlink-install --install-base @INSTALL_BASE@
 
