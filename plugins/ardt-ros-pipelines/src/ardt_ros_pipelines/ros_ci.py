@@ -21,15 +21,21 @@
 idea: **building the image is the CI run**. The image recipe (owned by
 :mod:`.recipes`, versioned with ardt) runs the ardt tasks as build stages —
 
-1. ``ardt deps``   — rosdep install
-2. ``ardt build``  — colcon build into the install base
-3. ``ardt test``   — red tests fail the image build
-4. stage the JUnit XMLs at a fixed path
-5. the shipped runtime image (``FROM base_image`` + repo's extra layers)
+1. ``ardt deps``   — rosdep install          (stage ``build``)
+2. ``ardt build``  — colcon build            (stage ``build``)
+3. ``ardt test``   — red tests fail the build (stage ``test``, forked from ``build``)
+4. stage the JUnit XMLs at a fixed path      (stage ``test``)
+5. the shipped runtime image (``FROM base_image`` + repo's extra layers,
+   forked from ``build`` — deliberately NOT from ``test``)
 
-— and the pipeline only orchestrates: render the recipe, build the ``build``
-target (which *is* deps/build/test), export the reports and the rendered
-Dockerfile, then build/publish the ``runtime`` target. **Repos own no
+— and the pipeline only orchestrates: render the recipe, build the ``test``
+target natively (which *is* deps/build/test — the CI gate), export the
+reports and the rendered Dockerfile, then build/publish the ``runtime``
+target per platform. ``runtime`` not depending on ``test`` is the point of
+the split: when it did, every foreign-arch runtime build re-ran the whole
+suite under QEMU. The escape hatch mirrors it:
+``docker build --target test`` proves a change, a plain ``docker build``
+produces the shipped image without re-running tests. **Repos own no
 Dockerfile**; they set the knobs in ``pipelines.ros_ci:``, and a repo that
 truly needs local image content extends the configured base with a small
 ``base.Dockerfile`` (``FROM ${BASE_IMAGE}`` + its layers), spliced into the
@@ -207,19 +213,21 @@ async def ros_ci(ctx: Context, dag: dagger.Client, ardt_source: str = "") -> Non
     secrets, ssh = _git_credentials(ctx, dag, cfg)
     context, rendered = _build_context(ctx, dag, cfg, ardt_source)
 
-    # Steps 1-4: the `build` target runs ardt deps/build/test as layers.
-    # A red test is a failed image build — there is no separate test phase.
-    build_stage = context.docker_build(
-        dockerfile=recipes.RENDERED_NAME, target=recipes.BUILD_TARGET, secrets=secrets, ssh=ssh
+    # Steps 1-4: the `test` target runs ardt deps/build/test as layers, on the
+    # native platform only. A red test is a failed image build — there is no
+    # separate test phase, and no other platform re-runs the suite: the
+    # runtime targets below fork from `build`, upstream of the tests.
+    test_stage = context.docker_build(
+        dockerfile=recipes.RENDERED_NAME, target=recipes.TEST_TARGET, secrets=secrets, ssh=ssh
     )
-    await build_stage.sync()
+    await test_stage.sync()
 
     # Export the JUnit XMLs (CI renders them) and the rendered Dockerfile
     # (the audit/`docker build` escape hatch ships with every run).
     export_dir = ctx.project_root / JUNIT_EXPORT_DIR
     # wipe: stale JUnit XMLs from a previous run must not survive into this
     # run's reports.
-    await build_stage.directory(recipes.RESULTS_DIR).export(str(export_dir), wipe=True)
+    await test_stage.directory(recipes.RESULTS_DIR).export(str(export_dir), wipe=True)
     rendered_path = export_dir / recipes.RENDERED_NAME
     rendered_path.parent.mkdir(parents=True, exist_ok=True)
     rendered_path.write_text(rendered, encoding="utf-8")

@@ -74,7 +74,40 @@ def test_bases_and_stages(tmp_path: Path) -> None:
     assert "ARG BUILDER_IMAGE=bld:2" in rendered
     assert "ARG BASE_IMAGE=base:1" in rendered
     assert f"AS {recipes.BUILD_TARGET}" in rendered
+    assert f"AS {recipes.TEST_TARGET}" in rendered
     assert f"AS {recipes.RUNTIME_TARGET}" in rendered
+
+
+class TestTestStageSplit:
+    """The runtime image must not depend on the test stage.
+
+    Regression: `runtime` copied from a stage that ended with `ardt test`, so
+    every foreign-arch runtime build re-ran the whole suite under QEMU — the
+    single most expensive span of the pipeline, paid twice.
+    """
+
+    def test_test_forks_from_build(self, tmp_path: Path) -> None:
+        rendered = render(tmp_path)
+        assert f"FROM {recipes.BUILD_TARGET} AS {recipes.TEST_TARGET}" in rendered
+
+    def test_runtime_copies_from_build_not_test(self, tmp_path: Path) -> None:
+        rendered = render(tmp_path)
+        assert "COPY --from=build /opt/ros/app" in rendered
+        assert f"--from={recipes.TEST_TARGET}" not in rendered
+        assert f"FROM {recipes.TEST_TARGET}" not in rendered.replace(
+            f"FROM {recipes.BUILD_TARGET} AS {recipes.TEST_TARGET}", ""
+        )
+
+    def test_tests_and_staging_live_in_the_test_stage(self, tmp_path: Path) -> None:
+        rendered = render(tmp_path)
+        test_stage_start = rendered.index(f"AS {recipes.TEST_TARGET}")
+        assert rendered.index("ardt test") > test_stage_start
+        assert rendered.index(recipes.RESULTS_DIR) > test_stage_start
+
+    def test_escape_hatch_names_the_test_target(self, tmp_path: Path) -> None:
+        """The header must tell a human that a plain build skips the tests."""
+        rendered = render(tmp_path)
+        assert f"--target {recipes.TEST_TARGET}" in rendered
 
 
 def test_tasks_run_as_stages(tmp_path: Path) -> None:
@@ -205,8 +238,19 @@ class TestInstallBaseAndStrip:
         rendered = render(tmp_path, strip_dev_files=True)
         assert "-name include" in rendered
         assert "*.a" in rendered
-        # the strip runs in the build stage, before the runtime stage begins
         assert rendered.index("IP protection") < rendered.index("AS runtime")
+
+    def test_strip_is_its_own_stage_and_runtime_copies_from_it(self, tmp_path: Path) -> None:
+        """Strip forks from build, and the test stage keeps the unstripped
+        install — the pre-split behavior, where strip ran after the tests."""
+        rendered = render(tmp_path, strip_dev_files=True)
+        assert f"FROM {recipes.BUILD_TARGET} AS {recipes.STRIP_STAGE}" in rendered
+        assert f"COPY --from={recipes.STRIP_STAGE} /opt/ros/app" in rendered
+        # the test stage still forks from the unstripped build stage
+        assert f"FROM {recipes.BUILD_TARGET} AS {recipes.TEST_TARGET}" in rendered
+
+    def test_no_strip_stage_without_the_knob(self, tmp_path: Path) -> None:
+        assert f"AS {recipes.STRIP_STAGE}" not in render(tmp_path)
 
 
 class TestGitAuth:

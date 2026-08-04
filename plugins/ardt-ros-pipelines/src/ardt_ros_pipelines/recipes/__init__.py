@@ -55,12 +55,23 @@ the same context excludes the pipeline uses — without it, a host checkout's
 ``build/``/``install/`` trees leak into the image and break rosdep/colcon."""
 
 BUILD_TARGET = "build"
+TEST_TARGET = "test"
+"""The CI gate: deps + build + test + JUnit staging. Its own stage so no
+runtime image depends on it — when ``runtime`` copied from a stage ending in
+``ardt test``, every foreign-arch runtime build re-ran the whole suite under
+QEMU."""
 RUNTIME_TARGET = "runtime"
 RESULTS_DIR = "/results"
-"""Where the build stage places JUnit XMLs (fixed contract with the pipeline)."""
+"""Where the test stage places JUnit XMLs (fixed contract with the pipeline)."""
 
 BASE_EXT_STAGE = "base-ext"
 """Stage name given to a repo's base extension in the rendered recipe."""
+
+STRIP_STAGE = "strip"
+"""Stage the IP-protection strip runs in when enabled. A stage rather than a
+``RUN`` inside ``build``, so the test stage (forked from ``build``) still sees
+the unstripped install — the pre-split behavior, where strip ran after the
+tests."""
 
 LOCAL_ARDT_DIR = ".ardt-src"
 """Context subdirectory the pipeline injects a local ardt checkout into."""
@@ -117,15 +128,18 @@ _GIT_AUTH = """ \\
       && exit 1; \\
     fi"""
 
-_STRIP_STEP = """\
+_STRIP_STEP = f"""\
 
 # 4b) IP protection: development files are removed BEFORE the runtime copy, so
 # the shipped image carries no headers, static libs, or CMake/pkg-config
 # exports that would let a third party develop against the proprietary
-# packages. Runtime data (launch files, urdf, plugins) is kept.
-RUN find {base} -type d \\( -name include -o -name cmake -o -name pkgconfig \\) \\
-      -prune -exec rm -rf {{}} + \\
- && find {base} -name '*.a' -delete
+# packages. Runtime data (launch files, urdf, plugins) is kept. A stage of its
+# own, forked from `build`: the test stage must keep seeing the unstripped
+# install, and the runtime copy sources from here instead.
+FROM {BUILD_TARGET} AS {STRIP_STAGE}
+RUN find {{base}} -type d \\( -name include -o -name cmake -o -name pkgconfig \\) \\
+      -prune -exec rm -rf {{{{}}}} + \\
+ && find {{base}} -name '*.a' -delete
 """
 
 
@@ -231,6 +245,7 @@ def render_ros2(
     install = _local_install() if local_ardt else _git_install(ardt_requirements)
     rendered_cmd = f"CMD {json.dumps(cmd)}\n" if cmd else ""
     strip = _STRIP_STEP.format(base=install_base) if strip_dev_files else ""
+    install_src = STRIP_STAGE if strip_dev_files else BUILD_TARGET
     git_mounts = _GIT_MOUNTS if git_host else ""
     git_auth = (
         _GIT_AUTH.format(
@@ -255,6 +270,7 @@ def render_ros2(
         .replace("@GIT_MOUNTS@", git_mounts)
         .replace("@GIT_AUTH@", git_auth)
         .replace("@INSTALL_BASE@", install_base)
+        .replace("@INSTALL_SRC@", install_src)
         .replace("@RUNTIME_SKIP@", _runtime_skip(rosdep_skip_keys))
         .replace("@STRIP@", strip)
         .replace("@BASE_EXT@", base_ext)

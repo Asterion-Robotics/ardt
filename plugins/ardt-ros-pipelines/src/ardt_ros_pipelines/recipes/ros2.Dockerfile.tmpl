@@ -3,13 +3,15 @@
 # The recipe lives in ardt-ros-pipelines and updates with the pinned ardt version;
 # repos contain NO Dockerfile. A repo needing local image content extends the
 # configured base via @BASE_FILE@ (spliced in below as a stage). Build, test and
-# packaging are ONE recipe — building this image proves the tests pass:
-#   docker build -f <this file> .                  -> shipped runtime image
-#   docker build -f <this file> --target build .   -> build+test stage only
+# packaging are ONE recipe; building the `test` target proves the tests pass:
+#   docker build -f <this file> --target test .   -> deps + build + TEST (the CI gate)
+#   docker build -f <this file> .                 -> shipped runtime image (does NOT run tests)
+# The runtime image deliberately does not depend on the test stage: depending on
+# it made every foreign-arch runtime build re-run the whole suite under QEMU.
 ARG BUILDER_IMAGE=@BUILDER@
 ARG BASE_IMAGE=@BASE_IMAGE@
 
-# ---- steps 1-4: deps, build, test, artefact staging (never ships) ----
+# ---- steps 1-2: deps + build (the shared root of test and runtime) ----
 FROM ${BUILDER_IMAGE} AS build
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -33,7 +35,13 @@ RUN @GIT_MOUNTS@apt-get update && rosdep update --rosdistro ${ROS_DISTRO}@GIT_AU
  && rm -rf /var/lib/apt/lists/*
 # 2) build (real files, not symlinks: the install base must survive the stage copy)
 RUN ardt build --no-symlink-install --install-base @INSTALL_BASE@
-# 3) test — red tests fail the image build (same install base as the build)
+
+# ---- steps 3-4: test + JUnit staging. Its own stage so NOTHING ships from it
+# and nothing depends on it: the CI pipeline builds this target as the gate,
+# the runtime images below fork from `build` directly. ----
+FROM build AS test
+
+# 3) test — red tests fail this target's build (same install base as the build)
 RUN ardt test --install-base @INSTALL_BASE@
 # 4) stage the JUnit XMLs where the pipeline (or a human) can copy them from
 # (colcon's build base is at the workspace root, not inside the repo). Two
@@ -45,7 +53,7 @@ RUN mkdir -p /results && cd /ws/build \
 # ---- step 5: the shipped runtime image ----
 FROM @RUNTIME_FROM@ AS runtime
 
-COPY --from=build @INSTALL_BASE@ @INSTALL_BASE@
+COPY --from=@INSTALL_SRC@ @INSTALL_BASE@ @INSTALL_BASE@
 # 5b) exec dependencies install HERE, not in the build stage: the runtime image
 # starts from the configured base alone, and everything rosdep put into the
 # builder would otherwise be missing at runtime. The install space's
