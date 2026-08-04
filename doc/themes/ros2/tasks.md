@@ -16,7 +16,9 @@ JUnit XMLs land at the fixed convention `build/**/test_results/**/*.xml`, so pip
 tasks:
   ros:
     distro: jazzy
-    repos_file: my_robot.repos     # imported by `ardt deps` before rosdep runs
+    # repos_file: my_robot.repos   # imported by `ardt deps` before rosdep runs;
+    #                              # default: `<project>.repos` when it exists,
+    #                              # "" opts out of that auto-detection
     repos_target: src/external
     rosdep_skip_keys:              # deps never installed (also: `ardt deps --skip-key KEY`)
       - rti-connext-dds

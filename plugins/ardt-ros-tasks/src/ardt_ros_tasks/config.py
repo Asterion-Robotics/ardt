@@ -88,7 +88,11 @@ class RosConfig(BaseModel):
     way."""
 
     repos_file: str | None = None
-    """A ``.repos`` file imported by ``ardt deps`` before rosdep runs."""
+    """A ``.repos`` file imported by ``ardt deps`` before rosdep runs. None
+    (the default) auto-detects ``<project>.repos`` in the project root and
+    skips the import when absent; an explicit value must exist; an explicit
+    empty string disables the import for a repo whose ``<project>.repos``
+    would otherwise be picked up."""
     repos_target: str | None = None
     """Where ``vcs import`` clones, relative to the project root. None resolves
     to ``external/`` under the workspace's ``src/`` (:func:`repos_target_path`):

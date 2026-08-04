@@ -130,6 +130,33 @@ def test_deps_missing_repos_file_is_a_clean_error(repo: Path) -> None:
         raise AssertionError("expected ArdtError")
 
 
+def test_deps_defaults_to_project_named_repos_file(repo: Path) -> None:
+    # the fixture repo's directory (and so its default project name) is `proj`
+    (repo / "proj.repos").write_text("repositories: {}\n")
+    ctx = context(repo, dry_run=True)
+    tasks.deps(ctx)
+    assert "vcs import" in output(ctx)
+    assert ctx.emitted["repos_file"] == "proj.repos"
+
+
+def test_deps_project_name_config_drives_the_default_repos_file(repo: Path) -> None:
+    (repo / "my_robot.repos").write_text("repositories: {}\n")
+    (repo / "ardt.yaml").write_text("project:\n  name: my_robot\n")
+    ctx = context(repo, dry_run=True)
+    tasks.deps(ctx)
+    assert "vcs import" in output(ctx)
+    assert ctx.emitted["repos_file"] == "my_robot.repos"
+
+
+def test_deps_empty_repos_file_opts_out_of_the_default(repo: Path) -> None:
+    (repo / "proj.repos").write_text("repositories: {}\n")
+    (repo / "ardt.yaml").write_text("tasks:\n  ros:\n    repos_file: ''\n")
+    ctx = context(repo, dry_run=True)
+    tasks.deps(ctx)
+    assert "vcs import" not in output(ctx)
+    assert ctx.emitted["repos_file"] is None
+
+
 def test_deps_skip_flags(repo: Path) -> None:
     (repo / "sources.repos").write_text("repositories: {}\n")
     (repo / "ardt.yaml").write_text("tasks:\n  ros:\n    repos_file: sources.repos\n")
