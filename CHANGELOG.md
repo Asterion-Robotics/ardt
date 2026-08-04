@@ -4,9 +4,28 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** `tasks.ros.package_scope`, defaulting to `project`: the three ROS tasks operate on the repo's own packages and nothing beyond what they need. `ardt build` runs `colcon build --packages-up-to <own>`, `ardt test` runs `colcon test --packages-select <own>` (imported dependencies' suites are not this repo's gate), and the rosdep pass resolves only that closure's manifests, so an imported stack's demo packages are neither dep-resolved, built, nor tested. A repo with no `.repos` imports has own == everything and keeps the old behavior exactly; only a repo that builds imported packages nothing of its own depends on breaks, and `package_scope: workspace` restores the old semantics. "Own" is discovered (`colcon list --base-paths <project root>`), never declared; an explicit `--packages-select` still overrides the scope.
+- `tasks.ros.repos_file` left unset now auto-detects `<project>.repos` in the project root and skips the import when absent. An explicit value must still exist (a typo must not silently drop the import), and an explicit empty string opts out of the auto-detection.
+
+## [0.4.0] - 2026-08-04
+
+### Changed
+
+- `ros-ci` builds faster, mostly felt on multi-platform runs. The recipe splits the tests out of the `build` stage into a `test` stage, and the runtime image forks from `build` (or from the new `strip` stage when `strip_dev_files` is on, which keeps the tests seeing the unstripped install), deliberately not from `test`: depending on it made every foreign-arch runtime build re-run the whole suite under QEMU. The escape hatch mirrors the split: `docker build --target test` is the CI gate, a plain `docker build` produces the shipped image without re-running tests.
+- The recipe copies manifests first: only the files `ardt deps` reads (`package.xml`, `COLCON_IGNORE`, `*.repos`, `ardt.yaml`) land before the deps layer, so a source edit no longer invalidates the apt/rosdep/vcs work. The caveat the cache inherits: `vcs import` clones branch HEADs, so a cached deps layer does not see upstream drift; pin commits or tags in the `.repos` file, or touch it to force a re-import.
+- Per-arch apt cache mounts in the builder and runtime stages make `apt-get update` and repeated package downloads near-free across runs on a persistent engine. A ccache mount is wired but inert until the builder image ships ccache and the repo opts in via `tasks.ros.build_args`.
+- The per-platform runtime builds run concurrently instead of sequentially: the engine overlaps one arch's network-bound apt with the other's CPU-bound emulated compile.
+- `ardt pipe run ros-ci --arg platforms=…` narrows one run to a subset of `pipelines.ros_ci.platforms`; the MR gate is the intended user (`platforms=linux/amd64` skips the emulated arm64 build entirely), while the tag pipeline keeps the config default and publishes the full manifest list.
+
 ### Fixed
 
 - `install.sh` still resolved `ardt-devcontainers` to `plugins/ardt-devcontainers`, the path it had before 0.3.0 promoted the devcontainer engine to a `packages/` plane. Every default (non-CI) install failed on `has no subdirectory plugins/ardt-devcontainers`; CI installs were unaffected, since the runner bundle carries neither dev module. The installer's copy of the platform-vs-plugin split is now pinned to the checkout layout and to `ardt_core.dist` by `tests/test_install_sh.py`, for every module in the monorepo.
+
+## [0.3.1] - 2026-07-29
+
+Docs only: the planes diagram draws the extension slots (entry-point groups), and the CLI surface is regrouped under Tools. No code changes.
 
 ## [0.3.0] - 2026-07-29
 
