@@ -100,6 +100,28 @@ def _scoped_script(ctx: Context, command: list[str], selector: str) -> str:
     )
 
 
+def _repos_file(ctx: Context, cfg: RosConfig) -> Path | None:
+    """The ``.repos`` file ``deps`` imports, or None for no import.
+
+    An explicit ``tasks.ros.repos_file`` must exist — a typo must not silently
+    drop the import. Unset auto-detects ``<project>.repos`` in the project
+    root, used only when present; an explicit empty string opts out of the
+    auto-detection.
+    """
+    if cfg.repos_file is not None:
+        if not cfg.repos_file:
+            return None
+        repos = ctx.project_root / cfg.repos_file
+        if not repos.is_file():
+            raise ArdtError(
+                f"repos file {cfg.repos_file} does not exist",
+                hint="fix `tasks.ros.repos_file` in ardt.yaml, or pass --skip-vcs",
+            )
+        return repos
+    default = ctx.project_root / f"{ctx.project}.repos"
+    return default if default.is_file() else None
+
+
 def deps(
     ctx: Context,
     *,
@@ -111,15 +133,10 @@ def deps(
     """Import ``.repos`` sources, then install system dependencies with rosdep."""
     cfg = ros_config(ctx.cfg)
 
-    if not skip_vcs and cfg.repos_file:
-        repos = ctx.project_root / cfg.repos_file
-        if not repos.is_file():
-            raise ArdtError(
-                f"repos file {cfg.repos_file} does not exist",
-                hint="fix `tasks.ros.repos_file` in ardt.yaml, or pass --skip-vcs",
-            )
+    repos = None if skip_vcs else _repos_file(ctx, cfg)
+    if repos is not None:
         target = repos_target_path(cfg, ctx.project_root)
-        with ctx.console.section(f"vcs import {cfg.repos_file}"):
+        with ctx.console.section(f"vcs import {repos.name}"):
             ctx.runner.require("vcs", hint="pip install vcstool")
             if not ctx.dry_run:
                 target.mkdir(parents=True, exist_ok=True)
@@ -155,7 +172,7 @@ def deps(
 
     ctx.emit(
         deps_ok=True,
-        repos_file=cfg.repos_file if not skip_vcs else None,
+        repos_file=str(repos.relative_to(ctx.project_root)) if repos is not None else None,
         rosdep_skip_keys=list(keys),
         excluded_packages=list(excluded),
     )
