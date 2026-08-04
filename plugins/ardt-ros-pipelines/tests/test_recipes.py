@@ -74,7 +74,40 @@ def test_bases_and_stages(tmp_path: Path) -> None:
     assert "ARG BUILDER_IMAGE=bld:2" in rendered
     assert "ARG BASE_IMAGE=base:1" in rendered
     assert f"AS {recipes.BUILD_TARGET}" in rendered
+    assert f"AS {recipes.TEST_TARGET}" in rendered
     assert f"AS {recipes.RUNTIME_TARGET}" in rendered
+
+
+class TestTestStageSplit:
+    """The runtime image must not depend on the test stage.
+
+    Regression: `runtime` copied from a stage that ended with `ardt test`, so
+    every foreign-arch runtime build re-ran the whole suite under QEMU — the
+    single most expensive span of the pipeline, paid twice.
+    """
+
+    def test_test_forks_from_build(self, tmp_path: Path) -> None:
+        rendered = render(tmp_path)
+        assert f"FROM {recipes.BUILD_TARGET} AS {recipes.TEST_TARGET}" in rendered
+
+    def test_runtime_copies_from_build_not_test(self, tmp_path: Path) -> None:
+        rendered = render(tmp_path)
+        assert "COPY --from=build /opt/ros/app" in rendered
+        assert f"--from={recipes.TEST_TARGET}" not in rendered
+        assert f"FROM {recipes.TEST_TARGET}" not in rendered.replace(
+            f"FROM {recipes.BUILD_TARGET} AS {recipes.TEST_TARGET}", ""
+        )
+
+    def test_tests_and_staging_live_in_the_test_stage(self, tmp_path: Path) -> None:
+        rendered = render(tmp_path)
+        test_stage_start = rendered.index(f"AS {recipes.TEST_TARGET}")
+        assert rendered.index("ardt test") > test_stage_start
+        assert rendered.index(recipes.RESULTS_DIR) > test_stage_start
+
+    def test_escape_hatch_names_the_test_target(self, tmp_path: Path) -> None:
+        """The header must tell a human that a plain build skips the tests."""
+        rendered = render(tmp_path)
+        assert f"--target {recipes.TEST_TARGET}" in rendered
 
 
 def test_tasks_run_as_stages(tmp_path: Path) -> None:
@@ -84,6 +117,40 @@ def test_tasks_run_as_stages(tmp_path: Path) -> None:
     test = rendered.index("ardt test")
     results = rendered.index(recipes.RESULTS_DIR)
     assert deps < build < test < results
+
+
+class TestManifestsFirst:
+    """The deps layer must survive a source-only edit.
+
+    Regression: `COPY .` preceded the deps layer, so any code change re-ran
+    apt + rosdep + vcs import — under QEMU on the arm64 leg, the single most
+    expensive re-run in the pipeline.
+    """
+
+    def test_manifest_copy_precedes_deps_full_copy_follows(self, tmp_path: Path) -> None:
+        rendered = render(tmp_path, project="demo")
+        manifests = rendered.index("COPY --parents")
+        # "&& ardt deps" is the invocation; a bare "ardt deps" would match the
+        # comment explaining the manifests-first ordering, above the COPY.
+        deps = rendered.index("&& ardt deps")
+        full = rendered.index("COPY . /ws/src/demo")
+        build = rendered.index("ardt build --no-symlink-install")
+        assert manifests < deps < full < build
+
+    def test_manifest_patterns(self, tmp_path: Path) -> None:
+        """package.xml (colcon discovery), COLCON_IGNORE (pruning), *.repos
+        (vcs import), ardt.yaml (the config `ardt deps` runs against)."""
+        rendered = render(tmp_path)
+        line = next(ln for ln in rendered.splitlines() if ln.startswith("COPY --parents"))
+        for pattern in ("./**/package.xml", "./**/COLCON_IGNORE", "./*.repos", "./ardt.yaml"):
+            assert pattern in line
+        assert line.endswith("/ws/src/demo/")
+
+    def test_staleness_caveat_is_documented(self, tmp_path: Path) -> None:
+        """vcs clones branch HEADs; a cached deps layer will not see drift.
+        The rendered file must carry the warning, since it is the artifact a
+        human debugs from."""
+        assert "vcs import` clones branch HEADs" in render(tmp_path)
 
 
 class TestRuntimeExecDeps:
@@ -205,14 +272,75 @@ class TestInstallBaseAndStrip:
         rendered = render(tmp_path, strip_dev_files=True)
         assert "-name include" in rendered
         assert "*.a" in rendered
-        # the strip runs in the build stage, before the runtime stage begins
         assert rendered.index("IP protection") < rendered.index("AS runtime")
+
+    def test_strip_is_its_own_stage_and_runtime_copies_from_it(self, tmp_path: Path) -> None:
+        """Strip forks from build, and the test stage keeps the unstripped
+        install — the pre-split behavior, where strip ran after the tests."""
+        rendered = render(tmp_path, strip_dev_files=True)
+        assert f"FROM {recipes.BUILD_TARGET} AS {recipes.STRIP_STAGE}" in rendered
+        assert f"COPY --from={recipes.STRIP_STAGE} /opt/ros/app" in rendered
+        # the test stage still forks from the unstripped build stage
+        assert f"FROM {recipes.BUILD_TARGET} AS {recipes.TEST_TARGET}" in rendered
+
+    def test_no_strip_stage_without_the_knob(self, tmp_path: Path) -> None:
+        assert f"AS {recipes.STRIP_STAGE}" not in render(tmp_path)
+
+
+class TestCacheMounts:
+    """Per-arch BuildKit cache mounts; they pay off on a persistent engine."""
+
+    def test_targetarch_declared_in_both_mounting_stages(self, tmp_path: Path) -> None:
+        """ARG scope is per stage; an undeclared TARGETARCH expands empty and
+        every arch would silently share (and thrash) one cache."""
+        rendered = render(tmp_path)
+        build_stage = rendered.split(f"AS {recipes.TEST_TARGET}")[0]
+        runtime_stage = rendered.split(f"AS {recipes.RUNTIME_TARGET}")[1]
+        assert "ARG TARGETARCH" in build_stage
+        assert "ARG TARGETARCH" in runtime_stage
+
+    def test_apt_mounts_are_arch_keyed_and_locked(self, tmp_path: Path) -> None:
+        rendered = render(tmp_path)
+        assert "target=/var/cache/apt,sharing=locked,id=apt-cache-${TARGETARCH}" in rendered
+        assert "target=/var/lib/apt/lists,sharing=locked,id=apt-lists-${TARGETARCH}" in rendered
+
+    def test_ccache_mount_on_the_build_step(self, tmp_path: Path) -> None:
+        rendered = render(tmp_path)
+        line_start = rendered.index("target=/root/.ccache,id=ccache-${TARGETARCH}")
+        assert line_start < rendered.index("ardt build --no-symlink-install")
+
+    def test_apt_lists_never_removed(self, tmp_path: Path) -> None:
+        """The lists live in a mount, not a layer; an rm would only empty the
+        shared cache for the next run. (Matched with the trailing /*: the
+        template's own comment quotes the command without it.)"""
+        assert "rm -rf /var/lib/apt/lists/*" not in render(tmp_path)
+
+    def test_docker_clean_removed_in_build_kept_in_runtime(self, tmp_path: Path) -> None:
+        """Build stage keeps .debs in the cache mount; the SHIPPED image's apt
+        behavior is not ours to change."""
+        rendered = render(tmp_path)
+        build_stage = rendered.split(f"AS {recipes.TEST_TARGET}")[0]
+        runtime_stage = rendered.split(f"AS {recipes.RUNTIME_TARGET}")[1]
+        assert "rm -f /etc/apt/apt.conf.d/docker-clean" in build_stage
+        assert (
+            "docker-clean"
+            not in runtime_stage.replace(
+                "# alone here (removing it would change the SHIPPED image's apt behavior), so", ""
+            ).split("RUN", 1)[1]
+        )
+
+    def test_deps_layer_keeps_cache_mounts_alongside_git_mounts(self, tmp_path: Path) -> None:
+        rendered = render(tmp_path, git_host="code.example.com")
+        deps_run = rendered[rendered.index("# 1) deps") : rendered.index("&& ardt deps")]
+        assert "--mount=type=ssh" in deps_run
+        assert "id=apt-cache-${TARGETARCH}" in deps_run
 
 
 class TestGitAuth:
     def test_off_by_default(self, tmp_path: Path) -> None:
         rendered = render(tmp_path)
-        assert "--mount" not in rendered
+        assert "--mount=type=ssh" not in rendered
+        assert "--mount=type=secret" not in rendered
         assert "credential" not in rendered
 
     def test_syntax_directive_is_the_first_line(self, tmp_path: Path) -> None:
@@ -230,7 +358,8 @@ class TestGitAuth:
         )
         assert "username=gitlab-ci-token" in rendered
         # auth is configured in the same RUN, before the vcs import runs
-        assert rendered.index("elif [ -f /run/secrets/") < rendered.index("ardt deps")
+        # ("&& ardt deps" is the invocation, not the comment mentioning it)
+        assert rendered.index("elif [ -f /run/secrets/") < rendered.index("&& ardt deps")
 
     def test_token_read_at_use_time_never_baked(self, tmp_path: Path) -> None:
         rendered = render(tmp_path, git_host="code.example.com")
