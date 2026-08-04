@@ -14,9 +14,24 @@ ARG BASE_IMAGE=@BASE_IMAGE@
 # ---- steps 1-2: deps + build (the shared root of test and runtime) ----
 FROM ${BUILDER_IMAGE} AS build
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-      build-essential git python3-pip openssh-client \
- && rm -rf /var/lib/apt/lists/*
+# BuildKit provides TARGETARCH per platform; declaring it per stage is what
+# makes it usable in the cache-mount ids below. Keying the caches by arch is
+# required: one cache shared across amd64 and arm64 would thrash with zero
+# hit-rate gain.
+ARG TARGETARCH
+
+# apt metadata and .debs live in per-arch cache mounts on a persistent engine,
+# so `apt-get update` and repeated package downloads become near-free across
+# runs. docker-clean is removed so the .debs actually survive in the mount
+# (the base image ships it to keep LAYERS small; a cache mount is not a
+# layer). No `rm -rf /var/lib/apt/lists` anywhere in this stage: the lists
+# live in the mount, never in a layer -- an rm would only empty the shared
+# cache.
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked,id=apt-cache-${TARGETARCH} \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked,id=apt-lists-${TARGETARCH} \
+    rm -f /etc/apt/apt.conf.d/docker-clean \
+ && apt-get update && apt-get install -y --no-install-recommends \
+      build-essential git python3-pip openssh-client
 
 # The same ardt tasks as on a dev machine run the build (two-plane rule).
 @ARDT_INSTALL@
@@ -39,14 +54,20 @@ COPY --parents ./**/package.xml ./**/COLCON_IGNORE ./*.repos ./ardt.yaml /ws/src
 WORKDIR /ws/src/@PROJECT@
 
 # 1) deps (exclusions come from ardt.yaml: tasks.ros.exclude_packages / rosdep_skip_keys)
-RUN @GIT_MOUNTS@apt-get update && rosdep update --rosdistro ${ROS_DISTRO}@GIT_AUTH@ \
- && ardt deps \
- && rm -rf /var/lib/apt/lists/*
+RUN @GIT_MOUNTS@--mount=type=cache,target=/var/cache/apt,sharing=locked,id=apt-cache-${TARGETARCH} \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked,id=apt-lists-${TARGETARCH} \
+    apt-get update && rosdep update --rosdistro ${ROS_DISTRO}@GIT_AUTH@ \
+ && ardt deps
 # 1b) the full source, AFTER the deps layer: a code edit invalidates from here
 # down, not the dependency install above
 COPY . /ws/src/@PROJECT@
-# 2) build (real files, not symlinks: the install base must survive the stage copy)
-RUN ardt build --no-symlink-install --install-base @INSTALL_BASE@
+# 2) build (real files, not symlinks: the install base must survive the stage copy).
+# The ccache mount is INERT until (a) the builder image ships ccache and
+# (b) the repo opts in via tasks.ros.build_args:
+#   [--cmake-args, -DCMAKE_C_COMPILER_LAUNCHER=ccache, -DCMAKE_CXX_COMPILER_LAUNCHER=ccache]
+# An unused mount costs nothing; wiring it here means opting in is config-only.
+RUN --mount=type=cache,target=/root/.ccache,id=ccache-${TARGETARCH} \
+    ardt build --no-symlink-install --install-base @INSTALL_BASE@
 
 # ---- steps 3-4: test + JUnit staging. Its own stage so NOTHING ships from it
 # and nothing depends on it: the CI pipeline builds this target as the gate,
@@ -65,6 +86,9 @@ RUN mkdir -p /results && cd /ws/build \
 # ---- step 5: the shipped runtime image ----
 FROM @RUNTIME_FROM@ AS runtime
 
+# Redeclared: ARG scope is per stage.
+ARG TARGETARCH
+
 COPY --from=@INSTALL_SRC@ @INSTALL_BASE@ @INSTALL_BASE@
 # 5b) exec dependencies install HERE, not in the build stage: the runtime image
 # starts from the configured base alone, and everything rosdep put into the
@@ -72,12 +96,19 @@ COPY --from=@INSTALL_SRC@ @INSTALL_BASE@ @INSTALL_BASE@
 # share/*/package.xml files are the manifest rosdep scans; --ignore-src skips
 # the workspace's own (already copied) packages. An unresolvable key fails the
 # image build — the earliest moment it can be caught.
-RUN apt-get update \
+# The apt cache mounts matter most on the emulated arch. docker-clean is left
+# alone here (removing it would change the SHIPPED image's apt behavior), so
+# the .deb half of the cache is inert in this stage; the lists half still
+# spares the apt/rosdep metadata fetches. No `rm` of the lists: they live in
+# the mount, not in a layer.
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked,id=apt-cache-${TARGETARCH} \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked,id=apt-lists-${TARGETARCH} \
+    apt-get update \
  && { command -v rosdep >/dev/null 2>&1 \
       || apt-get install -y --no-install-recommends python3-rosdep; } \
  && { [ -f /etc/ros/rosdep/sources.list.d/20-default.list ] || rosdep init; } \
  && rosdep update --rosdistro ${ROS_DISTRO} \
  && rosdep install --from-paths @INSTALL_BASE@ --ignore-src -y \
       --rosdistro ${ROS_DISTRO} --dependency-types exec@RUNTIME_SKIP@ \
- && rm -rf /var/lib/apt/lists/* /root/.ros/rosdep
+ && rm -rf /root/.ros/rosdep
 @CMD@

@@ -141,7 +141,7 @@ class TestManifestsFirst:
         """package.xml (colcon discovery), COLCON_IGNORE (pruning), *.repos
         (vcs import), ardt.yaml (the config `ardt deps` runs against)."""
         rendered = render(tmp_path)
-        line = next(l for l in rendered.splitlines() if l.startswith("COPY --parents"))
+        line = next(ln for ln in rendered.splitlines() if ln.startswith("COPY --parents"))
         for pattern in ("./**/package.xml", "./**/COLCON_IGNORE", "./*.repos", "./ardt.yaml"):
             assert pattern in line
         assert line.endswith("/ws/src/demo/")
@@ -287,10 +287,60 @@ class TestInstallBaseAndStrip:
         assert f"AS {recipes.STRIP_STAGE}" not in render(tmp_path)
 
 
+class TestCacheMounts:
+    """Per-arch BuildKit cache mounts; they pay off on a persistent engine."""
+
+    def test_targetarch_declared_in_both_mounting_stages(self, tmp_path: Path) -> None:
+        """ARG scope is per stage; an undeclared TARGETARCH expands empty and
+        every arch would silently share (and thrash) one cache."""
+        rendered = render(tmp_path)
+        build_stage = rendered.split(f"AS {recipes.TEST_TARGET}")[0]
+        runtime_stage = rendered.split(f"AS {recipes.RUNTIME_TARGET}")[1]
+        assert "ARG TARGETARCH" in build_stage
+        assert "ARG TARGETARCH" in runtime_stage
+
+    def test_apt_mounts_are_arch_keyed_and_locked(self, tmp_path: Path) -> None:
+        rendered = render(tmp_path)
+        assert "target=/var/cache/apt,sharing=locked,id=apt-cache-${TARGETARCH}" in rendered
+        assert "target=/var/lib/apt/lists,sharing=locked,id=apt-lists-${TARGETARCH}" in rendered
+
+    def test_ccache_mount_on_the_build_step(self, tmp_path: Path) -> None:
+        rendered = render(tmp_path)
+        line_start = rendered.index("target=/root/.ccache,id=ccache-${TARGETARCH}")
+        assert line_start < rendered.index("ardt build --no-symlink-install")
+
+    def test_apt_lists_never_removed(self, tmp_path: Path) -> None:
+        """The lists live in a mount, not a layer; an rm would only empty the
+        shared cache for the next run. (Matched with the trailing /*: the
+        template's own comment quotes the command without it.)"""
+        assert "rm -rf /var/lib/apt/lists/*" not in render(tmp_path)
+
+    def test_docker_clean_removed_in_build_kept_in_runtime(self, tmp_path: Path) -> None:
+        """Build stage keeps .debs in the cache mount; the SHIPPED image's apt
+        behavior is not ours to change."""
+        rendered = render(tmp_path)
+        build_stage = rendered.split(f"AS {recipes.TEST_TARGET}")[0]
+        runtime_stage = rendered.split(f"AS {recipes.RUNTIME_TARGET}")[1]
+        assert "rm -f /etc/apt/apt.conf.d/docker-clean" in build_stage
+        assert (
+            "docker-clean"
+            not in runtime_stage.replace(
+                "# alone here (removing it would change the SHIPPED image's apt behavior), so", ""
+            ).split("RUN", 1)[1]
+        )
+
+    def test_deps_layer_keeps_cache_mounts_alongside_git_mounts(self, tmp_path: Path) -> None:
+        rendered = render(tmp_path, git_host="code.example.com")
+        deps_run = rendered[rendered.index("# 1) deps") : rendered.index("&& ardt deps")]
+        assert "--mount=type=ssh" in deps_run
+        assert "id=apt-cache-${TARGETARCH}" in deps_run
+
+
 class TestGitAuth:
     def test_off_by_default(self, tmp_path: Path) -> None:
         rendered = render(tmp_path)
-        assert "--mount" not in rendered
+        assert "--mount=type=ssh" not in rendered
+        assert "--mount=type=secret" not in rendered
         assert "credential" not in rendered
 
     def test_syntax_directive_is_the_first_line(self, tmp_path: Path) -> None:
