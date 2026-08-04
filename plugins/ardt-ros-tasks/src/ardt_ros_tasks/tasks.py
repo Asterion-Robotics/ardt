@@ -73,6 +73,33 @@ def _in_ros_env(ctx: Context, cfg: RosConfig, command: list[str]) -> list[str]:
     return _sourced(ctx, cfg, f"exec {shlex.join(command)}")
 
 
+def _own_packages_query(ctx: Context) -> str:
+    """Shell fragment listing the repo's OWN packages (under the project root),
+    as opposed to what ``vcs import`` fetched into the workspace.
+
+    Composed into the command line rather than captured in Python:
+    ``Result.tail`` keeps a bounded number of lines, and a workspace can hold
+    more packages than it keeps lines — the same reason ``deps`` pipes its
+    ``colcon list`` through ``$( )``.
+    """
+    return f"colcon list --names-only --base-paths {shlex.quote(str(ctx.project_root))}"
+
+
+def _scoped_script(ctx: Context, command: list[str], selector: str) -> str:
+    """``command`` extended with ``<selector> <own packages>``, guarded.
+
+    ``$own`` is deliberately unquoted: the names must word-split into
+    arguments. The guard turns "repo with no packages" into a named error
+    instead of colcon's argparse complaint about a flag with no values.
+    """
+    return (
+        f'own="$({_own_packages_query(ctx)})"; '
+        f'[ -n "$own" ] || {{ echo "package_scope: project, but colcon finds no packages under '
+        f'{ctx.project_root}" >&2; exit 1; }}; '
+        f"{shlex.join(command)} {selector} $own"
+    )
+
+
 def deps(
     ctx: Context,
     *,
@@ -114,6 +141,11 @@ def deps(
         # --packages-skip is the space-ros pattern — resolve deps only for the
         # packages that will actually build.
         listing = "colcon list --paths-only"
+        if cfg.package_scope == "project":
+            # rosdep resolves only the build closure — the project's packages
+            # and their dependencies. An imported stack's demo packages get no
+            # apt installs for dependencies nothing here will build.
+            listing += f" --packages-up-to $({_own_packages_query(ctx)})"
         if excluded:
             listing += f" --packages-skip {shlex.join(excluded)}"
         script = f"rosdep install --from-paths $({listing}) --ignore-src -r -y"
@@ -163,7 +195,13 @@ def build(
 
     with ctx.console.section("colcon build"):
         ctx.runner.require("colcon", hint="apt install python3-colcon-common-extensions")
-        ctx.runner.run(_in_ros_env(ctx, cfg, command), cwd=_ws(ctx))
+        if not packages and cfg.package_scope == "project":
+            # Own packages plus their recursive dependencies; an imported
+            # stack's unrelated packages (demos, examples) never build.
+            script = _scoped_script(ctx, command, "--packages-up-to")
+            ctx.runner.run(_sourced(ctx, cfg, script), cwd=_ws(ctx))
+        else:
+            ctx.runner.run(_in_ros_env(ctx, cfg, command), cwd=_ws(ctx))
     ctx.emit(build_ok=True, install_base=base or "install")
 
 
@@ -196,7 +234,14 @@ def test(
     with ctx.console.section("colcon test"):
         ctx.runner.require("colcon", hint="apt install python3-colcon-common-extensions")
         # Let the summary below produce the diagnosis, rather than a bare exit code.
-        test_run: Result = ctx.runner.run(_in_ros_env(ctx, cfg, command), check=False, cwd=_ws(ctx))
+        if not packages and cfg.package_scope == "project":
+            # --packages-select, not --packages-up-to: the dependency
+            # closure's test suites belong to their own repos' gates, not to
+            # this one.
+            script = _scoped_script(ctx, command, "--packages-select")
+            test_run: Result = ctx.runner.run(_sourced(ctx, cfg, script), check=False, cwd=_ws(ctx))
+        else:
+            test_run = ctx.runner.run(_in_ros_env(ctx, cfg, command), check=False, cwd=_ws(ctx))
 
     with ctx.console.section("test results"):
         summary = ctx.runner.run(
