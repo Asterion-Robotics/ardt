@@ -20,6 +20,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -63,6 +64,28 @@ class RosConfig(BaseModel):
     distro: str = "jazzy"
     source_base: str = "/opt/ros"
     """The install prefix to source before invoking colcon; ``{distro}`` is appended."""
+
+    package_scope: Literal["workspace", "project"] = "project"
+    """Which packages the ros tasks operate on.
+
+    ``project`` (the default): the repo's own packages and nothing beyond what
+    they need. ``ardt build`` becomes ``--packages-up-to <own>`` (own packages
+    plus their recursive dependencies), ``ardt test`` becomes
+    ``--packages-select <own>`` (imported dependencies' test suites are not
+    this repo's merge gate), and the rosdep pass in ``ardt deps`` resolves
+    only that closure's manifests — an imported stack's demo packages are
+    neither dep-resolved, built, nor tested. "Own" is discovered, not
+    declared: whatever colcon finds under the project root. For a repo with
+    no ``.repos`` imports this is identical to ``workspace``, which is what
+    makes it a safe default.
+
+    ``workspace`` (the pre-v0.4.1 behavior, opt-in now): everything colcon
+    discovers under the workspace root — this repo AND every package
+    ``vcs import`` fetched, demo packages included. For the rare repo that
+    builds imported packages nothing of its own depends on.
+
+    An explicit ``--packages-select`` on the CLI overrides the scope either
+    way."""
 
     repos_file: str | None = None
     """A ``.repos`` file imported by ``ardt deps`` before rosdep runs."""

@@ -103,7 +103,9 @@ def test_deps_without_repos_file_only_plans_rosdep(repo: Path) -> None:
     ctx = context(repo, dry_run=True)
     tasks.deps(ctx)
     text = output(ctx)
-    assert "rosdep install --from-paths $(colcon list --paths-only) --ignore-src -r -y" in text
+    # the paths listing carries the default project scope (--packages-up-to)
+    assert "rosdep install --from-paths $(colcon list --paths-only --packages-up-to" in text
+    assert "--ignore-src -r -y" in text
     assert "vcs import" not in text
 
 
@@ -182,13 +184,83 @@ def test_exclude_packages_skips_build_and_test(repo: Path) -> None:
     assert "--packages-skip big_sim" in output(ctx)
 
 
+class TestPackageScope:
+    """`package_scope: project` operates on the repo's own closure only.
+
+    The point: a `.repos` import brings whole stacks (demos included); the
+    workspace scope builds, tests and dep-resolves all of it, the project
+    scope only what this repo's packages actually need.
+    """
+
+    YAML = "tasks:\n  ros:\n    package_scope: project\n"
+
+    def test_project_is_the_default(self, repo: Path) -> None:
+        """No config at all scopes to the project: safe because a repo with no
+        imports has own == everything, so this degenerates to the old
+        behavior exactly."""
+        ctx = context(repo, dry_run=True)
+        tasks.build(ctx)
+        assert "--packages-up-to $own" in output(ctx)
+
+    def test_workspace_opt_out_is_unscoped(self, repo: Path) -> None:
+        (repo / "ardt.yaml").write_text("tasks:\n  ros:\n    package_scope: workspace\n")
+        ctx = context(repo, dry_run=True)
+        tasks.build(ctx)
+        assert "--packages-up-to" not in output(ctx)
+
+    def test_build_up_to_own_packages(self, repo: Path) -> None:
+        (repo / "ardt.yaml").write_text(self.YAML)
+        ctx = context(repo, dry_run=True)
+        tasks.build(ctx)
+        text = output(ctx)
+        assert "--packages-up-to $own" in text
+        assert "colcon list --names-only --base-paths" in text
+        # the guard names the knob, so an empty repo fails with a diagnosis
+        assert "package_scope: project, but colcon finds no packages" in text
+
+    def test_test_selects_own_packages_only(self, repo: Path) -> None:
+        """--packages-select, not --packages-up-to: dependency test suites
+        belong to their own repos' gates."""
+        (repo / "ardt.yaml").write_text(self.YAML)
+        ctx = context(repo, dry_run=True)
+        tasks.test(ctx)
+        text = output(ctx)
+        assert "--packages-select $own" in text
+        assert "--packages-up-to" not in text
+
+    def test_deps_narrow_to_the_closure(self, repo: Path) -> None:
+        (repo / "ardt.yaml").write_text(self.YAML)
+        ctx = context(repo, dry_run=True)
+        tasks.deps(ctx)
+        assert "--packages-up-to $(colcon list --names-only --base-paths" in output(ctx)
+
+    def test_explicit_packages_override_the_scope(self, repo: Path) -> None:
+        (repo / "ardt.yaml").write_text(self.YAML)
+        ctx = context(repo, dry_run=True)
+        tasks.build(ctx, packages=("pkg_a",))
+        text = output(ctx)
+        assert "--packages-select pkg_a" in text
+        assert "--packages-up-to" not in text
+
+    def test_scope_composes_with_excludes(self, repo: Path) -> None:
+        (repo / "ardt.yaml").write_text(
+            "tasks:\n  ros:\n    package_scope: project\n    exclude_packages: [big_sim]\n"
+        )
+        ctx = context(repo, dry_run=True)
+        tasks.build(ctx)
+        text = output(ctx)
+        assert "--packages-skip big_sim" in text
+        assert "--packages-up-to $own" in text
+
+
 def test_deps_excluded_packages_narrow_rosdep_paths(repo: Path) -> None:
     (repo / "ardt.yaml").write_text("tasks:\n  ros:\n    exclude_packages: [big_sim]\n")
     ctx = context(repo, dry_run=True)
     tasks.deps(ctx, exclude_packages=("other",))
     text = output(ctx)
-    assert "colcon list --paths-only --packages-skip big_sim other" in text
-    assert "rosdep install --from-paths $(" in text
+    # excludes compose after the default project scope's --packages-up-to
+    assert "--packages-skip big_sim other" in text
+    assert "rosdep install --from-paths $(colcon list --paths-only" in text
 
 
 def test_deps_skip_keys_merge_config_and_cli(repo: Path) -> None:
