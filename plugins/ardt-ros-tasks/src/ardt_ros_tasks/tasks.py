@@ -153,10 +153,10 @@ def deps(
     with ctx.console.section("rosdep install"):
         ctx.runner.require("rosdep", hint="apt install python3-rosdep")
         ctx.runner.require("colcon", hint="apt install python3-colcon-common-extensions")
-        # Paths come from colcon, not a raw directory scan: colcon honors the
-        # COLCON_IGNORE markers in build/install trees (rosdep does not), and
-        # --packages-skip is the space-ros pattern — resolve deps only for the
-        # packages that will actually build.
+        # Paths come from colcon, not a raw directory scan: rosdep's crawler
+        # honors the COLCON_IGNORE markers too (catkin_pkg prunes on them),
+        # but only colcon can apply --packages-skip — the space-ros pattern —
+        # so deps resolve only for the packages that will actually build.
         listing = "colcon list --paths-only"
         if cfg.package_scope == "project":
             # rosdep resolves only the build closure — the project's packages

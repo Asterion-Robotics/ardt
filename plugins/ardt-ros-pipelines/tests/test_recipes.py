@@ -156,18 +156,35 @@ class TestManifestsFirst:
 class TestRuntimeExecDeps:
     """The shipped image installs its own exec dependencies.
 
-    Regression: the runtime stage was `base + COPY install/` alone, so every
+    Regression 1: the runtime stage was `base + COPY install/` alone, so every
     rosdep-installed exec dependency existed only in the builder and the image
     failed at `ros2 run` time unless the base happened to carry it.
+    Regression 2: the pass then scanned the install space directly — whose
+    root carries colcon's COLCON_IGNORE marker, which rosdep's crawler honors —
+    so it found zero packages and silently installed nothing. The pass must
+    scan the manifests restaged by the build stage, never the install space.
     """
 
     def _runtime_stage(self, rendered: str) -> str:
         return rendered.split("AS runtime", 1)[1]
 
-    def test_runtime_stage_resolves_exec_deps_from_the_install_space(self, tmp_path: Path) -> None:
+    def test_runtime_stage_resolves_exec_deps_from_staged_manifests(self, tmp_path: Path) -> None:
         stage = self._runtime_stage(render(tmp_path))
-        assert "rosdep install --from-paths /opt/ros/app --ignore-src" in stage
+        assert "COPY --from=build /opt/runtime-manifests /tmp/runtime-manifests" in stage
+        assert "rosdep install --from-paths /tmp/runtime-manifests --ignore-src" in stage
         assert "--dependency-types exec" in stage
+        assert "rosdep install --from-paths /opt/ros/app" not in stage
+
+    def test_build_stage_stages_manifests_and_fails_on_an_empty_set(self, tmp_path: Path) -> None:
+        build_stage = render(tmp_path).split("AS runtime", 1)[0]
+        assert "cp --parents -t /opt/runtime-manifests" in build_stage
+        assert "find /opt/runtime-manifests -name package.xml | grep -q ." in build_stage
+
+    def test_manifests_precede_the_install_space_copy(self, tmp_path: Path) -> None:
+        """Same split as the build stage: a rebuilt binary must not invalidate
+        the apt layer, and the emulated-arch leg feels it most."""
+        stage = self._runtime_stage(render(tmp_path))
+        assert stage.index("/tmp/runtime-manifests") < stage.index("COPY --from=build /opt/ros/app")
 
     def test_skip_keys_reach_the_runtime_rosdep_pass(self, tmp_path: Path) -> None:
         stage = self._runtime_stage(
@@ -178,9 +195,9 @@ class TestRuntimeExecDeps:
     def test_no_skip_flag_without_keys(self, tmp_path: Path) -> None:
         assert "--skip-keys" not in render(tmp_path)
 
-    def test_custom_install_base_is_scanned(self, tmp_path: Path) -> None:
-        stage = self._runtime_stage(render(tmp_path, install_base="/opt/app"))
-        assert "rosdep install --from-paths /opt/app" in stage
+    def test_custom_install_base_manifests_are_staged(self, tmp_path: Path) -> None:
+        rendered = render(tmp_path, install_base="/opt/app")
+        assert "cd /opt/app" in rendered.split("AS runtime", 1)[0]
 
 
 def test_git_install_by_default(tmp_path: Path) -> None:
