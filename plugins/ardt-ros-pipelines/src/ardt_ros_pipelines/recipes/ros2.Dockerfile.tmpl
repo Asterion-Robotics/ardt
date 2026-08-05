@@ -127,4 +127,12 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked,id=apt-cache-${TARGE
 # 5c) the install space, AFTER the deps layer — a rebuilt binary invalidates
 # from here down, not the apt install above
 COPY --from=@INSTALL_SRC@ @INSTALL_BASE@ @INSTALL_BASE@
+
+# 5d) the workspace overlay is active however the container is entered:
+# .bashrc covers interactive shells (docker exec … bash), the entrypoint
+# sources the overlay then execs CMD/args — the install space's setup.bash
+# chains the underlay captured at build time, so one source is the whole env.
+RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /root/.bashrc \
+ && echo "source @INSTALL_BASE@/setup.bash" >> /root/.bashrc
+ENTRYPOINT ["/bin/bash", "-c", "source @INSTALL_BASE@/setup.bash && exec \"$@\"", "--"]
 @CMD@
