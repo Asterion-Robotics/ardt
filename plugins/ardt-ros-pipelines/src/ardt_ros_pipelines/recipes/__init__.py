@@ -243,7 +243,10 @@ def render_ros2(
         runtime_from = BASE_EXT_STAGE
 
     install = _local_install() if local_ardt else _git_install(ardt_requirements)
-    rendered_cmd = f"CMD {json.dumps(cmd)}\n" if cmd else ""
+    # The runtime ENTRYPOINT resets any CMD inherited from the base image
+    # (Dockerfile rule), so an explicit default is required for `docker run`
+    # with no arguments to land in a shell.
+    rendered_cmd = f"CMD {json.dumps(cmd if cmd else ['bash'])}\n"
     strip = _STRIP_STEP.format(base=install_base) if strip_dev_files else ""
     install_src = STRIP_STAGE if strip_dev_files else BUILD_TARGET
     git_mounts = _GIT_MOUNTS if git_host else ""

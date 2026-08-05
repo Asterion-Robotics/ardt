@@ -19,6 +19,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -65,8 +66,9 @@ def test_staging_matches_both_junit_layouts(tmp_path: Path) -> None:
 
 
 def test_no_placeholders_survive(tmp_path: Path) -> None:
-    rendered = render(tmp_path)
-    assert "@" not in rendered.replace("ardt-core @", "").replace("ardt-ros-tasks @", "")
+    """Legit `@`s exist (pip's `pkg @ url`, the entrypoint's `"$@"`) — only the
+    render's own @UPPER_CASE@ tokens must be gone."""
+    assert not re.findall(r"@[A-Z_]+@", render(tmp_path))
 
 
 def test_bases_and_stages(tmp_path: Path) -> None:
@@ -227,8 +229,21 @@ def test_cmd_rendered_as_json(tmp_path: Path) -> None:
     assert 'CMD ["bash", "-lc", "run me"]' in rendered
 
 
-def test_no_cmd_no_cmd_line(tmp_path: Path) -> None:
-    assert "\nCMD " not in render(tmp_path)
+def test_no_cmd_defaults_to_bash(tmp_path: Path) -> None:
+    """The entrypoint resets any base-image CMD, so the render must supply one."""
+    assert 'CMD ["bash"]' in render(tmp_path)
+
+
+def test_entrypoint_sources_the_overlay(tmp_path: Path) -> None:
+    """CMD/args run with the workspace overlay active, and interactive shells
+    (docker exec … bash) get it from .bashrc — both keyed on install_base."""
+    rendered = render(tmp_path, install_base="/opt/app")
+    assert (
+        'ENTRYPOINT ["/bin/bash", "-c", "source /opt/app/setup.bash && exec \\"$@\\"", "--"]'
+        in rendered
+    )
+    assert 'echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /root/.bashrc' in rendered
+    assert 'echo "source /opt/app/setup.bash" >> /root/.bashrc' in rendered
 
 
 class TestBaseExtension:

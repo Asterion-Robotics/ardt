@@ -46,7 +46,7 @@ rendered recipe as a stage:
     pipelines:
       ros_ci:
         base_image: ros:jazzy-ros-base
-        cmd: ["bash", "-lc", ". /opt/app/setup.bash && ros2 run my_pkg node"]
+        cmd: ["ros2", "run", "my_pkg", "node"]  # entrypoint sources the overlay
         platforms: [linux/amd64, linux/arm64]
         git_host: code.asterion-robotics.com   # private `.repos` deps need auth
         git_ssh_port: 5022
@@ -99,7 +99,9 @@ class RosCiConfig(BaseModel):
     CMake/pkg-config exports from the install base before the runtime copy, so
     the shipped image cannot be developed against."""
     cmd: list[str] | None = None
-    """Container CMD of the shipped image."""
+    """Container CMD of the shipped image; ``["bash"]`` when unset. It runs
+    under an entrypoint that sources the workspace overlay first, so commands
+    need not source anything themselves."""
     platforms: list[str] = Field(default_factory=lambda: ["linux/amd64"])
     image: str | None = None
     """Sub-image appended under the registry project path
