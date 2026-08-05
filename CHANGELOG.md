@@ -2,16 +2,18 @@
 
 Notable changes per release. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions are git tags (see [RELEASING.md](RELEASING.md)) and package versions derive from them via hatch-vcs.
 
-## [Unreleased]
+## Unreleased
+
+## [0.4.1] - 2026-08-05
+
+Update changelog.
+
+## [0.4.0] - 2026-08-05
 
 ### Changed
 
 - **Breaking:** `tasks.ros.package_scope`, defaulting to `project`: the three ROS tasks operate on the repo's own packages and nothing beyond what they need. `ardt build` runs `colcon build --packages-up-to <own>`, `ardt test` runs `colcon test --packages-select <own>` (imported dependencies' suites are not this repo's gate), and the rosdep pass resolves only that closure's manifests, so an imported stack's demo packages are neither dep-resolved, built, nor tested. A repo with no `.repos` imports has own == everything and keeps the old behavior exactly; only a repo that builds imported packages nothing of its own depends on breaks, and `package_scope: workspace` restores the old semantics. "Own" is discovered (`colcon list --base-paths <project root>`), never declared; an explicit `--packages-select` still overrides the scope.
 - `tasks.ros.repos_file` left unset now auto-detects `<project>.repos` in the project root and skips the import when absent. An explicit value must still exist (a typo must not silently drop the import), and an explicit empty string opts out of the auto-detection.
-
-## [0.4.0] - 2026-08-04
-
-### Changed
 
 - `ros-ci` builds faster, mostly felt on multi-platform runs. The recipe splits the tests out of the `build` stage into a `test` stage, and the runtime image forks from `build` (or from the new `strip` stage when `strip_dev_files` is on, which keeps the tests seeing the unstripped install), deliberately not from `test`: depending on it made every foreign-arch runtime build re-run the whole suite under QEMU. The escape hatch mirrors the split: `docker build --target test` is the CI gate, a plain `docker build` produces the shipped image without re-running tests.
 - The recipe copies manifests first: only the files `ardt deps` reads (`package.xml`, `COLCON_IGNORE`, `*.repos`, `ardt.yaml`) land before the deps layer, so a source edit no longer invalidates the apt/rosdep/vcs work. The caveat the cache inherits: `vcs import` clones branch HEADs, so a cached deps layer does not see upstream drift; pin commits or tags in the `.repos` file, or touch it to force a re-import.
