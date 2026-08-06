@@ -163,8 +163,12 @@ class TestRuntimeExecDeps:
     failed at `ros2 run` time unless the base happened to carry it.
     Regression 2: the pass then scanned the install space directly — whose
     root carries colcon's COLCON_IGNORE marker, which rosdep's crawler honors —
-    so it found zero packages and silently installed nothing. The pass must
-    scan the manifests restaged by the build stage, never the install space.
+    so it found zero packages and silently installed nothing.
+    Regression 3: the manifests were then harvested from the install space,
+    but plain-cmake packages (vendored SDKs like fri_client_sdk) install no
+    package.xml, so `--ignore-src` could not recognize them as workspace-built
+    and their key hard-failed resolution. The build stage must stage the built
+    packages' manifests from the SOURCE tree, where every build type has one.
     """
 
     def _runtime_stage(self, rendered: str) -> str:
@@ -177,10 +181,19 @@ class TestRuntimeExecDeps:
         assert "--dependency-types exec" in stage
         assert "rosdep install --from-paths /opt/ros/app" not in stage
 
-    def test_build_stage_stages_manifests_and_fails_on_an_empty_set(self, tmp_path: Path) -> None:
+    def test_build_stage_stages_source_manifests_of_the_built_set(self, tmp_path: Path) -> None:
+        """Built set from colcon's build base, manifests from the source tree —
+        never from the install space, where plain-cmake packages have none."""
         build_stage = render(tmp_path).split("AS runtime", 1)[0]
-        assert "cp --parents -t /opt/runtime-manifests" in build_stage
-        assert "find /opt/runtime-manifests -name package.xml | grep -q ." in build_stage
+        staging = build_stage[build_stage.index("mkdir -p /opt/runtime-manifests") :]
+        assert "colcon list --base-paths src --paths-only --packages-select $built" in staging
+        assert 'cp --parents "$p/package.xml" /opt/runtime-manifests/' in staging
+        assert "find /opt/runtime-manifests -name package.xml | grep -q ." in staging
+        assert "cd /opt/ros/app" not in staging
+
+    def test_built_set_read_from_the_build_base(self, tmp_path: Path) -> None:
+        build_stage = render(tmp_path).split("AS runtime", 1)[0]
+        assert "find build -mindepth 1 -maxdepth 1 -type d" in build_stage
 
     def test_manifests_precede_the_install_space_copy(self, tmp_path: Path) -> None:
         """Same split as the build stage: a rebuilt binary must not invalidate
@@ -197,9 +210,13 @@ class TestRuntimeExecDeps:
     def test_no_skip_flag_without_keys(self, tmp_path: Path) -> None:
         assert "--skip-keys" not in render(tmp_path)
 
-    def test_custom_install_base_manifests_are_staged(self, tmp_path: Path) -> None:
+    def test_staging_is_independent_of_the_install_base(self, tmp_path: Path) -> None:
+        """Source-tree staging must not vary with install_base — only the
+        install-space copy and the entrypoint do."""
         rendered = render(tmp_path, install_base="/opt/app")
-        assert "cd /opt/app" in rendered.split("AS runtime", 1)[0]
+        start = rendered.index("mkdir -p /opt/runtime-manifests")
+        staging = rendered[start : rendered.index("grep -q .", start)]
+        assert "/opt/app" not in staging
 
 
 def test_git_install_by_default(tmp_path: Path) -> None:

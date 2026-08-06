@@ -68,15 +68,21 @@ COPY . /ws/src/@PROJECT@
 # An unused mount costs nothing; wiring it here means opting in is config-only.
 RUN --mount=type=cache,target=/root/.ccache,id=ccache-${TARGETARCH} \
     ardt build --no-symlink-install --install-base @INSTALL_BASE@
-# 2b) stage the shipped packages' manifests for the runtime stage's rosdep
-# pass: the install space's package.xml files are exactly the built set, but
-# the install space itself cannot be scanned — colcon drops a COLCON_IGNORE
-# marker at its root, and rosdep's crawler (catkin_pkg) honors it, silently
-# finding zero packages. Restaging just the manifests gives a marker-free
-# tree; the final grep fails the build if nothing was staged, so an empty
-# scan can never again ship a dep-less image.
-RUN mkdir -p /opt/runtime-manifests && cd @INSTALL_BASE@ \
- && (find . -name package.xml -exec cp --parents -t /opt/runtime-manifests {} +) \
+# 2b) stage the built packages' manifests for the runtime stage's rosdep
+# pass, from the SOURCE tree. Not from the install space: its root carries
+# colcon's COLCON_IGNORE marker (rosdep's crawler honors it and would find
+# zero packages), and plain-cmake packages (vendored SDKs) install no
+# package.xml at all — their key would then fail resolution as if it were a
+# system dep. Source manifests exist for every colcon package. The built set
+# is read from colcon's build base: one directory per package actually
+# built, written by the very command whose output ships, so whatever
+# package_scope/exclusions decided is already reflected. The final grep
+# fails the build if nothing was staged — an empty scan must never again
+# ship a dep-less image.
+RUN mkdir -p /opt/runtime-manifests && cd /ws \
+ && built=$(find build -mindepth 1 -maxdepth 1 -type d -printf '%f ') \
+ && for p in $(colcon list --base-paths src --paths-only --packages-select $built); do \
+      cp --parents "$p/package.xml" /opt/runtime-manifests/; done \
  && find /opt/runtime-manifests -name package.xml | grep -q .
 
 # ---- steps 3-4: test + JUnit staging. Its own stage so NOTHING ships from it
