@@ -74,7 +74,12 @@ POST_CREATE = f"{DEVCONTAINER_DIR}/postCreate.sh"
 HOST_CONFIG = f"{DEVCONTAINER_DIR}/host-config.sh"
 REQUIREMENTS = f"{DEVCONTAINER_DIR}/ardt-requirements.txt"
 DOCKERFILE = f"{DEVCONTAINER_DIR}/Dockerfile"
+GITIGNORE = f"{DEVCONTAINER_DIR}/.gitignore"
+"""Self-ignoring, ruff-cache style: the render stays out of git even in a repo
+whose root ``.gitignore`` never got the `ardt dev sync` entries."""
 CPP_PROPERTIES = f"{VSCODE_DIR}/c_cpp_properties.json"
+
+GITIGNORE_BODY = "# Automatically created by `ardt dev sync`.\n*\n"
 
 ARDT_SRC_MOUNT = "/opt/ardt-src"
 """Where a local ardt checkout mounts — the dev twin of the pipeline's
@@ -492,6 +497,7 @@ def build(
     reqs = requirements(cfg, dev, prof, ardt_source)
 
     files = {
+        GITIGNORE: GITIGNORE_BODY,
         DOCKERFILE: dockerfile(prof, dev, project=project, base_image=base_image, distro=distro),
         COMPOSE: compose(project, dev, ardt_source=ardt_source, image=dev.image),
         COMPOSE_HOST: host_overlay(host),

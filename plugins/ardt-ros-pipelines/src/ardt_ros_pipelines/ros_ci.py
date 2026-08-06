@@ -255,6 +255,11 @@ async def ros_ci(
     (export_dir / recipes.DOCKERIGNORE_NAME).write_text(
         recipes.render_dockerignore(std.SOURCE_EXCLUDES), encoding="utf-8"
     )
+    # Self-ignoring, ruff-cache style: the reports dir stays out of git without
+    # a root .gitignore entry. Rewritten every run — the wipe above removed it.
+    (export_dir / ".gitignore").write_text(
+        "# Automatically created by ardt.\n*\n", encoding="utf-8"
+    )
     ctx.emit(
         junit_dir=JUNIT_EXPORT_DIR,
         tests_ok=True,
