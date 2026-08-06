@@ -4,6 +4,12 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 
 ## Unreleased
 
+## [0.4.2] - 2026-08-06
+
+### Fixed
+
+- The `ros-ci` runtime stage's rosdep pass resolves exec dependencies from manifests staged out of the **source tree** (built set read from colcon's build base), no longer from the install space. Install-space harvesting had a blind spot: plain-cmake packages install no `package.xml`, so `--ignore-src` could not recognize them as workspace-built and their key hard-failed resolution as if it were a missing system dependency. Repos that worked around this with `tasks.ros.rosdep_skip_keys` entries for vendored source packages can drop them.
+
 ## [0.4.1] - 2026-08-05
 
 Update changelog.
