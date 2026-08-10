@@ -4,6 +4,8 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 
 ## Unreleased
 
+## [0.5.0] - 2026-08-10
+
 ### Changed
 
 - `ardt test` selects the repo's own packages in BOTH package scopes; `package_scope: workspace` now widens only what `ardt deps` resolves and `ardt build` builds. Imported (`.repos`) packages' test suites belong to their own repos' gates, and under `workspace` they previously ran in this repo's gate (slowest on the emulated arm64 leg, and an upstream flake failed the merge). An explicit `--packages-select` on the CLI still overrides the scoping.
