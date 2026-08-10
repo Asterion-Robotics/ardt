@@ -24,10 +24,12 @@ tasks:
       - rti-connext-dds
     # exclude_packages: [big_sim]  # skipped in rosdep/build/test (`--exclude-pkg`)
     # package_scope: workspace    # opt OUT of the default `project` scope:
-    #                              # build/test/dep-resolve everything vcs
+    #                              # build/dep-resolve everything vcs
     #                              # imported, demo packages included. The
     #                              # default builds --packages-up-to the
-    #                              # repo's OWN packages only.
+    #                              # repo's OWN packages only. `ardt test`
+    #                              # stays own-only in BOTH scopes: imports'
+    #                              # suites are not this repo's gate.
     # install_base: /opt/ros/app   # colcon --install-base; default ./install
     build_args:
       - --cmake-args

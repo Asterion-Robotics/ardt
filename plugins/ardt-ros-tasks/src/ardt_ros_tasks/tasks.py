@@ -94,7 +94,7 @@ def _scoped_script(ctx: Context, command: list[str], selector: str) -> str:
     """
     return (
         f'own="$({_own_packages_query(ctx)})"; '
-        f'[ -n "$own" ] || {{ echo "package_scope: project, but colcon finds no packages under '
+        f'[ -n "$own" ] || {{ echo "own-package scoping: colcon finds no packages under '
         f'{ctx.project_root}" >&2; exit 1; }}; '
         f"{shlex.join(command)} {selector} $own"
     )
@@ -251,10 +251,12 @@ def test(
     with ctx.console.section("colcon test"):
         ctx.runner.require("colcon", hint="apt install python3-colcon-common-extensions")
         # Let the summary below produce the diagnosis, rather than a bare exit code.
-        if not packages and cfg.package_scope == "project":
-            # --packages-select, not --packages-up-to: the dependency
-            # closure's test suites belong to their own repos' gates, not to
-            # this one.
+        if not packages:
+            # Own packages REGARDLESS of package_scope: a `.repos` import's
+            # test suites belong to their own repos' gates. The workspace
+            # scope widens what builds and ships, never what gates. And
+            # --packages-select, not --packages-up-to: same reasoning for the
+            # dependency closure.
             script = _scoped_script(ctx, command, "--packages-select")
             test_run: Result = ctx.runner.run(_sourced(ctx, cfg, script), check=False, cwd=_ws(ctx))
         else:
