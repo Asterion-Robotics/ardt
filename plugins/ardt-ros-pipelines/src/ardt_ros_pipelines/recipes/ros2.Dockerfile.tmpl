@@ -119,15 +119,23 @@ ARG TARGETARCH
 # the .deb half of the cache is inert in this stage; the lists half still
 # spares the apt/rosdep metadata fetches. No `rm` of the lists: they live in
 # the mount, not in a layer.
+# PIP_BREAK_SYSTEM_PACKAGES: rosdep's own pip installer checks this env var
+# before installing a pip-resolved key, and refuses with an
+# externally-managed-environment error (PEP 668) when it is unset — which a
+# plain Debian/Ubuntu runtime base hits every time. Scoped to this one
+# command; the SHIPPED image's pip keeps refusing system-wide installs
+# everywhere else.
 COPY --from=build /opt/runtime-manifests /tmp/runtime-manifests
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked,id=apt-cache-${TARGETARCH} \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked,id=apt-lists-${TARGETARCH} \
     apt-get update \
  && { command -v rosdep >/dev/null 2>&1 \
       || apt-get install -y --no-install-recommends python3-rosdep; } \
+ && { command -v pip3 >/dev/null 2>&1 \
+      || apt-get install -y --no-install-recommends python3-pip; } \
  && { [ -f /etc/ros/rosdep/sources.list.d/20-default.list ] || rosdep init; } \
  && rosdep update --rosdistro ${ROS_DISTRO} \
- && rosdep install --from-paths /tmp/runtime-manifests --ignore-src -y \
+ && PIP_BREAK_SYSTEM_PACKAGES=1 rosdep install --from-paths /tmp/runtime-manifests --ignore-src -y \
       --rosdistro ${ROS_DISTRO} --dependency-types exec@RUNTIME_SKIP@ \
  && rm -rf /root/.ros/rosdep /tmp/runtime-manifests
 # 5c) the install space, AFTER the deps layer — a rebuilt binary invalidates
