@@ -8,6 +8,10 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 
 - `ardt test` selects the repo's own packages in BOTH package scopes; `package_scope: workspace` now widens only what `ardt deps` resolves and `ardt build` builds. Imported (`.repos`) packages' test suites belong to their own repos' gates, and under `workspace` they previously ran in this repo's gate (slowest on the emulated arm64 leg, and an upstream flake failed the merge). An explicit `--packages-select` on the CLI still overrides the scoping.
 
+### Fixed
+
+- The `ros-ci` runtime stage's rosdep pass installs `python3-pip` when the base lacks it and runs with `PIP_BREAK_SYSTEM_PACKAGES=1`: rosdep's own pip installer checks that env var before installing a pip-resolved key and refuses with an externally-managed-environment error (PEP 668) when it is unset, which a plain Debian/Ubuntu runtime base hit on the first pip-resolved exec dependency. Scoped to that one command; the shipped image's pip keeps refusing system-wide installs everywhere else.
+
 ## [0.4.2] - 2026-08-06
 
 ### Fixed
