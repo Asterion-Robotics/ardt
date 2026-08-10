@@ -215,8 +215,9 @@ class TestPackageScope:
     """`package_scope: project` operates on the repo's own closure only.
 
     The point: a `.repos` import brings whole stacks (demos included); the
-    workspace scope builds, tests and dep-resolves all of it, the project
-    scope only what this repo's packages actually need.
+    workspace scope builds and dep-resolves all of it, the project scope only
+    what this repo's packages actually need. TESTS are own-only in BOTH
+    scopes: an import's suites belong to its own repo's gate.
     """
 
     YAML = "tasks:\n  ros:\n    package_scope: project\n"
@@ -242,8 +243,8 @@ class TestPackageScope:
         text = output(ctx)
         assert "--packages-up-to $own" in text
         assert "colcon list --names-only --base-paths" in text
-        # the guard names the knob, so an empty repo fails with a diagnosis
-        assert "package_scope: project, but colcon finds no packages" in text
+        # the guard names the scoping, so an empty repo fails with a diagnosis
+        assert "own-package scoping: colcon finds no packages" in text
 
     def test_test_selects_own_packages_only(self, repo: Path) -> None:
         """--packages-select, not --packages-up-to: dependency test suites
@@ -254,6 +255,22 @@ class TestPackageScope:
         text = output(ctx)
         assert "--packages-select $own" in text
         assert "--packages-up-to" not in text
+
+    def test_workspace_scope_still_tests_own_only(self, repo: Path) -> None:
+        """Regression: workspace scope once ran imported suites in the gate.
+        The scope widens what builds and ships, never what gates."""
+        (repo / "ardt.yaml").write_text("tasks:\n  ros:\n    package_scope: workspace\n")
+        ctx = context(repo, dry_run=True)
+        tasks.test(ctx)
+        assert "--packages-select $own" in output(ctx)
+
+    def test_explicit_packages_still_override_test_scoping(self, repo: Path) -> None:
+        (repo / "ardt.yaml").write_text("tasks:\n  ros:\n    package_scope: workspace\n")
+        ctx = context(repo, dry_run=True)
+        tasks.test(ctx, packages=("pkg_a",))
+        text = output(ctx)
+        assert "--packages-select pkg_a" in text
+        assert "$own" not in text
 
     def test_deps_narrow_to_the_closure(self, repo: Path) -> None:
         (repo / "ardt.yaml").write_text(self.YAML)

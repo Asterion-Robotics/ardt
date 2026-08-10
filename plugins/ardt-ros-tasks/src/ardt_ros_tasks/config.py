@@ -79,10 +79,13 @@ class RosConfig(BaseModel):
     no ``.repos`` imports this is identical to ``workspace``, which is what
     makes it a safe default.
 
-    ``workspace`` (the pre-v0.4.1 behavior, opt-in now): everything colcon
+    ``workspace``: ``ardt deps`` and ``ardt build`` cover everything colcon
     discovers under the workspace root — this repo AND every package
-    ``vcs import`` fetched, demo packages included. For the rare repo that
-    builds imported packages nothing of its own depends on.
+    ``vcs import`` fetched, demo packages included. For the repo that ships
+    imported packages nothing of its own depends on. ``ardt test`` stays
+    own-only in BOTH scopes: an import's test suites belong to its own
+    repo's gate, so the scope widens what builds and ships, never what
+    gates.
 
     An explicit ``--packages-select`` on the CLI overrides the scope either
     way."""
