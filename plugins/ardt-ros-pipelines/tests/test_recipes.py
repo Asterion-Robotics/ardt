@@ -114,7 +114,7 @@ class TestTestStageSplit:
 
 def test_tasks_run_as_stages(tmp_path: Path) -> None:
     rendered = render(tmp_path)
-    deps = rendered.index("ardt deps")
+    deps = rendered.index("PIP_BREAK_SYSTEM_PACKAGES=1 ardt deps")
     build = rendered.index("ardt build --no-symlink-install")
     test = rendered.index("ardt test")
     results = rendered.index(recipes.RESULTS_DIR)
@@ -132,9 +132,9 @@ class TestManifestsFirst:
     def test_manifest_copy_precedes_deps_full_copy_follows(self, tmp_path: Path) -> None:
         rendered = render(tmp_path, project="demo")
         manifests = rendered.index("COPY --parents")
-        # "&& ardt deps" is the invocation; a bare "ardt deps" would match the
-        # comment explaining the manifests-first ordering, above the COPY.
-        deps = rendered.index("&& ardt deps")
+        # "&& PIP_BREAK_SYSTEM_PACKAGES=1 ardt deps" is the invocation; a bare
+        # "ardt deps" would match the comment explaining the manifests-first ordering.
+        deps = rendered.index("&& PIP_BREAK_SYSTEM_PACKAGES=1 ardt deps")
         full = rendered.index("COPY . /ws/src/demo")
         build = rendered.index("ardt build --no-symlink-install")
         assert manifests < deps < full < build
@@ -380,7 +380,7 @@ class TestCacheMounts:
 
     def test_deps_layer_keeps_cache_mounts_alongside_git_mounts(self, tmp_path: Path) -> None:
         rendered = render(tmp_path, git_host="code.example.com")
-        deps_run = rendered[rendered.index("# 1) deps") : rendered.index("&& ardt deps")]
+        deps_run = rendered[rendered.index("# 1) deps") : rendered.index("&& PIP_BREAK_SYSTEM_PACKAGES=1 ardt deps")]
         assert "--mount=type=ssh" in deps_run
         assert "id=apt-cache-${TARGETARCH}" in deps_run
 
@@ -407,8 +407,8 @@ class TestGitAuth:
         )
         assert "username=gitlab-ci-token" in rendered
         # auth is configured in the same RUN, before the vcs import runs
-        # ("&& ardt deps" is the invocation, not the comment mentioning it)
-        assert rendered.index("elif [ -f /run/secrets/") < rendered.index("&& ardt deps")
+        # ("&& PIP_BREAK_SYSTEM_PACKAGES=1 ardt deps" is the invocation)
+        assert rendered.index("elif [ -f /run/secrets/") < rendered.index("&& PIP_BREAK_SYSTEM_PACKAGES=1 ardt deps")
 
     def test_token_read_at_use_time_never_baked(self, tmp_path: Path) -> None:
         rendered = render(tmp_path, git_host="code.example.com")
