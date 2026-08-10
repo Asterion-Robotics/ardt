@@ -87,7 +87,8 @@ ROS2 = Profile(
         ("sudo", "apt-get", "update", "-qq"),
         ("rosdep", "update", "--rosdistro", DISTRO),
         # Identical to the CI recipe's step 1 — the whole point of the exercise.
-        ("ardt", "deps"),
+        # PEP 668: set the env var only for this command (not the whole image).
+        ("PIP_BREAK_SYSTEM_PACKAGES=1", "ardt", "deps"),
     ),
     extensions=(
         "llvm-vs-code-extensions.vscode-clangd",

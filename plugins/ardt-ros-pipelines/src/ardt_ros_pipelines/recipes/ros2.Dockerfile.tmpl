@@ -57,7 +57,7 @@ WORKDIR /ws/src/@PROJECT@
 RUN @GIT_MOUNTS@--mount=type=cache,target=/var/cache/apt,sharing=locked,id=apt-cache-${TARGETARCH} \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked,id=apt-lists-${TARGETARCH} \
     apt-get update && rosdep update --rosdistro ${ROS_DISTRO}@GIT_AUTH@ \
- && ardt deps
+ && PIP_BREAK_SYSTEM_PACKAGES=1 ardt deps
 # 1b) the full source, AFTER the deps layer: a code edit invalidates from here
 # down, not the dependency install above
 COPY . /ws/src/@PROJECT@

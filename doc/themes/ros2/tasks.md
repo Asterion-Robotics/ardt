@@ -10,6 +10,10 @@
 
 JUnit XMLs land at the fixed convention `build/**/test_results/**/*.xml`, so pipelines export them blindly.
 
+:::{note}
+When running `ardt deps` on a dev machine with Python \>= 3.11, the CI images and devcontainer (via the bootstrap step) set `PIP_BREAK_SYSTEM_PACKAGES=1` for PEP 668 compliance; a plain dev shell does not (the behavior can be unwanted in some cases).
+:::
+
 ## Configuration
 
 ```yaml

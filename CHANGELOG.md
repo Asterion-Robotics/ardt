@@ -4,6 +4,12 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 
 ## Unreleased
 
+## [0.5.1] - 2026-08-10
+
+### Fixed
+
+- The `ros-ci` build stage's `ardt deps` command runs with `PIP_BREAK_SYSTEM_PACKAGES=1`, mirroring the runtime stage fix: rosdep's pip resolver requires the env var under Python >= 3.11 (PEP 668) and previously failed for pip-resolved dependencies during the deps phase.
+
 ## [0.5.0] - 2026-08-10
 
 ### Changed
