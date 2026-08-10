@@ -167,6 +167,43 @@ def test_deps_skip_flags(repo: Path) -> None:
     assert "rosdep" not in text
 
 
+def test_deps_from_paths_switches_to_manifest_tree_mode(repo: Path) -> None:
+    """The runtime image's exec pass: explicit manifest trees, no vcs import
+    (even when a repos file would auto-import), no colcon scoping, and strict
+    resolution — an unresolvable key must fail the image build, its earliest
+    catchable moment, so no `-r`."""
+    (repo / "proj.repos").write_text("repositories: {}\n")
+    ctx = context(repo, dry_run=True)
+    manifests = repo / "manifests"
+    tasks.deps(ctx, from_paths=(str(manifests),), dependency_types=("exec",))
+    text = output(ctx)
+    assert "vcs import" not in text
+    assert "colcon list" not in text
+    assert f"rosdep install --from-paths {manifests} --ignore-src -y" in text
+    assert " -r " not in text
+    assert "--dependency-types exec" in text
+    assert ctx.emitted["dependency_types"] == ["exec"]
+
+
+def test_deps_from_paths_still_honors_skip_keys(repo: Path) -> None:
+    """Config and CLI skip keys reach the manifest-tree pass unchanged — the
+    whole point of running the task instead of raw rosdep in the runtime
+    stage."""
+    (repo / "ardt.yaml").write_text("tasks:\n  ros:\n    rosdep_skip_keys: ['gazebo']\n")
+    ctx = context(repo, dry_run=True)
+    tasks.deps(ctx, from_paths=(str(repo / "m"),), skip_keys=("extra",))
+    text = output(ctx)
+    assert "--skip-keys" in text
+    assert "gazebo extra" in text
+
+
+def test_dependency_types_apply_to_the_workspace_pass_too(repo: Path) -> None:
+    ctx = context(repo, dry_run=True)
+    tasks.deps(ctx, dependency_types=("exec", "test"))
+    text = output(ctx)
+    assert "--dependency-types exec --dependency-types test" in text
+
+
 def test_rosdep_skip_keys_forwarded(repo: Path) -> None:
     (repo / "ardt.yaml").write_text(
         "tasks:\n  ros:\n    rosdep_skip_keys: ['rti-connext-dds', 'foo']\n"

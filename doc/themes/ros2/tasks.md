@@ -20,7 +20,9 @@ tasks:
     #                              # default: `<project>.repos` when it exists,
     #                              # "" opts out of that auto-detection
     repos_target: src/external
-    rosdep_skip_keys:              # deps never installed (also: `ardt deps --skip-key KEY`)
+    rosdep_skip_keys:              # deps never installed (also: `ardt deps --skip-key KEY`);
+      #                            # honored in every mode, incl. the runtime image's
+      #                            # `ardt deps --from-paths … --dependency-types exec` pass
       - rti-connext-dds
     # exclude_packages: [big_sim]  # skipped in rosdep/build/test (`--exclude-pkg`)
     # package_scope: workspace    # opt OUT of the default `project` scope:

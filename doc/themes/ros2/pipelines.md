@@ -5,7 +5,7 @@
 **Repos own no Dockerfile.** The recipe for this repo type (`recipes/ros2.Dockerfile.tmpl`) lives in the plugin and updates by bumping the pinned ardt version. Because the recipe runs the ardt tasks as build stages, *building the image is the CI run*:
 
 ```{image} ros-ci-stages.svg
-:alt: The build target runs ardt deps, build and test as image stages and exports reports; the runtime target copies the install base and then installs its exec dependencies with rosdep.
+:alt: The build target runs ardt deps, build and test as image stages and exports reports; the runtime target installs its exec dependencies with the same ardt deps task and then copies the install base.
 :width: 100%
 :align: center
 ```
@@ -27,15 +27,17 @@ ardt pipe run ros-ci
 └─ build the `runtime` target
      5a) FROM base_image (⊕ the repo's base extension, if any)
          + COPY the built install base + CMD
-     5b) rosdep install --dependency-types exec over that install base
-         ← exec deps only, resolved from the share/*/package.xml files
-           the copy brought along; skips tasks.ros.rosdep_skip_keys
+     5b) ardt deps --from-paths … --dependency-types exec
+         ← exec deps only, resolved from the built packages' manifests
+           (staged from the source tree) and the repo's ardt config
+           staged beside them; ardt itself is bind-mounted from the
+           build stage's venv for that one RUN — it never ships
       → always built (a broken runtime stage fails the MR run)
       → with --publish: one multi-arch manifest pushed as
         <registry>/<project>:<ctx.version>, digest in the --json envelope
 ```
 
-Step 5b runs in the *runtime* stage, not the build stage, and it is raw `rosdep` rather than `ardt deps`. Both are deliberate. The runtime image starts from `base_image` alone, so everything rosdep installed into the builder is absent from it; and what it needs is the **exec** closure only, resolved from the install base it just copied, not the build and test dependencies `ardt deps` resolves from the source tree. There is no source tree and no ardt in the runtime image, and putting either there would ship a toolchain with the app. An unresolvable key fails the image build, which is the earliest moment it can be caught.
+Step 5b runs in the *runtime* stage, not the build stage, and it is the same `ardt deps` task the build stage ran — the two-plane rule holds for the exec pass too, so rosdep flags and `tasks.ros.rosdep_skip_keys` are honored by one code path instead of being re-plumbed into a raw `rosdep` call. The runtime image starts from `base_image` alone, so everything rosdep installed into the builder is absent from it; what it needs is the **exec** closure only, resolved in manifest-tree mode (`--from-paths`, no `.repos` import, no colcon) from the built packages' manifests the build stage staged. Still, no toolchain ships with the app: ardt lives in a sealed venv built in the build stage and **bind-mounted** into the deps `RUN` — outside that one command the shipped image carries no ardt, git, or source tree. The venv is never on `PATH` (its `pip3`/`python3` must not shadow the system ones) and reuses the base's interpreter, which is why builder and base must share the same distro generation. An unresolvable key fails the image build, which is the earliest moment it can be caught; rosdep keys that resolve to pip work despite the base's externally-managed Python ([PEP 668](https://peps.python.org/pep-0668/)) because the deps command — and only it — runs with `PIP_BREAK_SYSTEM_PACKAGES=1`.
 
 ## Configuration
 
@@ -52,6 +54,6 @@ All knobs live under `pipelines.ros_ci:`.
 | `git_host` / `git_ssh_port` | auth for private `.repos` deps: CI job token, or a local ssh agent |
 | `base.Dockerfile` (a file) | the only local Docker file a repo may carry: a single-stage base extension (`FROM ${BASE_IMAGE}` + layers below the app — drivers, kernel modules), spliced into the rendered recipe |
 
-Until the baked `ardt-ci` tool image exists, the recipe pip-installs the ardt *task plane* (never the pipeline plane) into the build stage from `ardt_source`: the public git repo by default, or a local checkout for development — `ardt pipe run ros-ci --arg ardt_source=/path/to/ardt`.
+Until the baked `ardt-ci` tool image exists, the recipe pip-installs the ardt *task plane* (never the pipeline plane) into a sealed venv in the build stage from `ardt_source`: the public git repo by default, or a local checkout for development — `ardt pipe run ros-ci --arg ardt_source=/path/to/ardt`.
 
 The implementation is {py:mod}`ardt_ros_pipelines.ros_ci`.

@@ -31,9 +31,14 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked,id=apt-cache-${TARGE
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked,id=apt-lists-${TARGETARCH} \
     rm -f /etc/apt/apt.conf.d/docker-clean \
  && apt-get update && apt-get install -y --no-install-recommends \
-      build-essential git python3-pip openssh-client
+      build-essential git python3-pip python3-venv openssh-client
 
-# The same ardt tasks as on a dev machine run the build (two-plane rule).
+# The same ardt tasks as on a dev machine run the build (two-plane rule),
+# installed into a sealed venv, deliberately NOT on PATH: rosdep resolves
+# `pip3` via PATH and a repo test script's `/usr/bin/env python3` must find
+# the ROS python, so the venv's own pip3/python3 may never shadow them.
+# Every stage calls the absolute @ARDT_BIN@ instead — which is also what
+# lets the runtime stage bind-mount this same venv without shipping it.
 @ARDT_INSTALL@
 # The canonical colcon workspace, identical to the dev container's: this repo
 # is ONE entry under /ws/src, `.repos` imports land grouped in /ws/src/external,
@@ -57,7 +62,7 @@ WORKDIR /ws/src/@PROJECT@
 RUN @GIT_MOUNTS@--mount=type=cache,target=/var/cache/apt,sharing=locked,id=apt-cache-${TARGETARCH} \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked,id=apt-lists-${TARGETARCH} \
     apt-get update && rosdep update --rosdistro ${ROS_DISTRO}@GIT_AUTH@ \
- && ardt deps
+ && @ARDT_BIN@ deps
 # 1b) the full source, AFTER the deps layer: a code edit invalidates from here
 # down, not the dependency install above
 COPY . /ws/src/@PROJECT@
@@ -67,7 +72,7 @@ COPY . /ws/src/@PROJECT@
 #   [--cmake-args, -DCMAKE_C_COMPILER_LAUNCHER=ccache, -DCMAKE_CXX_COMPILER_LAUNCHER=ccache]
 # An unused mount costs nothing; wiring it here means opting in is config-only.
 RUN --mount=type=cache,target=/root/.ccache,id=ccache-${TARGETARCH} \
-    ardt build --no-symlink-install --install-base @INSTALL_BASE@
+    @ARDT_BIN@ build --no-symlink-install --install-base @INSTALL_BASE@
 # 2b) stage the built packages' manifests for the runtime stage's rosdep
 # pass, from the SOURCE tree. Not from the install space: its root carries
 # colcon's COLCON_IGNORE marker (rosdep's crawler honors it and would find
@@ -78,12 +83,16 @@ RUN --mount=type=cache,target=/root/.ccache,id=ccache-${TARGETARCH} \
 # built, written by the very command whose output ships, so whatever
 # package_scope/exclusions decided is already reflected. The final grep
 # fails the build if nothing was staged — an empty scan must never again
-# ship a dep-less image.
+# ship a dep-less image. The repo's ardt config rides along: the runtime
+# stage's `ardt deps` reads its skip keys from the same file this stage's
+# pass did.
 RUN mkdir -p /opt/runtime-manifests && cd /ws \
  && built=$(find build -mindepth 1 -maxdepth 1 -type d -printf '%f ') \
  && for p in $(colcon list --base-paths src --paths-only --packages-select $built); do \
       cp --parents "$p/package.xml" /opt/runtime-manifests/; done \
- && find /opt/runtime-manifests -name package.xml | grep -q .
+ && find /opt/runtime-manifests -name package.xml | grep -q . \
+ && for f in ardt.yaml ardt.yml pyproject.toml; do \
+      if [ -f "/ws/src/@PROJECT@/$f" ]; then cp "/ws/src/@PROJECT@/$f" /opt/runtime-manifests/; fi; done
 
 # ---- steps 3-4: test + JUnit staging. Its own stage so NOTHING ships from it
 # and nothing depends on it: the CI pipeline builds this target as the gate,
@@ -91,7 +100,7 @@ RUN mkdir -p /opt/runtime-manifests && cd /ws \
 FROM build AS test
 
 # 3) test — red tests fail this target's build (same install base as the build)
-RUN ardt test --install-base @INSTALL_BASE@
+RUN @ARDT_BIN@ test --install-base @INSTALL_BASE@
 # 4) stage the JUnit XMLs where the pipeline (or a human) can copy them from
 # (colcon's build base is at the workspace root, not inside the repo). Two
 # layouts: ament_cmake writes <pkg>/test_results/<pkg>/*.xml, colcon's pytest
@@ -107,28 +116,43 @@ ARG TARGETARCH
 
 # 5b) exec dependencies install HERE, not in the build stage: the runtime image
 # starts from the configured base alone, and everything rosdep put into the
-# builder would otherwise be missing at runtime. MANIFESTS FIRST, same split
-# as the build stage's deps layer: the pass scans the staged manifests of the
-# built packages (never the install space itself — its root COLCON_IGNORE
-# makes rosdep find nothing), and landing it before the install-space copy
-# keeps this layer cached across source edits. --ignore-src skips the
-# workspace's own packages. An unresolvable key fails the image build — the
-# earliest moment it can be caught.
+# builder would otherwise be missing at runtime. The SAME `ardt deps` task
+# that resolved the build stage's dependencies runs the pass (two-plane rule),
+# bind-mounted from the build stage's venv for this one RUN — the shipped
+# image carries no ardt, git, or source tree. The venv leans on the runtime
+# base's python3 (a bind-mounted venv reuses the host interpreter and stdlib,
+# so builder and base must share the Python minor version — implied by the
+# same-distro-generation builder/base contract); python3-rosdep provides
+# python3 anyway. Manifest-tree mode: no .repos import, no colcon scoping
+# (the staged manifests already reflect what built), exec deps only, and an
+# unresolvable key fails the image build — the earliest moment it can be
+# caught. Skip keys come from the repo's ardt config, staged beside the
+# manifests, the same file the build stage's pass read.
+# MANIFESTS FIRST, same split as the build stage's deps layer: manifests land
+# before the install-space copy, so this layer stays cached across source
+# edits. pip-resolved rosdep keys need system pip present and PEP 668
+# overridden (the base's Python is externally managed and rosdep's pip
+# installer passes no override), so pip installs when absent and
+# PIP_BREAK_SYSTEM_PACKAGES=1 is scoped to the one deps command — the
+# SHIPPED image's pip keeps refusing system-wide installs.
 # The apt cache mounts matter most on the emulated arch. docker-clean is left
 # alone here (removing it would change the SHIPPED image's apt behavior), so
 # the .deb half of the cache is inert in this stage; the lists half still
 # spares the apt/rosdep metadata fetches. No `rm` of the lists: they live in
 # the mount, not in a layer.
 COPY --from=build /opt/runtime-manifests /tmp/runtime-manifests
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked,id=apt-cache-${TARGETARCH} \
+RUN --mount=type=bind,from=build,source=@ARDT_TOOLS@,target=@ARDT_TOOLS@ \
+    --mount=type=cache,target=/var/cache/apt,sharing=locked,id=apt-cache-${TARGETARCH} \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked,id=apt-lists-${TARGETARCH} \
     apt-get update \
  && { command -v rosdep >/dev/null 2>&1 \
       || apt-get install -y --no-install-recommends python3-rosdep; } \
+ && { command -v pip3 >/dev/null 2>&1 \
+      || apt-get install -y --no-install-recommends python3-pip; } \
  && { [ -f /etc/ros/rosdep/sources.list.d/20-default.list ] || rosdep init; } \
  && rosdep update --rosdistro ${ROS_DISTRO} \
- && rosdep install --from-paths /tmp/runtime-manifests --ignore-src -y \
-      --rosdistro ${ROS_DISTRO} --dependency-types exec@RUNTIME_SKIP@ \
+ && cd /tmp/runtime-manifests \
+ && PIP_BREAK_SYSTEM_PACKAGES=1 @ARDT_BIN@ deps --skip-vcs --from-paths . --dependency-types exec \
  && rm -rf /root/.ros/rosdep /tmp/runtime-manifests
 # 5c) the install space, AFTER the deps layer — a rebuilt binary invalidates
 # from here down, not the apt install above

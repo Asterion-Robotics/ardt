@@ -65,6 +65,21 @@ _install_base_option = click.option(
     help="rosdep key to skip (repeatable; merges with tasks.ros.rosdep_skip_keys).",
 )
 @_exclude_option
+@click.option(
+    "--from-paths",
+    "from_paths",
+    multiple=True,
+    metavar="PATH",
+    help="Resolve the package.xml trees under PATH instead of the colcon workspace "
+    "(repeatable). Implies --skip-vcs; unresolvable keys are fatal.",
+)
+@click.option(
+    "--dependency-types",
+    "dependency_types",
+    multiple=True,
+    metavar="TYPE",
+    help="Restrict rosdep to this dependency type, e.g. exec (repeatable).",
+)
 @pass_ardt
 def deps(
     ctx: Context,
@@ -72,6 +87,8 @@ def deps(
     skip_rosdep: bool,
     skip_keys: tuple[str, ...],
     exclude_packages: tuple[str, ...],
+    from_paths: tuple[str, ...],
+    dependency_types: tuple[str, ...],
 ) -> None:
     """Import workspace sources and install system dependencies."""
     tasks.deps(
@@ -80,6 +97,8 @@ def deps(
         skip_rosdep=skip_rosdep,
         skip_keys=skip_keys,
         exclude_packages=exclude_packages,
+        from_paths=from_paths,
+        dependency_types=dependency_types,
     )
 
 

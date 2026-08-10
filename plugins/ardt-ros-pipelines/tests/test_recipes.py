@@ -132,9 +132,9 @@ class TestManifestsFirst:
     def test_manifest_copy_precedes_deps_full_copy_follows(self, tmp_path: Path) -> None:
         rendered = render(tmp_path, project="demo")
         manifests = rendered.index("COPY --parents")
-        # "&& ardt deps" is the invocation; a bare "ardt deps" would match the
-        # comment explaining the manifests-first ordering, above the COPY.
-        deps = rendered.index("&& ardt deps")
+        # The full invocation; a bare "ardt deps" would match the comment
+        # explaining the manifests-first ordering, above the COPY.
+        deps = rendered.index(f"&& {recipes.TOOLS_VENV}/bin/ardt deps")
         full = rendered.index("COPY . /ws/src/demo")
         build = rendered.index("ardt build --no-symlink-install")
         assert manifests < deps < full < build
@@ -174,12 +174,38 @@ class TestRuntimeExecDeps:
     def _runtime_stage(self, rendered: str) -> str:
         return rendered.split("AS runtime", 1)[1]
 
-    def test_runtime_stage_resolves_exec_deps_from_staged_manifests(self, tmp_path: Path) -> None:
+    def test_runtime_stage_runs_the_deps_task_on_staged_manifests(self, tmp_path: Path) -> None:
+        """Two-plane rule: the SAME `ardt deps` task as the build stage runs
+        the exec pass, in manifest-tree mode — never a raw rosdep call whose
+        flags the render would have to keep in sync with the task."""
         stage = self._runtime_stage(render(tmp_path))
         assert "COPY --from=build /opt/runtime-manifests /tmp/runtime-manifests" in stage
-        assert "rosdep install --from-paths /tmp/runtime-manifests --ignore-src" in stage
-        assert "--dependency-types exec" in stage
-        assert "rosdep install --from-paths /opt/ros/app" not in stage
+        assert "cd /tmp/runtime-manifests" in stage
+        assert (
+            f"{recipes.TOOLS_VENV}/bin/ardt deps --skip-vcs --from-paths . "
+            "--dependency-types exec" in stage
+        )
+        assert "rosdep install" not in stage  # the task owns the rosdep invocation
+
+    def test_runtime_deps_bind_mount_the_tools_venv_never_ship_it(self, tmp_path: Path) -> None:
+        """The venv exists in the deps RUN only; the shipped image carries no
+        ardt, git, or pip toolchain beyond what the base already had."""
+        stage = self._runtime_stage(render(tmp_path))
+        assert (
+            f"--mount=type=bind,from=build,source={recipes.TOOLS_VENV},"
+            f"target={recipes.TOOLS_VENV}" in stage
+        )
+        assert f"COPY --from=build {recipes.TOOLS_VENV}" not in stage
+
+    def test_pip_resolved_keys_survive_pep668(self, tmp_path: Path) -> None:
+        """The base's Python is externally managed (PEP 668) and rosdep's pip
+        installer passes no override: without the env var, every pip-resolved
+        key failed exactly here. Scoped to the one command — never an ENV —
+        so the SHIPPED image's pip keeps refusing system-wide installs."""
+        stage = self._runtime_stage(render(tmp_path))
+        assert f"PIP_BREAK_SYSTEM_PACKAGES=1 {recipes.TOOLS_VENV}/bin/ardt deps" in stage
+        assert "python3-pip" in stage  # installed when the base lacks it
+        assert "ENV PIP_BREAK_SYSTEM_PACKAGES" not in stage
 
     def test_build_stage_stages_source_manifests_of_the_built_set(self, tmp_path: Path) -> None:
         """Built set from colcon's build base, manifests from the source tree —
@@ -201,14 +227,14 @@ class TestRuntimeExecDeps:
         stage = self._runtime_stage(render(tmp_path))
         assert stage.index("/tmp/runtime-manifests") < stage.index("COPY --from=build /opt/ros/app")
 
-    def test_skip_keys_reach_the_runtime_rosdep_pass(self, tmp_path: Path) -> None:
-        stage = self._runtime_stage(
-            render(tmp_path, rosdep_skip_keys=("rti-connext-dds", "gazebo"))
-        )
-        assert '--skip-keys "rti-connext-dds gazebo"' in stage
-
-    def test_no_skip_flag_without_keys(self, tmp_path: Path) -> None:
-        assert "--skip-keys" not in render(tmp_path)
+    def test_skip_keys_travel_via_the_staged_config_not_the_render(self, tmp_path: Path) -> None:
+        """The build stage stages the repo's ardt config beside the manifests;
+        the runtime `ardt deps` reads tasks.ros.rosdep_skip_keys from it, so
+        the render never plumbs skip keys as flags."""
+        rendered = render(tmp_path, project="demo")
+        assert "--skip-keys" not in rendered
+        assert "for f in ardt.yaml ardt.yml pyproject.toml" in rendered
+        assert 'cp "/ws/src/demo/$f" /opt/runtime-manifests/' in rendered
 
     def test_staging_is_independent_of_the_install_base(self, tmp_path: Path) -> None:
         """Source-tree staging must not vary with install_base — only the
@@ -224,6 +250,18 @@ def test_git_install_by_default(tmp_path: Path) -> None:
     for requirement in REQUIREMENTS:
         assert f'"{requirement}"' in rendered
     assert recipes.LOCAL_ARDT_DIR not in rendered
+
+
+def test_ardt_installs_into_a_sealed_venv(tmp_path: Path) -> None:
+    """The venv's pip3/python3 must never shadow the system ones (rosdep
+    resolves `pip3` via PATH; repo test scripts' `/usr/bin/env python3` must
+    find the ROS python): install into the venv, invoke by absolute path,
+    never put it on PATH."""
+    rendered = render(tmp_path)
+    assert f"python3 -m venv {recipes.TOOLS_VENV}" in rendered
+    assert f"{recipes.TOOLS_VENV}/bin/pip install" in rendered
+    assert "--break-system-packages" not in rendered
+    assert "ENV PATH" not in rendered
 
 
 def test_pinned_requirements_render_verbatim(tmp_path: Path) -> None:
@@ -407,8 +445,10 @@ class TestGitAuth:
         )
         assert "username=gitlab-ci-token" in rendered
         # auth is configured in the same RUN, before the vcs import runs
-        # ("&& ardt deps" is the invocation, not the comment mentioning it)
-        assert rendered.index("elif [ -f /run/secrets/") < rendered.index("&& ardt deps")
+        # (the full path is the invocation, not the comment mentioning it)
+        assert rendered.index("elif [ -f /run/secrets/") < rendered.index(
+            f"&& {recipes.TOOLS_VENV}/bin/ardt deps"
+        )
 
     def test_token_read_at_use_time_never_baked(self, tmp_path: Path) -> None:
         rendered = render(tmp_path, git_host="code.example.com")

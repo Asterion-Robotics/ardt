@@ -129,9 +129,26 @@ def deps(
     skip_rosdep: bool = False,
     skip_keys: tuple[str, ...] = (),
     exclude_packages: tuple[str, ...] = (),
+    from_paths: tuple[str, ...] = (),
+    dependency_types: tuple[str, ...] = (),
 ) -> None:
-    """Import ``.repos`` sources, then install system dependencies with rosdep."""
+    """Import ``.repos`` sources, then install system dependencies with rosdep.
+
+    ``from_paths`` switches to manifest-tree mode: rosdep resolves the
+    ``package.xml`` trees under the given paths instead of the colcon
+    workspace. No ``.repos`` import, no colcon scoping (the manifests are
+    taken as the exact package set), and unresolvable keys are fatal — no
+    ``-r``. It exists for the runtime image's exec-dependency pass, where the
+    same task runs against staged manifests rather than sources, and the
+    image build is the earliest moment a bad key can be caught.
+
+    ``dependency_types`` restricts rosdep to those dependency types
+    (``exec`` for a runtime image); empty keeps rosdep's default set.
+    """
     cfg = ros_config(ctx.cfg)
+
+    if from_paths:
+        skip_vcs = True
 
     repos = None if skip_vcs else _repos_file(ctx, cfg)
     if repos is not None:
@@ -152,20 +169,30 @@ def deps(
 
     with ctx.console.section("rosdep install"):
         ctx.runner.require("rosdep", hint="apt install python3-rosdep")
-        ctx.runner.require("colcon", hint="apt install python3-colcon-common-extensions")
-        # Paths come from colcon, not a raw directory scan: rosdep's crawler
-        # honors the COLCON_IGNORE markers too (catkin_pkg prunes on them),
-        # but only colcon can apply --packages-skip — the space-ros pattern —
-        # so deps resolve only for the packages that will actually build.
-        listing = "colcon list --paths-only"
-        if cfg.package_scope == "project":
-            # rosdep resolves only the build closure — the project's packages
-            # and their dependencies. An imported stack's demo packages get no
-            # apt installs for dependencies nothing here will build.
-            listing += f" --packages-up-to $({_own_packages_query(ctx)})"
-        if excluded:
-            listing += f" --packages-skip {shlex.join(excluded)}"
-        script = f"rosdep install --from-paths $({listing}) --ignore-src -r -y"
+        if from_paths:
+            # Explicit manifest trees: no colcon (the runtime image has
+            # none), and no -r — an unresolvable key must fail the run.
+            # Resolved against the invocation cwd, not the workspace root
+            # the command below runs from.
+            paths = " ".join(shlex.quote(str(Path(p).resolve())) for p in from_paths)
+            script = f"rosdep install --from-paths {paths} --ignore-src -y"
+        else:
+            ctx.runner.require("colcon", hint="apt install python3-colcon-common-extensions")
+            # Paths come from colcon, not a raw directory scan: rosdep's crawler
+            # honors the COLCON_IGNORE markers too (catkin_pkg prunes on them),
+            # but only colcon can apply --packages-skip — the space-ros pattern —
+            # so deps resolve only for the packages that will actually build.
+            listing = "colcon list --paths-only"
+            if cfg.package_scope == "project":
+                # rosdep resolves only the build closure — the project's packages
+                # and their dependencies. An imported stack's demo packages get no
+                # apt installs for dependencies nothing here will build.
+                listing += f" --packages-up-to $({_own_packages_query(ctx)})"
+            if excluded:
+                listing += f" --packages-skip {shlex.join(excluded)}"
+            script = f"rosdep install --from-paths $({listing}) --ignore-src -r -y"
+        for dep_type in dependency_types:
+            script += f" --dependency-types {shlex.quote(dep_type)}"
         if keys:
             script += f" --skip-keys {shlex.quote(' '.join(keys))}"
         ctx.runner.run(_sourced(ctx, cfg, script), cwd=_ws(ctx))
@@ -175,6 +202,8 @@ def deps(
         repos_file=str(repos.relative_to(ctx.project_root)) if repos is not None else None,
         rosdep_skip_keys=list(keys),
         excluded_packages=list(excluded),
+        from_paths=list(from_paths),
+        dependency_types=list(dependency_types),
     )
 
 

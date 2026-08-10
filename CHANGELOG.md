@@ -6,7 +6,12 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 
 ### Changed
 
+- The `ros-ci` runtime stage installs exec dependencies with `ardt deps` itself (two-plane rule), no longer with a raw `rosdep install` whose flags the render had to keep in sync with the task. `ardt deps` gains a manifest-tree mode for it: `--from-paths PATH` resolves the `package.xml` trees under explicit paths (implies `--skip-vcs`, needs no colcon, and drops `-r` so an unresolvable key fails the image build), and `--dependency-types TYPE` restricts rosdep accordingly. The build stage stages the repo's ardt config beside the manifests, so `tasks.ros.rosdep_skip_keys` reach the runtime pass from the config file instead of render-time plumbing. No toolchain ships: ardt now installs into a sealed venv (`/opt/ardt-tools`, never on `PATH` — the venv's `pip3`/`python3` must not shadow the system ones rosdep and test scripts resolve) that build/test stages invoke by absolute path and the runtime deps `RUN` bind-mounts for its one command.
 - `ardt test` selects the repo's own packages in BOTH package scopes; `package_scope: workspace` now widens only what `ardt deps` resolves and `ardt build` builds. Imported (`.repos`) packages' test suites belong to their own repos' gates, and under `workspace` they previously ran in this repo's gate (slowest on the emulated arm64 leg, and an upstream flake failed the merge). An explicit `--packages-select` on the CLI still overrides the scoping.
+
+### Fixed
+
+- pip-resolved rosdep keys no longer fail the runtime stage on PEP 668 (`externally-managed-environment`). The builder ROS images set `PIP_BREAK_SYSTEM_PACKAGES=1` globally, the plain runtime base does not; the runtime deps command — and only it — now runs with that override, and `python3-pip` is installed when the base lacks it. The shipped image's pip behavior is unchanged.
 
 ## [0.4.2] - 2026-08-06
 

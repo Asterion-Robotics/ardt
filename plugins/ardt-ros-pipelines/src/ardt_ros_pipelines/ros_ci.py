@@ -139,20 +139,6 @@ def _git_credentials(
     return std.git_credentials(dag, ctx, host=cfg.git_host)
 
 
-def _rosdep_skip_keys(ctx: Context) -> tuple[str, ...]:
-    """``tasks.ros.rosdep_skip_keys``, read raw.
-
-    The runtime stage runs its own rosdep pass and must skip the same keys the
-    build stage's ``ardt deps`` skips. The section belongs to ``ardt-ros-tasks``
-    (which this plugin must not import), so it is read as plain data and treated
-    as absent when malformed — the task plugin owns validation.
-    """
-    keys = ctx.cfg.raw("tasks.ros.rosdep_skip_keys")
-    if not isinstance(keys, list):
-        return ()
-    return tuple(key for key in keys if isinstance(key, str))  # pyright: ignore[reportUnknownVariableType]
-
-
 _NATIVE_PLATFORM = {"x86_64": "linux/amd64", "aarch64": "linux/arm64", "arm64": "linux/arm64"}
 
 
@@ -212,7 +198,6 @@ def _build_context(
         git_host=cfg.git_host,
         git_ssh_port=cfg.git_ssh_port,
         git_token_user=cfg.git_token_user,
-        rosdep_skip_keys=_rosdep_skip_keys(ctx),
     )
     context = src.with_new_file(recipes.RENDERED_NAME, rendered)
     if local_ardt:

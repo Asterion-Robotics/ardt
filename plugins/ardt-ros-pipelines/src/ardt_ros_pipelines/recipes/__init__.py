@@ -77,9 +77,18 @@ LOCAL_ARDT_DIR = ".ardt-src"
 """Context subdirectory the pipeline injects a local ardt checkout into."""
 
 ARDT_MODULES = ("ardt-core", "ardt-ros-tasks")
-"""The ardt modules this recipe's build stage needs (it runs ``ardt deps`` /
-``build`` / ``test``). *Where* they install from is the repo's ``ardt:``
-section (:mod:`ardt_core.dist`) — the recipe only owns the list."""
+"""The ardt modules this recipe needs (``ardt deps`` / ``build`` / ``test`` in
+the build stage, ``ardt deps`` again in the runtime stage). *Where* they
+install from is the repo's ``ardt:`` section (:mod:`ardt_core.dist`) — the
+recipe only owns the list."""
+
+TOOLS_VENV = "/opt/ardt-tools"
+"""Sealed venv the recipe installs ardt into, in the build stage. Deliberately
+never on PATH — rosdep resolves ``pip3`` via PATH and repo test scripts'
+``/usr/bin/env python3`` must find the ROS python, so the venv's own binaries
+may never shadow the system ones. Stages invoke ``{TOOLS_VENV}/bin/ardt`` by
+absolute path, and the runtime stage bind-mounts the venv for its deps RUN
+instead of shipping it."""
 
 # Re-exported so recipe consumers need not care where the contract lives.
 GIT_TOKEN_SECRET = std.GIT_TOKEN_SECRET
@@ -89,7 +98,7 @@ GIT_TOKEN_SECRET = std.GIT_TOKEN_SECRET
 
 def _git_install(requirements: Sequence[str]) -> str:
     specs = " \\\n      ".join(f'"{r}"' for r in requirements)
-    return f"RUN python3 -m pip install --break-system-packages \\\n      {specs}"
+    return f"RUN python3 -m venv {TOOLS_VENV} \\\n && {TOOLS_VENV}/bin/pip install \\\n      {specs}"
 
 
 def _local_install() -> str:
@@ -97,7 +106,7 @@ def _local_install() -> str:
     return (
         "# dev mode: ardt injected from a local checkout instead of the configured git\n"
         f"COPY {LOCAL_ARDT_DIR} /opt/ardt-src\n"
-        f"RUN python3 -m pip install --break-system-packages \\\n      {paths}"
+        f"RUN python3 -m venv {TOOLS_VENV} \\\n && {TOOLS_VENV}/bin/pip install \\\n      {paths}"
     )
 
 
@@ -141,13 +150,6 @@ RUN find {{base}} -type d \\( -name include -o -name cmake -o -name pkgconfig \\
       -prune -exec rm -rf {{{{}}}} + \\
  && find {{base}} -name '*.a' -delete
 """
-
-
-def _runtime_skip(keys: Sequence[str]) -> str:
-    """The runtime rosdep pass must skip the same keys `ardt deps` skips."""
-    if not keys:
-        return ""
-    return f' --skip-keys "{" ".join(keys)}"'
 
 
 def _template(name: str) -> str:
@@ -214,7 +216,6 @@ def render_ros2(
     git_host: str | None = None,
     git_ssh_port: int = 22,
     git_token_user: str = "gitlab-ci-token",
-    rosdep_skip_keys: Sequence[str] = (),
 ) -> str:
     """Render the ROS 2 workspace recipe for one repo.
 
@@ -227,9 +228,10 @@ def render_ros2(
     ``git_host`` switches on private-host git auth for the deps layer (the
     ``vcs import`` of a private ``.repos``): SSH-agent and token mounts plus
     the runtime branching between them.
-    ``rosdep_skip_keys`` reaches the runtime stage's own rosdep pass (exec
-    dependencies of the shipped install space), mirroring what ``ardt deps``
-    skipped in the build stage.
+    The runtime stage runs the same ``ardt deps`` task as the build stage
+    (manifest-tree mode, exec deps only, :data:`TOOLS_VENV` bind-mounted from
+    the build stage) against the staged manifests and the repo's ardt config
+    staged beside them — rosdep skip keys need no render-time plumbing.
     """
     base_ext = ""
     runtime_from = "${BASE_IMAGE}"
@@ -270,6 +272,8 @@ def render_ros2(
         .replace("@BASE_IMAGE@", base_image)
         .replace("@BASE_FILE@", base_dockerfile)
         .replace("@ARDT_INSTALL@", install)
+        .replace("@ARDT_BIN@", f"{TOOLS_VENV}/bin/ardt")
+        .replace("@ARDT_TOOLS@", TOOLS_VENV)
         .replace("@GIT_MOUNTS@", git_mounts)
         .replace("@GIT_AUTH@", git_auth)
         .replace("@INSTALL_BASE@", install_base)
