@@ -112,7 +112,7 @@ def test_the_gui_tools_follow_the_repo_distro() -> None:
 
 
 def test_bootstrap_ends_on_the_ci_recipes_first_step() -> None:
-    """`ardt deps` last (with PEP 668 env var), and `rosdep update` at the repo's distro before it."""
+    """`ardt deps` last with PEP 668 env var; `rosdep update` at repo distro before it."""
     assert ROS2.bootstrap[-1] == ("PIP_BREAK_SYSTEM_PACKAGES=1", "ardt", "deps")
     assert ("rosdep", "update", "--rosdistro", "@DISTRO@") in ROS2.bootstrap
 

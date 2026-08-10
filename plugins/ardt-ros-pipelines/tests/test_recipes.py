@@ -380,7 +380,9 @@ class TestCacheMounts:
 
     def test_deps_layer_keeps_cache_mounts_alongside_git_mounts(self, tmp_path: Path) -> None:
         rendered = render(tmp_path, git_host="code.example.com")
-        deps_run = rendered[rendered.index("# 1) deps") : rendered.index("&& PIP_BREAK_SYSTEM_PACKAGES=1 ardt deps")]
+        deps_run = rendered[
+            rendered.index("# 1) deps") : rendered.index("&& PIP_BREAK_SYSTEM_PACKAGES=1 ardt deps")
+        ]
         assert "--mount=type=ssh" in deps_run
         assert "id=apt-cache-${TARGETARCH}" in deps_run
 
@@ -408,7 +410,9 @@ class TestGitAuth:
         assert "username=gitlab-ci-token" in rendered
         # auth is configured in the same RUN, before the vcs import runs
         # ("&& PIP_BREAK_SYSTEM_PACKAGES=1 ardt deps" is the invocation)
-        assert rendered.index("elif [ -f /run/secrets/") < rendered.index("&& PIP_BREAK_SYSTEM_PACKAGES=1 ardt deps")
+        assert rendered.index("elif [ -f /run/secrets/") < rendered.index(
+            "&& PIP_BREAK_SYSTEM_PACKAGES=1 ardt deps"
+        )
 
     def test_token_read_at_use_time_never_baked(self, tmp_path: Path) -> None:
         rendered = render(tmp_path, git_host="code.example.com")
