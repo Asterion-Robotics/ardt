@@ -4,6 +4,10 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 
 ## Unreleased
 
+### Added
+
+- `tasks.ros.overlays`: install spaces layered on the distro (an SDK prebuilt in the builder image, a vendor stack), sourced in order after `<source_base>/<distro>/setup.bash` before `ardt deps`, `ardt build` and `ardt test`. A listed overlay that does not exist is an error. Motivated by repos built `FROM` an image carrying a colcon install space the distro setup does not chain.
+
 ## [0.5.1] - 2026-08-10
 
 ### Fixed
