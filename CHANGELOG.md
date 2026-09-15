@@ -4,6 +4,8 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 
 ## Unreleased
 
+## [0.5.2] - 2026-09-15
+
 ### Added
 
 - `tasks.ros.overlays`: install spaces layered on the distro (an SDK prebuilt in the builder image, a vendor stack), their `local_setup.bash` sourced in order after `<source_base>/<distro>/setup.bash` before `ardt deps`, `ardt build` and `ardt test`, so exactly the listed prefixes compose the environment. A listed overlay that does not exist is an error. The dev container follows: its shell sources the same overlays in the same order after the distro, IntelliSense sees their include paths before the distro's, and `ardt dev doctor` reports them (inside the container, it fails when one is missing). Motivated by repos built `FROM` an image carrying a colcon install space the distro setup does not chain.
