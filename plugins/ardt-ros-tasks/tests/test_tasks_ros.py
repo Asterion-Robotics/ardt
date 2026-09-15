@@ -363,14 +363,14 @@ def test_overlays_are_sourced_after_the_distro_in_order(repo: Path, tmp_path: Pa
     vendor = tmp_path / "vendor"
     for prefix in (sdk, vendor):
         prefix.mkdir()
-        (prefix / "setup.bash").write_text("")
+        (prefix / "local_setup.bash").write_text("")
     (repo / "ardt.yaml").write_text(f"tasks:\n  ros:\n    overlays: ['{sdk}', '{vendor}']\n")
     ctx = context(repo, dry_run=True)
     tasks.build(ctx)
     plan = output(ctx)
-    assert f". {sdk}/setup.bash; . {vendor}/setup.bash; " in plan
-    assert plan.index(f"{sdk}/setup.bash") < plan.index(f"{vendor}/setup.bash")
-    assert plan.index(f"{vendor}/setup.bash") < plan.index("colcon build --symlink-install")
+    assert f". {sdk}/local_setup.bash; . {vendor}/local_setup.bash; " in plan
+    assert plan.index(f"{sdk}/local_setup.bash") < plan.index(f"{vendor}/local_setup.bash")
+    assert plan.index(f"{vendor}/local_setup.bash") < plan.index("colcon build --symlink-install")
 
 
 def test_missing_overlay_is_a_clean_error(repo: Path, tmp_path: Path) -> None:
@@ -380,4 +380,4 @@ def test_missing_overlay_is_a_clean_error(repo: Path, tmp_path: Path) -> None:
     ctx = context(repo, dry_run=True)
     with pytest.raises(ArdtError) as exc:
         tasks.build(ctx)
-    assert "has no setup.bash" in exc.value.message
+    assert "has no local_setup.bash" in exc.value.message

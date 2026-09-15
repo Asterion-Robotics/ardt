@@ -56,13 +56,19 @@ def _ros_setup(cfg: RosConfig) -> Path:
 
 
 def _overlay_setups(cfg: RosConfig) -> list[Path]:
-    """The ``setup.bash`` of every configured overlay, in order; a missing one is an error."""
+    """The ``local_setup.bash`` of every configured overlay, in order; a missing one is an error.
+
+    ``local_setup``, not ``setup``: the distro and the overlays are composed here,
+    explicitly and in the configured order, so the prefix chain an overlay
+    recorded at its own build time (its underlays, at their then paths) must not
+    be replayed on top.
+    """
     setups = []
     for prefix in cfg.overlays:
-        setup = Path(prefix) / "setup.bash"
+        setup = Path(prefix) / "local_setup.bash"
         if not setup.is_file():
             raise ArdtError(
-                f"overlay {prefix} has no setup.bash",
+                f"overlay {prefix} has no local_setup.bash",
                 hint="fix `tasks.ros.overlays` in ardt.yaml, or build in the image that ships it",
             )
         setups.append(setup)
