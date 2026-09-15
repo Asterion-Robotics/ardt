@@ -39,7 +39,7 @@ tasks:
     #                              # stays own-only in BOTH scopes: imports'
     #                              # suites are not this repo's gate.
     # install_base: /opt/ros/app   # colcon --install-base; default ./install
-    # overlays: [/opt/aos/sdk]     # install spaces layered on the distro (an SDK
+    # overlays: [/opt/acme/sdk]     # install spaces layered on the distro (an SDK
     #                              # prebuilt in the builder image): their
     #                              # local_setup.bash, sourced in this order
     #                              # after the distro before deps/build/test
