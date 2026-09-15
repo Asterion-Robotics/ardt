@@ -52,9 +52,10 @@ rendered recipe as a stage:
         git_ssh_port: 5022
 
 The ardt installed inside the image comes from the repo's ``ardt:`` config
-section (:mod:`ardt_core.dist`) — pin ``ardt.version`` there for reproducible
-recipes. ``--arg ardt_source=`` overrides it for one run: a directory injects
-a local checkout into the build; a ``git+…`` URL swaps the monorepo address.
+section (:mod:`ardt_core.dist`): ``ardt.version`` when set, else the release of
+the ardt running this pipeline. ``--arg ardt_source=`` overrides it for one run:
+a directory injects a local checkout into the build; a ``git+…`` URL swaps the
+monorepo address.
 """
 
 from __future__ import annotations

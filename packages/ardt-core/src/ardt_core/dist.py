@@ -47,6 +47,8 @@ from collections.abc import Iterable
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from .version import UNKNOWN, installed, is_release
+
 ARDT_GIT = "git+https://github.com/Asterion-Robotics/ardt.git"
 """The ardt monorepo — the default source of every first-party module."""
 
@@ -73,6 +75,18 @@ def subdirectory(module: str) -> str:
     name = base_name(module)
     root = "packages" if name in _PACKAGES else "plugins"
     return f"{root}/{name}"
+
+
+def running_release() -> str | None:
+    """The git tag of the ardt running this process, or None for a dev build.
+
+    The default pin: a recipe rendered by a released ardt installs that same
+    release, so pinning the ardt that renders (an image tag, a tool version) pins
+    the ardt inside the image too. A dev build (``x.y.z.devN+g…``, or a source
+    tree never installed) has no tag to name and falls back to HEAD.
+    """
+    version = installed("ardt-core")
+    return f"v{version}" if version != UNKNOWN and is_release(version) else None
 
 
 def local_requirement(module: str, root: str) -> str:
@@ -110,7 +124,8 @@ class DistConfig(BaseModel):
     git: str = ARDT_GIT
     """Git address of the ardt monorepo (pip VCS form)."""
     version: str | None = None
-    """Git rev every monorepo module installs at. None tracks HEAD."""
+    """Git rev every monorepo module installs at. None means the release of the
+    ardt doing the rendering (:func:`running_release`), HEAD for a dev build."""
     modules: dict[str, ModulePin] = Field(default_factory=dict)
     """Per-module overrides, keyed by distribution name."""
     install_extras: list[str] = Field(default_factory=list)
@@ -129,7 +144,7 @@ class DistConfig(BaseModel):
         pin = self.modules.get(base_name(module), ModulePin())
         if pin.git is None:
             source = self.git
-            version = pin.version or self.version
+            version = pin.version or self.effective_version
             sub = pin.subdirectory or subdirectory(module)
         else:
             source = pin.git
@@ -142,6 +157,11 @@ class DistConfig(BaseModel):
         if sub:
             url += f"#subdirectory={sub}"
         return f"{module} @ {url}"
+
+    @property
+    def effective_version(self) -> str | None:
+        """The section-wide rev actually installed: the pin, else the running release."""
+        return self.version or running_release()
 
     def requirements(self, modules: Iterable[str]) -> tuple[str, ...]:
         """Requirement strings for the modules a pipeline's image needs."""

@@ -68,8 +68,14 @@ def run_checks(ctx: Context, plan: Render) -> list[tuple[str, str, str]]:
 
     if ctx.cfg.ardt.version:
         check("ok", "ardt pin", f"{ctx.cfg.ardt.git}@{ctx.cfg.ardt.version}")
+    elif ctx.cfg.ardt.effective_version:
+        check(
+            "ok",
+            "ardt pin",
+            f"{ctx.cfg.ardt.git}@{ctx.cfg.ardt.effective_version} (this ardt's release)",
+        )
     else:
-        check("warn", "ardt pin", "ardt.version unset: container and CI both track HEAD")
+        check("warn", "ardt pin", "dev ardt and no ardt.version: container and CI track HEAD")
     if plan.ardt_source:
         check("warn", "ardt source", f"local checkout {plan.ardt_source} (not the pin)")
 

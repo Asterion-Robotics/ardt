@@ -7,7 +7,8 @@ project:
   name: my_robot # defaults to the project-root directory name
 
 # Which ardt the pipelines install inside the images they build (core-owned).
-# Pin `version` for reproducible recipes — without it installs track HEAD.
+# Unset, `version` is the release of the ardt rendering the recipe (an installed
+# release pins itself); a dev build of ardt tracks HEAD. Set it to override.
 # ardt:
 #   git: git+https://github.com/Asterion-Robotics/ardt.git # the default
 #   version: v0.3.0 # git rev (tag/branch/sha) every monorepo module installs at

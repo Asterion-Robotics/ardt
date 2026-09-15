@@ -117,4 +117,4 @@ tasks:
     distro: jazzy
 ```
 
-From there `ardt deps` / `build` / `test`, `ardt dev open` and `ardt pipe run ros-ci` all work with defaults. The annotated [`ardt.example.yaml`](https://github.com/Asterion-Robotics/ardt/blob/main/ardt.example.yaml) is the full reference — copy it and uncomment what you need. Pin `ardt.version` as soon as CI matters: it is what makes pipeline builds reproducible.
+From there `ardt deps` / `build` / `test`, `ardt dev open` and `ardt pipe run ros-ci` all work with defaults. The annotated [`ardt.example.yaml`](https://github.com/Asterion-Robotics/ardt/blob/main/ardt.example.yaml) is the full reference — copy it and uncomment what you need. Pipeline builds are reproducible without any pin as long as CI runs a released ardt: the images it builds install that same release. Set `ardt.version` only to diverge from the ardt running the pipeline.
