@@ -4,6 +4,8 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 
 ## Unreleased
 
+## [0.5.3] - 2026-09-15
+
 ### Changed
 
 - An unset `ardt.version` now installs, inside every image a pipeline builds, the release of the ardt rendering the recipe (`v<__version__>`), instead of tracking HEAD. Pinning the ardt that runs CI (a tool version, an image tag) therefore pins the ardt inside the images, and the pip layer's cache key changes with the release. A dev build of ardt (no exact tag) still tracks HEAD; `ardt dev doctor` warns only in that case.
