@@ -23,6 +23,8 @@ exit code. Pure enough to assert check by check with a captured context.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from ardt_core.context import Context
 
 from . import docker as docker_module
@@ -49,6 +51,20 @@ def run_checks(ctx: Context, plan: Render) -> list[tuple[str, str, str]]:
         check("ok", "CI parity", f"dev base == ros_ci.builder ({builder})")
     else:
         check("fail", "CI parity", f"dev base {plan.base_image} != ros_ci.builder {builder}")
+
+    if plan.overlays:
+        if docker_module.in_container():
+            missing = [p for p in plan.overlays if not Path(p, "local_setup.bash").is_file()]
+            if missing:
+                check("fail", "overlays", f"no local_setup.bash in: {', '.join(missing)}")
+            else:
+                check("ok", "overlays", f"sourced after the distro: {', '.join(plan.overlays)}")
+        else:
+            check(
+                "ok",
+                "overlays",
+                f"{', '.join(plan.overlays)} (tasks.ros.overlays; checked in the container)",
+            )
 
     if ctx.cfg.ardt.version:
         check("ok", "ardt pin", f"{ctx.cfg.ardt.git}@{ctx.cfg.ardt.version}")

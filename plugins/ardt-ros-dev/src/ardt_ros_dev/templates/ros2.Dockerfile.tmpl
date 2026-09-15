@@ -46,6 +46,7 @@ ENV @ENV@
 RUN printf '%s\n' \
       '# --- ardt dev ---' \
       '. /opt/ros/$ROS_DISTRO/setup.bash' \
+@OVERLAYS@
       '[ -f @WORKSPACE@/install/setup.bash ] && . @WORKSPACE@/install/setup.bash' \
       '. /usr/share/colcon_argcomplete/hook/colcon-argcomplete.bash 2>/dev/null || true' \
       > /etc/profile.d/10-ardt-dev.sh \

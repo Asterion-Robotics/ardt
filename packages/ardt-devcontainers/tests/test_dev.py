@@ -45,7 +45,7 @@ from ardt_core.testing import build_context
 from ardt_devcontainers import host as host_module
 from ardt_devcontainers import manifest as manifest_module
 from ardt_devcontainers import render as render_module
-from ardt_devcontainers.config import ci_builder, dev_config, ros_distro
+from ardt_devcontainers.config import ci_builder, dev_config, ros_distro, ros_overlays
 from ardt_devcontainers.host import HostFacts
 from ardt_devcontainers.profiles import profile, profiles
 
@@ -609,3 +609,34 @@ def test_manifest_records_what_the_render_was_resolved_from(repo: Path) -> None:
     assert data["host"] == "wsl2"
     assert data["ardt_source"] == "../../ardt"
     assert data["generated"][render_module.DOCKERFILE].startswith("sha256:")
+
+
+def test_overlays_follow_the_ros_tasks_into_the_dev_shell_and_intellisense() -> None:
+    """The parity rule for the environment: what `ardt build` sources, the dev
+    shell sources too, in the same order, and clangd sees it before the distro."""
+    cfg = ArdtConfig.model_validate(
+        {"tasks": {"ros": {"overlays": ["/opt/aos/sdk", "/opt/vendor"]}}}
+    )
+    assert ros_overlays(cfg) == ("/opt/aos/sdk", "/opt/vendor")
+    rendered = plan(cfg)
+    dockerfile = rendered.files[render_module.DOCKERFILE]
+    distro_line = dockerfile.index("/opt/ros/$ROS_DISTRO/setup.bash")
+    sdk_line = dockerfile.index("'. /opt/aos/sdk/local_setup.bash'")
+    vendor_line = dockerfile.index("'. /opt/vendor/local_setup.bash'")
+    workspace_line = dockerfile.index("install/setup.bash ]")
+    assert distro_line < sdk_line < vendor_line < workspace_line
+    assert "@OVERLAYS@" not in dockerfile
+    include = json.loads(rendered.files[render_module.CPP_PROPERTIES])["configurations"][0][
+        "includePath"
+    ]
+    assert include.index("/opt/aos/sdk/*/include/**") < include.index("/opt/ros/jazzy/include/**")
+    assert include.index("${workspaceFolder}/install/*/include/**") < include.index(
+        "/opt/aos/sdk/*/include/**"
+    )
+
+
+def test_no_overlays_leaves_the_render_untouched() -> None:
+    rendered = plan(ArdtConfig())
+    assert "@OVERLAYS@" not in rendered.files[render_module.DOCKERFILE]
+    assert "local_setup.bash" not in rendered.files[render_module.DOCKERFILE]
+    assert rendered.overlays == ()
