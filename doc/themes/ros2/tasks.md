@@ -10,10 +10,6 @@
 
 JUnit XMLs land at the fixed convention `build/**/test_results/**/*.xml`, so pipelines export them blindly.
 
-### Overlays
-
-A repo built `FROM` an image that ships a prebuilt colcon workspace (an SDK, a vendor stack) lists it in `overlays`. Every task then sources `<source_base>/<distro>/setup.bash` first and each overlay's `local_setup.bash` after it, in the listed order: `local_setup`, not `setup`, so exactly the configured prefixes compose the environment and the prefix chain an overlay recorded at its own build is never replayed on top. An overlay that depends on another is listed after it. A listed overlay with no `local_setup.bash` is an error, never a silent build without it. The dev container sources the same overlays in the same order (see the [parity rule](../../devcontainer/parity.md)).
-
 :::{note}
 When running `ardt deps` on a dev machine with Python \>= 3.11, the CI images and devcontainer (via the bootstrap step) set `PIP_BREAK_SYSTEM_PACKAGES=1` for PEP 668 compliance; a plain dev shell does not (the behavior can be unwanted in some cases).
 :::
@@ -48,6 +44,10 @@ tasks:
       - -DCMAKE_BUILD_TYPE=RelWithDebInfo
     symlink_install: true
 ```
+
+## Overlays
+
+A repo built `FROM` an image that ships a prebuilt colcon workspace (an SDK, a vendor stack) lists it in `overlays`. Every task then sources `<source_base>/<distro>/setup.bash` first and each overlay's `local_setup.bash` after it, in the listed order: `local_setup`, not `setup`, so exactly the configured prefixes compose the environment and the prefix chain an overlay recorded at its own build is never replayed on top. An overlay that depends on another is listed after it. A listed overlay with no `local_setup.bash` is an error, never a silent build without it. The dev container sources the same overlays in the same order (see the [parity rule](../../devcontainer/parity.md)).
 
 :::{note}
 A sourced ROS overlay puts `/opt/ros/<distro>` on `PYTHONPATH`, whose pytest plugins can break collection of ardt's own test suite. Run it with `PYTHONPATH= uv run pytest`. CI containers have no ROS, so this only bites local runs.
