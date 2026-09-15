@@ -55,18 +55,44 @@ def _ros_setup(cfg: RosConfig) -> Path:
     return Path(cfg.source_base) / cfg.distro / "setup.bash"
 
 
+def _overlay_setups(cfg: RosConfig) -> list[Path]:
+    """The ``local_setup.bash`` of every configured overlay, in order; a missing one is an error.
+
+    ``local_setup``, not ``setup``: the distro and the overlays are composed here,
+    explicitly and in the configured order, so the prefix chain an overlay
+    recorded at its own build time (its underlays, at their then paths) must not
+    be replayed on top.
+    """
+    setups = []
+    for prefix in cfg.overlays:
+        setup = Path(prefix) / "local_setup.bash"
+        if not setup.is_file():
+            raise ArdtError(
+                f"overlay {prefix} has no local_setup.bash",
+                hint="fix `tasks.ros.overlays` in ardt.yaml, or build in the image that ships it",
+            )
+        setups.append(setup)
+    return setups
+
+
 def _sourced(ctx: Context, cfg: RosConfig, script: str) -> list[str]:
-    """Run a shell script with the ROS distro sourced, when one is present.
+    """Run a shell script with the ROS distro sourced, when one is present, then
+    the configured overlays in order.
 
     On a host without ``/opt/ros/<distro>`` (a laptop using a devcontainer, say)
     the script runs bare and colcon fails with its own clear message — better
-    than ardt guessing at an underlay.
+    than ardt guessing at an underlay. Overlays are never skipped: a listed one
+    must exist.
     """
+    sources = []
     setup = _ros_setup(cfg)
-    if not setup.is_file():
+    if setup.is_file():
+        sources.append(setup)
+    else:
         ctx.console.detail(f"{setup} not found; running without sourcing a ROS underlay")
-        return ["bash", "-c", f"set -e; {script}"]
-    return ["bash", "-c", f"set -e; . {shlex.quote(str(setup))}; {script}"]
+    sources.extend(_overlay_setups(cfg))
+    prefix = "".join(f". {shlex.quote(str(s))}; " for s in sources)
+    return ["bash", "-c", f"set -e; {prefix}{script}"]
 
 
 def _in_ros_env(ctx: Context, cfg: RosConfig, command: list[str]) -> list[str]:

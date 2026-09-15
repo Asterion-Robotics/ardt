@@ -65,6 +65,16 @@ class RosConfig(BaseModel):
     source_base: str = "/opt/ros"
     """The install prefix to source before invoking colcon; ``{distro}`` is appended."""
 
+    overlays: list[str] = Field(default_factory=list)
+    """Install spaces layered on the distro, sourced in order after it (each
+    ``<prefix>/local_setup.bash``, so exactly the listed prefixes compose the
+    environment, never the chain an overlay recorded at its own build) before
+    ``deps``, ``build`` and ``test``. For a repo built on an image that carries
+    a prebuilt workspace (an SDK, a vendor stack); an overlay that depends on
+    another is listed after it. A listed overlay that does not exist is an
+    error: an SDK a build silently ran without is exactly the kind of drift
+    these tasks are meant to catch."""
+
     package_scope: Literal["workspace", "project"] = "project"
     """Which packages the ros tasks operate on.
 

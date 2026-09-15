@@ -356,3 +356,28 @@ def test_colcon_runs_from_the_workspace_root(tmp_path: Path) -> None:
     # The dry-run plan prints the command; the cwd is the runner's business —
     # assert it directly on the call the task makes.
     assert tasks._ws(ctx) == tmp_path / "ws"
+
+
+def test_overlays_are_sourced_after_the_distro_in_order(repo: Path, tmp_path: Path) -> None:
+    sdk = tmp_path / "sdk"
+    vendor = tmp_path / "vendor"
+    for prefix in (sdk, vendor):
+        prefix.mkdir()
+        (prefix / "local_setup.bash").write_text("")
+    (repo / "ardt.yaml").write_text(f"tasks:\n  ros:\n    overlays: ['{sdk}', '{vendor}']\n")
+    ctx = context(repo, dry_run=True)
+    tasks.build(ctx)
+    plan = output(ctx)
+    assert f". {sdk}/local_setup.bash; . {vendor}/local_setup.bash; " in plan
+    assert plan.index(f"{sdk}/local_setup.bash") < plan.index(f"{vendor}/local_setup.bash")
+    assert plan.index(f"{vendor}/local_setup.bash") < plan.index("colcon build --symlink-install")
+
+
+def test_missing_overlay_is_a_clean_error(repo: Path, tmp_path: Path) -> None:
+    from ardt_core.errors import ArdtError
+
+    (repo / "ardt.yaml").write_text(f"tasks:\n  ros:\n    overlays: ['{tmp_path / 'nope'}']\n")
+    ctx = context(repo, dry_run=True)
+    with pytest.raises(ArdtError) as exc:
+        tasks.build(ctx)
+    assert "has no local_setup.bash" in exc.value.message

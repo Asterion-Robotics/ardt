@@ -100,6 +100,16 @@ def ros_distro(cfg: ArdtConfig, default: str = "jazzy") -> str:
     return distro if isinstance(distro, str) else default
 
 
+def ros_overlays(cfg: ArdtConfig) -> tuple[str, ...]:
+    """``tasks.ros.overlays``, read raw — the install spaces the ros tasks source
+    after the distro. The dev shell sources the same ones, in the same order:
+    that is the parity rule applied to the environment, not only the image."""
+    overlays = cfg.raw("tasks.ros.overlays")
+    if not isinstance(overlays, list):
+        return ()
+    return tuple(item for item in overlays if isinstance(item, str))
+
+
 def ci_builder(cfg: ArdtConfig) -> str | None:
     """``pipelines.ros_ci.builder``, read raw.
 

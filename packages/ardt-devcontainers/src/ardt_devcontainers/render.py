@@ -54,6 +54,7 @@ from .config import (
     DevConfig,
     ci_builder,
     ros_distro,
+    ros_overlays,
     source_folder,
 )
 from .host import HostFacts, HostProfile, detect
@@ -161,6 +162,9 @@ class Render:
     requirements: tuple[str, ...]
     image: str | None = None
     """``dev.image`` when the repo pins a published one, else None."""
+    overlays: tuple[str, ...] = ()
+    """``tasks.ros.overlays``: sourced in the dev shell after the distro, as the
+    ros tasks do, and offered to IntelliSense before the distro."""
     shared_volumes: tuple[str, ...] = ()
     """The machine-wide caches. ``external:``, so they must exist before compose
     starts and compose never removes them."""
@@ -283,7 +287,22 @@ def _claude_block() -> str:
     return _CLAUDE_BLOCK.format(version_arg=arg)
 
 
-def dockerfile(prof: Profile, dev: DevConfig, *, project: str, base_image: str, distro: str) -> str:
+def _overlays_block(overlays: tuple[str, ...]) -> str:
+    """One printf line per overlay, sourced after the distro and before the
+    workspace: ``local_setup.bash``, as the ros tasks source it, so exactly
+    the configured prefixes compose the environment."""
+    return "".join(f"      '. {prefix}/local_setup.bash' \\\n" for prefix in overlays)
+
+
+def dockerfile(
+    prof: Profile,
+    dev: DevConfig,
+    *,
+    project: str,
+    base_image: str,
+    distro: str,
+    overlays: tuple[str, ...] = (),
+) -> str:
     return (
         _template(prof.templates_package, prof.dockerfile)
         .replace("@VERSION@", __version__)
@@ -294,6 +313,7 @@ def dockerfile(prof: Profile, dev: DevConfig, *, project: str, base_image: str, 
         .replace("@APT@", _apt_block(prof, dev.apt_packages, distro))
         .replace("@ENV@", _env_block(prof, dev))
         .replace("@CLAUDE@", _claude_block() if dev.claude_code else "")
+        .replace("@OVERLAYS@\n", _overlays_block(overlays))
     )
 
 
@@ -453,7 +473,7 @@ def _detokenize(value: object, distro: str) -> object:
     return value
 
 
-def cpp_properties(prof: Profile, distro: str) -> str:
+def cpp_properties(prof: Profile, distro: str, overlays: tuple[str, ...] = ()) -> str:
     """``.vscode/c_cpp_properties.json`` — the one file cpptools reads from there.
 
     No comment header, unlike every other rendered file: cpptools only grew a
@@ -462,6 +482,17 @@ def cpp_properties(prof: Profile, distro: str) -> str:
     lives in the manifest instead.
     """
     entry = _detokenize(dict(prof.cpp_properties or {}), distro)
+    include = entry.get("includePath") if isinstance(entry, dict) else None
+    if overlays and isinstance(include, list):
+        # Overlay before underlay, as the shell orders them: the overlays sit
+        # between the workspace entries and the distro's own include path.
+        first_distro = next(
+            (i for i, p in enumerate(include) if str(p).startswith("/opt/ros/")), len(include)
+        )
+        extra = [
+            p for prefix in overlays for p in (f"{prefix}/*/include/**", f"{prefix}/include/**")
+        ]
+        include[first_distro:first_distro] = extra
     return json.dumps({"configurations": [entry], "version": 4}, indent=4) + "\n"
 
 
@@ -491,6 +522,7 @@ def build(
     """
     prof = profile(dev.profile, registry)
     distro = ros_distro(cfg)
+    overlays = ros_overlays(cfg)
     base_image = resolve_base_image(cfg, dev, prof, distro)
     probed = facts or HostFacts.probe()
     host = detect(probed, gui=dev.gui)
@@ -498,7 +530,9 @@ def build(
 
     files = {
         GITIGNORE: GITIGNORE_BODY,
-        DOCKERFILE: dockerfile(prof, dev, project=project, base_image=base_image, distro=distro),
+        DOCKERFILE: dockerfile(
+            prof, dev, project=project, base_image=base_image, distro=distro, overlays=overlays
+        ),
         COMPOSE: compose(project, dev, ardt_source=ardt_source, image=dev.image),
         COMPOSE_HOST: host_overlay(host),
         DEVCONTAINER: devcontainer(project, dev, prof),
@@ -513,7 +547,7 @@ def build(
         ),
     }
     if prof.cpp_properties:
-        files[CPP_PROPERTIES] = cpp_properties(prof, distro)
+        files[CPP_PROPERTIES] = cpp_properties(prof, distro, overlays)
     shared = tuple(v for v in SHARED_VOLUMES if dev.claude_code or v != CLAUDE_VOLUME)
     return Render(
         files=files,
@@ -525,6 +559,7 @@ def build(
         ardt_source=ardt_source,
         requirements=reqs,
         image=dev.image,
+        overlays=overlays,
         shared_volumes=shared,
         colcon_volume=(
             f"{compose_project(project)}_{COLCON_VOLUME}" if dev.isolate_build_dirs else None
