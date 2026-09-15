@@ -615,13 +615,13 @@ def test_overlays_follow_the_ros_tasks_into_the_dev_shell_and_intellisense() -> 
     """The parity rule for the environment: what `ardt build` sources, the dev
     shell sources too, in the same order, and clangd sees it before the distro."""
     cfg = ArdtConfig.model_validate(
-        {"tasks": {"ros": {"overlays": ["/opt/aos/sdk", "/opt/vendor"]}}}
+        {"tasks": {"ros": {"overlays": ["/opt/acme/sdk", "/opt/vendor"]}}}
     )
-    assert ros_overlays(cfg) == ("/opt/aos/sdk", "/opt/vendor")
+    assert ros_overlays(cfg) == ("/opt/acme/sdk", "/opt/vendor")
     rendered = plan(cfg)
     dockerfile = rendered.files[render_module.DOCKERFILE]
     distro_line = dockerfile.index("/opt/ros/$ROS_DISTRO/setup.bash")
-    sdk_line = dockerfile.index("'. /opt/aos/sdk/local_setup.bash'")
+    sdk_line = dockerfile.index("'. /opt/acme/sdk/local_setup.bash'")
     vendor_line = dockerfile.index("'. /opt/vendor/local_setup.bash'")
     workspace_line = dockerfile.index("install/setup.bash ]")
     assert distro_line < sdk_line < vendor_line < workspace_line
@@ -629,9 +629,9 @@ def test_overlays_follow_the_ros_tasks_into_the_dev_shell_and_intellisense() -> 
     include = json.loads(rendered.files[render_module.CPP_PROPERTIES])["configurations"][0][
         "includePath"
     ]
-    assert include.index("/opt/aos/sdk/*/include/**") < include.index("/opt/ros/jazzy/include/**")
+    assert include.index("/opt/acme/sdk/*/include/**") < include.index("/opt/ros/jazzy/include/**")
     assert include.index("${workspaceFolder}/install/*/include/**") < include.index(
-        "/opt/aos/sdk/*/include/**"
+        "/opt/acme/sdk/*/include/**"
     )
 
 

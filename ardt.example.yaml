@@ -59,7 +59,7 @@ tasks:
   ros:
     distro: jazzy
     # source_base: /opt/ros # prefix sourced before colcon runs ({distro} appended)
-    # overlays: [/opt/aos/sdk] # install spaces layered on the distro: their
+    # overlays: [/opt/acme/sdk] # install spaces layered on the distro: their
     #                           # local_setup.bash, sourced in this order after it
     # repos_file: my_robot.repos # imported by `ardt deps` before rosdep runs;
     #                            # default: `<project>.repos` when it exists,
