@@ -78,11 +78,42 @@ class TestInstallKnobs:
         assert section.install_skip == ["ardt-ros-pipelines"]
 
 
+class TestRunningRelease:
+    def test_release_build_names_its_tag(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(dist, "installed", lambda _: "1.2.0")
+        assert dist.running_release() == "v1.2.0"
+
+    @pytest.mark.parametrize("version", ["1.2.1.dev3+gabc1234", "1.2.0+dirty", dist.UNKNOWN])
+    def test_dev_build_has_no_tag(self, monkeypatch: pytest.MonkeyPatch, version: str) -> None:
+        monkeypatch.setattr(dist, "installed", lambda _: version)
+        assert dist.running_release() is None
+
+
 class TestRequirement:
-    def test_default_tracks_monorepo_head(self) -> None:
-        assert dist.DistConfig().requirement("ardt-core") == (
+    @pytest.fixture(autouse=True)
+    def _dev_ardt(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(dist, "installed", lambda _: "1.2.1.dev3+gabc1234")
+
+    def test_dev_ardt_without_pin_tracks_monorepo_head(self) -> None:
+        section = dist.DistConfig()
+        assert section.effective_version is None
+        assert section.requirement("ardt-core") == (
             f"ardt-core @ {dist.ARDT_GIT}#subdirectory=packages/ardt-core"
         )
+
+    def test_released_ardt_without_pin_installs_itself(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(dist, "installed", lambda _: "1.2.0")
+        section = dist.DistConfig()
+        assert section.effective_version == "v1.2.0"
+        assert section.requirement("ardt-core") == (
+            f"ardt-core @ {dist.ARDT_GIT}@v1.2.0#subdirectory=packages/ardt-core"
+        )
+
+    def test_explicit_pin_beats_the_running_release(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(dist, "installed", lambda _: "1.2.0")
+        assert "@v9#" in dist.DistConfig(version="v9").requirement("ardt-core")
 
     def test_section_version_pins_every_monorepo_module(self) -> None:
         section = dist.DistConfig(version="v1.2.0")

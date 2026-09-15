@@ -8,4 +8,4 @@ The container a developer works in and the image CI builds must not drift. Five 
 - **the first step**: `ardt dev bootstrap` runs the recipe's first step, `ardt deps`;
 - **the environment**: the dev shell sources what the tasks source, `/opt/ros/<distro>/setup.bash` then each `tasks.ros.overlays` entry's `local_setup.bash` in order, before the workspace; `c_cpp_properties.json` lists the overlay include paths between the workspace and the distro. `ardt dev doctor` reports the overlays and, inside the container, fails when one has no `local_setup.bash`.
 
-`ardt dev doctor` also warns when `ardt.version` is unpinned: a recipe is only reproducible when the ardt inside it is.
+`ardt dev doctor` also reports the ardt pin: `ardt.version` when set, else the release of the running ardt (a released ardt installs itself inside the images it renders). It warns only when a dev build of ardt renders without a pin: that recipe tracks HEAD and is not reproducible.
