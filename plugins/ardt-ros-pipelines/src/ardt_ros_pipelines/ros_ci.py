@@ -23,8 +23,8 @@ idea: **building the image is the CI run**. The image recipe (owned by
 
 1. ``ardt deps``   — rosdep install          (stage ``build``)
 2. ``ardt build``  — colcon build            (stage ``build``)
-3. ``ardt test``   — no network; a red test stages its exit code (stage ``test``, forked from ``build``)
-4. stage the JUnit XMLs at a fixed path      (stage ``test``)
+3. ``ardt test``   — no network, exit code staged   (stage ``test``, forked from ``build``)
+4. stage the JUnit XMLs and logs at a fixed path (stage ``test``)
 5. the shipped runtime image (``FROM base_image`` + repo's extra layers,
    forked from ``build`` — deliberately NOT from ``test``)
 
