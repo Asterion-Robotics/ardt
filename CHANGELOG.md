@@ -4,6 +4,10 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 
 ## Unreleased
 
+### Fixed
+
+- `ros-ci`: a red test no longer fails the image layer that runs the tests, which exported nothing; the test step stages the exit code of `ardt test` beside the results (`pipeline-reports/test-exit-code`), the results are exported, and the pipeline then fails on that code, so a failed run's JUnit report reaches the job. Logs a test writes beside its XML (`build/**/test_results/**/*.log`) are exported with it.
+
 ## [0.5.3] - 2026-09-15
 
 ### Changed

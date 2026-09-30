@@ -70,6 +70,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from ardt_core.context import Context
 from ardt_core.dist import DistConfig
+from ardt_core.errors import ArdtError
 from ardt_pipelines import pipeline, std
 
 from . import recipes
@@ -235,9 +236,11 @@ async def ros_ci(
     context, rendered = _build_context(ctx, dag, cfg, ardt_source)
 
     # Steps 1-4: the `test` target runs ardt deps/build/test as layers, on the
-    # native platform only. A red test is a failed image build — there is no
-    # separate test phase, and no other platform re-runs the suite: the
-    # runtime targets below fork from `build`, upstream of the tests.
+    # native platform only. A red test does not fail the image build: the test
+    # layer stages its exit code with the results, so the reports of a red run
+    # are exported below before the pipeline fails on it. There is no separate
+    # test phase, and no other platform re-runs the suite: the runtime targets
+    # below fork from `build`, upstream of the tests.
     test_stage = context.docker_build(
         dockerfile=recipes.RENDERED_NAME, target=recipes.TEST_TARGET, secrets=secrets, ssh=ssh
     )
@@ -261,11 +264,19 @@ async def ros_ci(
     (export_dir / ".gitignore").write_text(
         "# Automatically created by ardt.\n*\n", encoding="utf-8"
     )
+    exit_file = export_dir / recipes.TEST_EXIT_FILE
+    test_exit = exit_file.read_text(encoding="utf-8").strip() if exit_file.is_file() else "unknown"
+    tests_ok = test_exit == "0"
     ctx.emit(
         junit_dir=JUNIT_EXPORT_DIR,
-        tests_ok=True,
+        tests_ok=tests_ok,
         rendered_dockerfile=f"{JUNIT_EXPORT_DIR}/{recipes.RENDERED_NAME}",
     )
+    if not tests_ok:
+        raise ArdtError(
+            f"tests failed: `ardt test` exited {test_exit}; the JUnit reports and the logs beside "
+            f"them are in {JUNIT_EXPORT_DIR}/, nothing was built past the tests"
+        )
 
     # Step 5: the runtime target — built even without --publish so a broken
     # runtime stage fails the MR run, published only on --publish.

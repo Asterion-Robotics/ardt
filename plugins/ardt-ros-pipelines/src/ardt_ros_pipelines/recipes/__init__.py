@@ -62,6 +62,8 @@ runtime image depends on it — when ``runtime`` copied from a stage ending in
 QEMU."""
 RUNTIME_TARGET = "runtime"
 RESULTS_DIR = "/results"
+# Written by the test stage beside the results: the exit code of `ardt test`.
+TEST_EXIT_FILE = "test-exit-code"
 """Where the test stage places JUnit XMLs (fixed contract with the pipeline)."""
 
 BASE_EXT_STAGE = "base-ext"

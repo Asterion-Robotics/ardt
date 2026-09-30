@@ -92,6 +92,52 @@ def test_ros_ci_end_to_end_on_a_fixture_package(repo: Path) -> None:
         subprocess.run(["docker", "rmi", *loaded], check=False, capture_output=True)
 
 
+def test_a_red_test_fails_the_pipeline_after_its_reports_are_exported(repo: Path) -> None:
+    """A red test is read, not guessed: the JUnit XML and the exit code land in
+    pipeline-reports/ first, then the pipeline fails on them, and no runtime image
+    is built."""
+    from ardt_core.errors import ArdtError
+    from ardt_core.testing import git
+    from ardt_ros_pipelines.ros_ci import ros_ci
+
+    (repo / "ardt.yaml").write_text("tasks:\n  ros:\n    distro: jazzy\n")
+    (repo / "package.xml").write_text(
+        '<?xml version="1.0"?>\n'
+        '<package format="3">\n'
+        "  <name>demo_pkg</name><version>0.0.1</version>\n"
+        "  <description>ardt integration fixture</description>\n"
+        '  <maintainer email="t@example.com">T</maintainer><license>Apache-2.0</license>\n'
+        "  <buildtool_depend>ament_python</buildtool_depend>\n"
+        "  <test_depend>python3-pytest</test_depend>\n"
+        "  <export><build_type>ament_python</build_type></export>\n"
+        "</package>\n"
+    )
+    (repo / "setup.py").write_text(
+        "from setuptools import setup\n"
+        "setup(name='demo_pkg', version='0.0.1', packages=[], tests_require=['pytest'],\n"
+        "      data_files=[('share/ament_index/resource_index/packages',\n"
+        "                   ['resource/demo_pkg']), ('share/demo_pkg', ['package.xml'])])\n"
+    )
+    (repo / "resource").mkdir()
+    (repo / "resource" / "demo_pkg").write_text("")
+    (repo / "test").mkdir()
+    (repo / "test" / "test_red.py").write_text(
+        "def test_red() -> None:\n    assert False, 'red on purpose'\n"
+    )
+    git("add", "-A", cwd=repo)
+    git("commit", "-qm", "fixture package with a red test", cwd=repo)
+
+    ctx = Context.build(cwd=repo, registry=Registry(plugins=[], problems=[]))
+    with pytest.raises(ArdtError, match="tests failed"):
+        run_pipeline(ctx, ros_ci, ros_ci.bind({"ardt_source": str(ARDT_ROOT)}))
+
+    assert ctx.emitted["tests_ok"] is False
+    reports = repo / "pipeline-reports"
+    assert (reports / "test-exit-code").read_text().strip() != "0"
+    assert list(reports.rglob("*.xml")), "the red run's JUnit results were not staged"
+    assert "loaded" not in ctx.emitted, "no image is built past a red test"
+
+
 def test_trivial_pipeline_against_real_engine(repo: Path) -> None:
     @pipeline(name="trivial", doc="echo in alpine")
     async def trivial(ctx: Context, dag, message: str = "hello") -> None:
