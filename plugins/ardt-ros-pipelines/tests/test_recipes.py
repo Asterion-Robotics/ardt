@@ -77,6 +77,12 @@ def test_a_red_test_stages_its_exit_code_instead_of_failing_the_layer(tmp_path: 
     assert "RUN ardt test" not in rendered
 
 
+def test_the_tests_run_without_network(tmp_path: Path) -> None:
+    """Two jobs' tests on one engine would share its loopback and a ROS graph with it."""
+    rendered = render(tmp_path)
+    assert "RUN --network=none (ardt test --install-base" in rendered
+
+
 def test_no_placeholders_survive(tmp_path: Path) -> None:
     """Legit `@`s exist (pip's `pkg @ url`, the entrypoint's `"$@"`) — only the
     render's own @UPPER_CASE@ tokens must be gone."""

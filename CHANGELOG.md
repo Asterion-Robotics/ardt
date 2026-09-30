@@ -4,6 +4,10 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 
 ## Unreleased
 
+### Changed
+
+- `ros-ci`: the test stage runs with `--network=none`. Two jobs' tests on one engine shared its loopback, and a ROS graph with it, so one job's nodes answered the other's requests; a test now sees its own loopback only.
+
 ### Fixed
 
 - `ros-ci`: a red test no longer fails the image layer that runs the tests, which exported nothing; the test step stages the exit code of `ardt test` beside the results (`pipeline-reports/test-exit-code`), the results are exported, and the pipeline then fails on that code, so a failed run's JUnit report reaches the job. Logs a test writes beside its XML (`build/**/test_results/**/*.log`) are exported with it.
