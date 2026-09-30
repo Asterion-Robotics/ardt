@@ -28,7 +28,7 @@ The Dagger SDK is imported only when a run actually begins. `ardt pipe list`, `-
 
 ## Artifacts
 
-Reports and exported files land under `pipeline-reports/` at the project root, a fixed convention so nothing needs per-repo wiring. `pipeline-reports/Dockerfile.rendered` is the ardt-free escape hatch: `docker build -f pipeline-reports/Dockerfile.rendered .` reproduces the image on a machine with nothing installed.
+Reports and exported files land under `pipeline-reports/` at the project root, a fixed convention so nothing needs per-repo wiring: the JUnit XMLs and the logs staged beside them, `test-exit-code` (the exit code of the test step, on which a run fails after the export), and the rendered recipe. `pipeline-reports/Dockerfile.rendered` is the ardt-free escape hatch: `docker build -f pipeline-reports/Dockerfile.rendered .` reproduces the image on a machine with nothing installed but Docker with BuildKit (the default since Docker 23.0; the recipe's test step uses `RUN --network=none`, which the legacy builder rejects).
 
 ## Engine
 

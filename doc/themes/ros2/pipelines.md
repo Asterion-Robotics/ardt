@@ -20,9 +20,10 @@ ardt pipe run ros-ci
 ├─ build the `build` target        FROM pipelines.ros_ci.builder
 │     1) ardt deps                 ← the same tasks, config and flags
 │     2) ardt build                  as on a dev machine (two-plane rule)
-│     3) ardt test                 ← red tests = failed image build
-│     4) stage JUnit XMLs at /results
+│     3) ardt test                 ← no network; a red test stages its exit code
+│     4) stage JUnit XMLs + logs at /results
 │     └─ exported → pipeline-reports/                 ← CI renders these
+│        then the run fails on a red exit code, nothing built past it
 │
 └─ build the `runtime` target
      5a) FROM base_image (⊕ the repo's base extension, if any)
@@ -36,6 +37,16 @@ ardt pipe run ros-ci
 ```
 
 Step 5b runs in the *runtime* stage, not the build stage, and it is raw `rosdep` rather than `ardt deps`. Both are deliberate. The runtime image starts from `base_image` alone, so everything rosdep installed into the builder is absent from it; and what it needs is the **exec** closure only, resolved from the install base it just copied, not the build and test dependencies `ardt deps` resolves from the source tree. There is no source tree and no ardt in the runtime image, and putting either there would ship a toolchain with the app. An unresolvable key fails the image build, which is the earliest moment it can be caught.
+
+## The test stage: no network, and what a red test leaves
+
+Step 3 runs with `RUN --network=none`. For that one step, the container has no network interface but its loopback: no route out, no DNS, no reach to the engine, the runner, a registry or another job's container. Processes started by the tests still talk to each other over `127.0.0.1` and shared memory, so a suite that launches ROS 2 nodes and drives them keeps working, discovery included (measured on a suite that launches a control stack and `move_group` beside the test binary). The steps before and after keep their network: `ardt deps` in step 1 installs everything the tests need, and step 5b's `rosdep` runs in the runtime stage.
+
+The reason is the persistent engine: two jobs building on it share its network, and a ROS 2 graph with it, so one job's nodes answered the other's requests and both went red for nothing in their code. A test that needs the network at test time (a download, a real service, a broker) fails under this rule by design: install what it needs in the deps stage, or stub the service; a suite that reaches out of its container is testing something other than the repo.
+
+A red test does not fail the image layer: step 3 records the exit code of `ardt test` in `/results/test-exit-code`, step 4 stages the JUnit XMLs and any `*.log` a test wrote under `test_results/` beside them (a launched process's output, a trace), the run exports `pipeline-reports/`, and only then fails on the exit code, with nothing built past the tests. A failed layer exports nothing, and a failure nobody can read is what the reports exist for. CI keeps `pipeline-reports/` as an artifact with `when: always` and renders the XMLs as a JUnit report.
+
+`RUN --network=none` is a BuildKit Dockerfile feature: the rendered escape hatch (`docker build -f pipeline-reports/Dockerfile.rendered .`) needs BuildKit, which Docker uses by default since 23.0; the legacy builder rejects the flag.
 
 ## Configuration
 
