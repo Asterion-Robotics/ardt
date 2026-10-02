@@ -65,6 +65,10 @@ RESULTS_DIR = "/results"
 # Written by the test stage beside the results: the exit code of `ardt test`.
 TEST_EXIT_FILE = "test-exit-code"
 """Where the test stage places JUnit XMLs (fixed contract with the pipeline)."""
+TEST_RUN_ARG = "ARDT_TEST_RUN"
+"""Build arg declared right before the test step and given a fresh value by
+every pipeline run. The test layer succeeds whatever the tests say, so without
+it BuildKit caches a red result and a retry replays it instead of testing."""
 
 BASE_EXT_STAGE = "base-ext"
 """Stage name given to a repo's base extension in the rendered recipe."""

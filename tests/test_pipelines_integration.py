@@ -134,8 +134,19 @@ def test_a_red_test_fails_the_pipeline_after_its_reports_are_exported(repo: Path
     assert ctx.emitted["tests_ok"] is False
     reports = repo / "pipeline-reports"
     assert (reports / "test-exit-code").read_text().strip() != "0"
-    assert list(reports.rglob("*.xml")), "the red run's JUnit results were not staged"
+    xmls = sorted(reports.rglob("*.xml"))
+    assert xmls, "the red run's JUnit results were not staged"
     assert "loaded" not in ctx.emitted, "no image is built past a red test"
+
+    # A retry on the same sources runs the tests again: the test layer succeeded,
+    # so only the per-run arg keeps BuildKit from replaying the cached red result.
+    first = {p.relative_to(reports): p.read_bytes() for p in xmls}
+    retry = Context.build(cwd=repo, registry=Registry(plugins=[], problems=[]))
+    with pytest.raises(ArdtError, match="tests failed"):
+        run_pipeline(retry, ros_ci, ros_ci.bind({"ardt_source": str(ARDT_ROOT)}))
+    second = {p.relative_to(reports): p.read_bytes() for p in sorted(reports.rglob("*.xml"))}
+    assert second.keys() == first.keys()
+    assert second != first, "the retry replayed the cached red result instead of testing"
 
 
 def test_trivial_pipeline_against_real_engine(repo: Path) -> None:
