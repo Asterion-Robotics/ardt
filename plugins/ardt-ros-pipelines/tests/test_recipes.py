@@ -83,6 +83,17 @@ def test_the_tests_run_without_network(tmp_path: Path) -> None:
     assert "RUN --network=none (ardt test --install-base" in rendered
 
 
+def test_the_test_layer_is_keyed_by_a_per_run_arg(tmp_path: Path) -> None:
+    """The test layer always succeeds, so BuildKit caches a red result like a green
+    one: a per-run ARG right before it makes every run execute the tests, and only
+    the test stage pays for it (deps and build stay cached)."""
+    rendered = render(tmp_path)
+    test_stage = rendered.split("AS test\n", 1)[1]
+    arg = test_stage.index(f"ARG {recipes.TEST_RUN_ARG}\n")
+    assert arg < test_stage.index("RUN --network=none (ardt test")
+    assert f"ARG {recipes.TEST_RUN_ARG}" not in rendered.split("AS test\n", 1)[0]
+
+
 def test_no_placeholders_survive(tmp_path: Path) -> None:
     """Legit `@`s exist (pip's `pkg @ url`, the entrypoint's `"$@"`) — only the
     render's own @UPPER_CASE@ tokens must be gone."""

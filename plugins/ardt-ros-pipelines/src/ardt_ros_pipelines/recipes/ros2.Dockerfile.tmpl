@@ -96,7 +96,12 @@ FROM build AS test
 # results exist for (same install base as the build). No network: the tests
 # of two jobs on one engine otherwise share its loopback, and a ROS graph
 # with it, so one job's nodes answer the other's; a test that needs the
-# network is a test of something else.
+# network is a test of something else. The pipeline gives ARDT_TEST_RUN a
+# fresh value per run: this layer succeeds whatever the tests say, so without it
+# a red result is cached and a retry replays it instead of testing. Only this
+# stage pays (deps and build stay cached); a plain `docker build` leaves it
+# empty and caches as before.
+ARG ARDT_TEST_RUN
 RUN --network=none (ardt test --install-base @INSTALL_BASE@; code=$?; mkdir -p /results; echo $code > /results/test-exit-code)
 # 4) stage the JUnit XMLs where the pipeline (or a human) can copy them from
 # (colcon's build base is at the workspace root, not inside the repo). Two

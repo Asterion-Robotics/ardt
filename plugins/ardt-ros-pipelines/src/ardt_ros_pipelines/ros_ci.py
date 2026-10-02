@@ -62,6 +62,7 @@ from __future__ import annotations
 
 import asyncio
 import platform
+import uuid
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -240,9 +241,15 @@ async def ros_ci(
     # layer stages its exit code with the results, so the reports of a red run
     # are exported below before the pipeline fails on it. There is no separate
     # test phase, and no other platform re-runs the suite: the runtime targets
-    # below fork from `build`, upstream of the tests.
+    # below fork from `build`, upstream of the tests. A fresh test-run arg makes
+    # every run execute the tests: the test layer never fails, so a cached one
+    # would replay a red result on retry.
     test_stage = context.docker_build(
-        dockerfile=recipes.RENDERED_NAME, target=recipes.TEST_TARGET, secrets=secrets, ssh=ssh
+        dockerfile=recipes.RENDERED_NAME,
+        target=recipes.TEST_TARGET,
+        build_args=[dagger.BuildArg(recipes.TEST_RUN_ARG, uuid.uuid4().hex)],
+        secrets=secrets,
+        ssh=ssh,
     )
     await test_stage.sync()
 
