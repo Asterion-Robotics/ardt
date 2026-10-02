@@ -4,6 +4,8 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 
 ## Unreleased
 
+## [0.5.5] - 2026-10-02
+
 ### Fixed
 
 - `ros-ci`: a retry runs the tests again instead of replaying a cached red result. Since 0.5.4 the test layer succeeds whatever the tests say, so BuildKit cached a red run and a retry on the same sources replayed its reports in seconds. The test stage now declares an `ARDT_TEST_RUN` build arg the pipeline sets to a fresh value per run; only the test stage reruns, deps and build stay cached. A `main` or tag pipeline on the tree its MR already tested now runs the suite again.
