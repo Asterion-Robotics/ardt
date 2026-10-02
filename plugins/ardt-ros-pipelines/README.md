@@ -14,9 +14,10 @@ ardt pipe run ros-ci
 ├─ build the `build` target        FROM pipelines.ros_ci.builder
 │     1) ardt deps                 ← the same tasks, config and flags
 │     2) ardt build                  as on a dev machine (two-plane rule)
-│     3) ardt test                 ← red tests = failed image build
-│     4) stage JUnit XMLs at /results
+│     3) ardt test                 ← no network; a red test stages its exit code
+│     4) stage JUnit XMLs + logs at /results
 │     └─ exported → pipeline-reports/                 ← CI renders these
+│        then the run fails on a red exit code, nothing built past it
 │
 └─ build the `runtime` target
       5) FROM base_image (⊕ the repo's base extension, if any)

@@ -90,14 +90,21 @@ RUN mkdir -p /opt/runtime-manifests && cd /ws \
 # the runtime images below fork from `build` directly. ----
 FROM build AS test
 
-# 3) test — red tests fail this target's build (same install base as the build)
-RUN ardt test --install-base @INSTALL_BASE@
+# 3) test — a red test does not fail this layer: its exit code is staged with
+# the results, and the pipeline fails on it once the results are exported. A
+# failed layer exports nothing, and a failure nobody can read is what the
+# results exist for (same install base as the build). No network: the tests
+# of two jobs on one engine otherwise share its loopback, and a ROS graph
+# with it, so one job's nodes answer the other's; a test that needs the
+# network is a test of something else.
+RUN --network=none (ardt test --install-base @INSTALL_BASE@; code=$?; mkdir -p /results; echo $code > /results/test-exit-code)
 # 4) stage the JUnit XMLs where the pipeline (or a human) can copy them from
 # (colcon's build base is at the workspace root, not inside the repo). Two
 # layouts: ament_cmake writes <pkg>/test_results/<pkg>/*.xml, colcon's pytest
-# step writes <pkg>/pytest.xml — the grouped find matches both.
-RUN mkdir -p /results && cd /ws/build \
- && (find . \( -path '*test_results*' -name '*.xml' -o -name 'pytest.xml' \) -exec cp --parents -t /results {} +)
+# step writes <pkg>/pytest.xml — the grouped find matches both. A log a test
+# wrote beside its XML (a launched process's output, a trace) ships with it.
+RUN cd /ws/build \
+ && (find . \( -path '*test_results*' \( -name '*.xml' -o -name '*.log' \) -o -name 'pytest.xml' \) -exec cp --parents -t /results {} +)
 @STRIP@@BASE_EXT@
 # ---- step 5: the shipped runtime image ----
 FROM @RUNTIME_FROM@ AS runtime

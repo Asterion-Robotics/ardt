@@ -62,7 +62,25 @@ def test_staging_matches_both_junit_layouts(tmp_path: Path) -> None:
     <pkg>/pytest.xml with no test_results component — the staging find must
     match both, or ament_python results silently vanish from the reports."""
     rendered = render(tmp_path)
-    assert "-path '*test_results*' -name '*.xml' -o -name 'pytest.xml'" in rendered
+    assert (
+        "-path '*test_results*' \\( -name '*.xml' -o -name '*.log' \\) -o -name 'pytest.xml'"
+        in rendered
+    )
+
+
+def test_a_red_test_stages_its_exit_code_instead_of_failing_the_layer(tmp_path: Path) -> None:
+    """A failed layer exports nothing: the test step records `ardt test`'s exit code
+    beside the results, and the pipeline fails on it after the export."""
+    rendered = render(tmp_path)
+    assert "(ardt test --install-base" in rendered
+    assert "echo $code > /results/test-exit-code" in rendered
+    assert "RUN ardt test" not in rendered
+
+
+def test_the_tests_run_without_network(tmp_path: Path) -> None:
+    """Two jobs' tests on one engine would share its loopback and a ROS graph with it."""
+    rendered = render(tmp_path)
+    assert "RUN --network=none (ardt test --install-base" in rendered
 
 
 def test_no_placeholders_survive(tmp_path: Path) -> None:
