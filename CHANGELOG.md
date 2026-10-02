@@ -4,6 +4,8 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 
 ## Unreleased
 
+## [0.5.4] - 2026-10-02
+
 ### Changed
 
 - `ros-ci`: the test stage runs with `--network=none`. Two jobs' tests on one engine shared its loopback, and a ROS graph with it, so one job's nodes answered the other's requests; a test now sees its own loopback only.
