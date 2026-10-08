@@ -31,7 +31,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked,id=apt-cache-${TARGE
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked,id=apt-lists-${TARGETARCH} \
     rm -f /etc/apt/apt.conf.d/docker-clean \
  && apt-get update && apt-get install -y --no-install-recommends \
-      build-essential git python3-pip openssh-client
+      build-essential git python3-pip python3-venv openssh-client
 
 # The same ardt tasks as on a dev machine run the build (two-plane rule).
 @ARDT_INSTALL@

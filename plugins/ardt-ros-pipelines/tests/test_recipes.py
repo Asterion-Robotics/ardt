@@ -255,6 +255,21 @@ def test_git_install_by_default(tmp_path: Path) -> None:
     assert recipes.LOCAL_ARDT_DIR not in rendered
 
 
+@pytest.mark.parametrize("local_ardt", [False, True])
+def test_ardt_installs_in_its_own_venv(tmp_path: Path, local_ardt: bool) -> None:
+    """ardt and its Python dependencies never touch the base image's distro
+    packages: pip cannot uninstall a Debian-installed module (no RECORD file),
+    so a dependency newer than the distro's failed the build. Only the `ardt`
+    command is exposed; rosdep, pip keys and colcon stay on the system Python."""
+    rendered = render(tmp_path, local_ardt=local_ardt)
+    install = rendered[rendered.index("python3 -m venv") : rendered.index("WORKDIR")]
+    assert f"python3 -m venv {recipes.ARDT_VENV}" in install
+    assert f"{recipes.ARDT_VENV}/bin/pip install" in install
+    assert f"ln -sf {recipes.ARDT_VENV}/bin/ardt /usr/local/bin/ardt" in install
+    assert "--break-system-packages" not in install
+    assert "python3-venv" in rendered[: rendered.index("python3 -m venv")]
+
+
 def test_pinned_requirements_render_verbatim(tmp_path: Path) -> None:
     pinned = (
         "ardt-core @ git+https://example.com/ardt.git@v1.2.0#subdirectory=packages/ardt-core",

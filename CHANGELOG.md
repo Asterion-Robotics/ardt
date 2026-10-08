@@ -4,6 +4,10 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 
 ## Unreleased
 
+### Fixed
+
+- `ros-ci`: the build stage installs ardt in a venv of its own (`/opt/ardt`, the `ardt` command linked into `/usr/local/bin`) instead of `pip install --break-system-packages` into the base image's Python. pip cannot uninstall a Debian-installed module (no RECORD file), so a dependency newer than the distro's broke every uncached build: pydantic-core 2.50.0 requires typing-extensions 4.16 over Ubuntu's 4.15. rosdep, its pip keys and colcon still run on the system Python.
+
 ## [0.5.5] - 2026-10-02
 
 ### Fixed

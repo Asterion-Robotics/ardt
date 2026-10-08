@@ -93,17 +93,30 @@ GIT_TOKEN_SECRET = std.GIT_TOKEN_SECRET
 ``ardt_pipelines.std.git_credentials``."""
 
 
+ARDT_VENV = "/opt/ardt"
+"""Where the build stage installs ardt: a venv of its own, so its Python
+dependencies never replace the base image's distro packages (pip cannot
+uninstall a Debian-installed module). Only the ``ardt`` command is linked onto
+PATH: rosdep, its pip keys and colcon keep running on the system Python."""
+
+
+def _venv_install(packages: str) -> str:
+    return (
+        f"RUN python3 -m venv {ARDT_VENV} \\\n"
+        f" && {ARDT_VENV}/bin/pip install --no-cache-dir \\\n      {packages} \\\n"
+        f" && ln -sf {ARDT_VENV}/bin/ardt /usr/local/bin/ardt"
+    )
+
+
 def _git_install(requirements: Sequence[str]) -> str:
-    specs = " \\\n      ".join(f'"{r}"' for r in requirements)
-    return f"RUN python3 -m pip install --break-system-packages \\\n      {specs}"
+    return _venv_install(" \\\n      ".join(f'"{r}"' for r in requirements))
 
 
 def _local_install() -> str:
     paths = " ".join(dist.local_requirement(m, "/opt/ardt-src") for m in ARDT_MODULES)
     return (
         "# dev mode: ardt injected from a local checkout instead of the configured git\n"
-        f"COPY {LOCAL_ARDT_DIR} /opt/ardt-src\n"
-        f"RUN python3 -m pip install --break-system-packages \\\n      {paths}"
+        f"COPY {LOCAL_ARDT_DIR} /opt/ardt-src\n" + _venv_install(paths)
     )
 
 
