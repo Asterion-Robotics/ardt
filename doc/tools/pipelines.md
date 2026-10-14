@@ -56,4 +56,55 @@ docker buildx rm --keep-state ardt              # remove the builder, keep its c
 docker buildx rm ardt                           # remove the builder and its cache: a full reset
 ```
 
-A different ceiling, a registry mirror or an insecure registry go into the daemon's configuration: `docker buildx rm --keep-state ardt`, then `docker buildx create --name ardt --driver docker-container --buildkitd-config <your buildkitd.toml>`; ardt reattaches to a builder of that name whatever created it. On a CI runner the same builder is shared by every job that uses the host's Docker socket, so its ceiling is sized for the runner's disk, and a job needs no setup beyond the registry login.
+### Sizing the cache yourself
+
+The ceiling is a property of the builder, so it is set once per host where the builder is created, never per repository or per run. It lives in BuildKit's [`buildkitd.toml`](https://docs.docker.com/build/buildkit/toml-configuration/), section `[worker.oci]`. The simple shape, one ceiling for everything:
+
+```toml
+[worker.oci]
+  gc = true
+  maxUsedSpace = "40GB"    # prune until the cache is under this
+  minFreeSpace = "10%"     # and until the disk keeps at least this much free
+  # reservedSpace = "10GB" # never prune below this, even when the disk is tight
+```
+
+The fine shape, ordered rules where the first match wins, to keep the apt and ccache mounts longer than the layers:
+
+```toml
+[worker.oci]
+  gc = true
+
+  [[worker.oci.gcpolicy]]
+    filters = ["type==exec.cachemount"]   # the cache mounts: a month, up to 10 GB
+    keepDuration = "720h"
+    maxUsedSpace = "10GB"
+
+  [[worker.oci.gcpolicy]]                 # everything else: a week, up to 40 GB
+    keepDuration = "168h"
+    maxUsedSpace = "40GB"
+    minFreeSpace = "10%"
+```
+
+Sizes take a byte count, a unit (`"512MB"`) or a percentage of the disk; `docker buildx inspect ardt` prints the rules in force as `GC Policy rule#N`, which is how to check what a builder runs.
+
+**Locally**, recreate the builder with your file and keep its cache:
+
+```bash
+docker buildx rm --keep-state ardt
+docker buildx create --name ardt --driver docker-container \
+  --driver-opt image=moby/buildkit:v0.33.1 \
+  --buildkitd-config ~/.config/ardt/buildkitd.toml --bootstrap
+```
+
+ardt reattaches to any builder named `ardt`, so what you created wins over its default from then on.
+
+**On a CI runner**, the builder is host infrastructure: created once by whatever provisions the runner, as the user the jobs run as, sized for that disk, and capped so a build cannot starve the runner's other jobs. Jobs reattach to it and need nothing beyond the registry login.
+
+```bash
+docker buildx create --name ardt --driver docker-container \
+  --driver-opt image=moby/buildkit:v0.33.1 \
+  --driver-opt memory=12g --driver-opt cpu-quota=600000 \
+  --buildkitd-config /etc/ardt/buildkitd.toml --bootstrap
+```
+
+A registry mirror or an insecure registry go into the same file. With a throwaway daemon per job there is no builder to size: the default rule applies to a cache that dies with the job, and the registry cache does the work.
