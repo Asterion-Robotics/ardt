@@ -20,7 +20,7 @@ ros = "ardt_ros_pipelines.ros_ci"
 ros2 = "ardt_ros_dev.profile:ROS2"
 ```
 
-Only `ardt.commands` loads at startup; the rest load on demand, and per group — resolving a dev profile never imports a pipeline module, so `ardt dev sync` never pays for Dagger.
+Only `ardt.commands` loads at startup; the rest load on demand, and per group — resolving a dev profile never imports a pipeline module, so `ardt dev sync` never pays for the pipeline plane.
 
 ```python
 # src/ardt_<theme>_tasks/__init__.py

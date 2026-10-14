@@ -23,9 +23,9 @@ Everything a developer actually runs arrives as a **plugin**, discovered through
 :align: center
 ```
 
-One plane holds the **tasks**, the commands that run where you type them. The other two each stand a container up and run those same tasks inside it: the pipeline plane for CI, driven by Dagger, and the devcontainer plane for the inner loop, driven by `docker compose`. Tasks never call either one back.
+One plane holds the **tasks**, the commands that run where you type them. The other two each stand a container up and run those same tasks inside it: the pipeline plane for CI, driven by docker buildx, and the devcontainer plane for the inner loop, driven by `docker compose`. Tasks never call either one back.
 
-That the two container planes run the *same* task plane, installed from the same `ardt:` pin, is what the parity rule is: the image CI builds and the container you work in cannot quietly diverge, and `ardt dev doctor` fails when they do. Core imports neither ROS nor Dagger, so the inner loop works with no engine installed.
+That the two container planes run the *same* task plane, installed from the same `ardt:` pin, is what the parity rule is: the image CI builds and the container you work in cannot quietly diverge, and `ardt dev doctor` fails when they do. Core imports neither ROS nor docker, so the inner loop works with no engine installed.
 
 The dotted boxes are the extension points. A plugin of your own joins the plane it contributes to through the same entry points the shipped ones use, and core is none the wiser ([extending ardt](extending.md)).
 

@@ -5,7 +5,7 @@ One page per distribution, one section per module. The pages autodoc the **insta
 | Distribution | Role |
 |---|---|
 | [`ardt-core`](ardt_core.md) | the CLI, the plugin loader, the context, the config |
-| [`ardt-pipelines`](ardt_pipelines.md) | the generic Dagger plane |
+| [`ardt-pipelines`](ardt_pipelines.md) | the generic pipeline plane (buildx executor) |
 | [`ardt-devcontainers`](ardt_devcontainers.md) | the devcontainer engine |
 | [`ardt-ros-tasks`](ardt_ros_tasks.md) / [`ardt-ros-pipelines`](ardt_ros_pipelines.md) / [`ardt-ros-dev`](ardt_ros_dev.md) | the ROS 2 theme |
 | [`ardt-doc-tasks`](ardt_doc_tasks.md) / [`ardt-doc-pipelines`](ardt_doc_pipelines.md) | the documentation theme |
