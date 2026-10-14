@@ -24,22 +24,22 @@ idea: **building the image is the CI run**. The image recipe (owned by
 1. ``ardt deps``   — rosdep install          (stage ``build``)
 2. ``ardt build``  — colcon build            (stage ``build``)
 3. ``ardt test``   — no network, exit code staged   (stage ``test``, forked from ``build``)
-4. stage the JUnit XMLs and logs at a fixed path (stage ``test``)
+4. stage the JUnit XMLs and logs at a fixed path (stage ``test``, exported through ``reports``)
 5. the shipped runtime image (``FROM base_image`` + repo's extra layers,
    forked from ``build`` — deliberately NOT from ``test``)
 
-— and the pipeline only orchestrates: render the recipe, build the ``test``
-target natively (which *is* deps/build/test — the CI gate), export the
-reports and the rendered Dockerfile, then build/publish the ``runtime``
-target per platform. ``runtime`` not depending on ``test`` is the point of
-the split: when it did, every foreign-arch runtime build re-ran the whole
-suite under QEMU. The escape hatch mirrors it:
-``docker build --target test`` proves a change, a plain ``docker build``
-produces the shipped image without re-running tests. **Repos own no
-Dockerfile**; they set the knobs in ``pipelines.ros_ci:``, and a repo that
-truly needs local image content extends the configured base with a small
-``base.Dockerfile`` (``FROM ${BASE_IMAGE}`` + its layers), spliced into the
-rendered recipe as a stage:
+— and the pipeline only orchestrates: render the recipe and a bake file,
+build the ``reports`` target natively (which *is* deps/build/test — the CI
+gate, exported with the rendered recipe into ``pipeline-reports/``), then
+build the ``runtime`` target for the selected platforms. ``runtime`` not
+depending on ``test`` is the point of the split: when it did, every
+foreign-arch runtime build re-ran the whole suite under QEMU. The escape
+hatch mirrors it: ``docker buildx bake -f pipeline-reports/bake.json reports``
+proves a change, ``... runtime`` produces the shipped image without re-running
+tests. **Repos own no Dockerfile**; they set the knobs in ``pipelines.ros_ci:``,
+and a repo that truly needs local image content extends the configured base
+with a small ``base.Dockerfile`` (``FROM ${BASE_IMAGE}`` + its layers), spliced
+into the rendered recipe as a stage:
 
 .. code-block:: yaml
 
@@ -51,28 +51,34 @@ rendered recipe as a stage:
         git_host: code.asterion-robotics.com   # private `.repos` deps need auth
         git_ssh_port: 5022
 
+Publishing: with every configured platform in one run, bake pushes one
+manifest list under the image name. A run narrowed to a subset (``--arg
+platforms=linux/arm64``, the one-job-per-platform CI layout) pushes its image
+by digest and records it under ``pipeline-reports/digests/``; ``ardt pipe
+merge`` turns the records into the tag once they sit together.
+
 The ardt installed inside the image comes from the repo's ``ardt:`` config
 section (:mod:`ardt_core.dist`): ``ardt.version`` when set, else the release of
 the ardt running this pipeline. ``--arg ardt_source=`` overrides it for one run:
-a directory injects a local checkout into the build; a ``git+…`` URL swaps the
-monorepo address.
+a directory becomes a named build context the recipe installs from; a
+``git+…`` URL swaps the monorepo address.
 """
 
 from __future__ import annotations
 
-import asyncio
 import platform
+import shutil
 import uuid
 from collections.abc import Sequence
 from pathlib import Path
 
-import dagger
 from pydantic import BaseModel, ConfigDict, Field
 
 from ardt_core.context import Context
 from ardt_core.dist import DistConfig
 from ardt_core.errors import ArdtError
 from ardt_pipelines import pipeline, std
+from ardt_pipelines.buildx import BAKE_FILE, Buildx, Target, render_bake
 
 from . import recipes
 
@@ -119,6 +125,10 @@ class RosCiConfig(BaseModel):
     git_token_user: str = "gitlab-ci-token"
     """Username the token authenticates as (GitLab job tokens require this
     literal; PATs accept any username, so the default serves both)."""
+    compression: str = "gzip"
+    """Layer compression of the published image: ``gzip`` (every consumer
+    reads it) or ``zstd`` (smaller and faster to unpack, needs a consumer on
+    containerd 1.6 or Docker 23 and later)."""
 
 
 class PipelinesSection(BaseModel):
@@ -133,13 +143,11 @@ def _config(ctx: Context) -> RosCiConfig:
     return ctx.cfg.section_as("pipelines", PipelinesSection).ros_ci
 
 
-def _git_credentials(
-    ctx: Context, dag: dagger.Client, cfg: RosCiConfig
-) -> tuple[list[dagger.Secret], dagger.Socket | None]:
+def _git_credentials(ctx: Context, cfg: RosCiConfig) -> std.Credentials:
     """The std credential plumbing, switched by the ``git_host`` knob."""
     if cfg.git_host is None:
-        return [], None
-    return std.git_credentials(dag, ctx, host=cfg.git_host)
+        return std.Credentials()
+    return std.git_credentials(ctx, host=cfg.git_host)
 
 
 def _rosdep_skip_keys(ctx: Context) -> tuple[str, ...]:
@@ -159,21 +167,16 @@ def _rosdep_skip_keys(ctx: Context) -> tuple[str, ...]:
 _NATIVE_PLATFORM = {"x86_64": "linux/amd64", "aarch64": "linux/arm64", "arm64": "linux/arm64"}
 
 
-def _native_variant(
-    platforms: list[str], variants: list[dagger.Container]
-) -> dagger.Container | None:
-    """The variant this machine can actually run, for ``--load``.
+def _native_platform(platforms: list[str]) -> str | None:
+    """The platform this machine can actually run, for ``--load``.
 
     A single-platform build is taken at face value; a multi-platform one picks
-    the variant matching the local architecture, or none.
+    the platform matching the local architecture, or none.
     """
-    if len(variants) == 1:
-        return variants[0]
+    if len(platforms) == 1:
+        return platforms[0]
     native = _NATIVE_PLATFORM.get(platform.machine())
-    for built_platform, variant in zip(platforms, variants, strict=True):
-        if built_platform == native:
-            return variant
-    return None
+    return native if native in platforms else None
 
 
 def _selected_platforms(cfg: RosCiConfig, override: Sequence[str]) -> list[str]:
@@ -181,7 +184,8 @@ def _selected_platforms(cfg: RosCiConfig, override: Sequence[str]) -> list[str]:
 
     The MR gate is the intended user: ``--arg platforms=linux/amd64`` skips
     the emulated arm64 build entirely, while the tag pipeline runs the config
-    default and publishes the full manifest list.
+    default and publishes the full manifest list, or one job per platform
+    pushes by digest for ``ardt pipe merge``.
     """
     return list(override) if override else list(cfg.platforms)
 
@@ -194,14 +198,9 @@ def _ardt_dist(ctx: Context, ardt_source: str) -> DistConfig:
     return section
 
 
-def _build_context(
-    ctx: Context, dag: dagger.Client, cfg: RosCiConfig, ardt_source: str
-) -> tuple[dagger.Directory, str]:
-    """The build context (source + rendered recipe) and the rendered text."""
-    src = std.source_dir(dag, ctx)
-
+def _render(ctx: Context, cfg: RosCiConfig, ardt_source: str) -> str:
     local_ardt = bool(ardt_source) and Path(ardt_source).is_dir()
-    rendered = recipes.render_ros2(
+    return recipes.render_ros2(
         builder=cfg.builder,
         base_image=cfg.base_image,
         project=ctx.project,
@@ -217,60 +216,160 @@ def _build_context(
         git_token_user=cfg.git_token_user,
         rosdep_skip_keys=_rosdep_skip_keys(ctx),
     )
-    context = src.with_new_file(recipes.RENDERED_NAME, rendered)
-    if local_ardt:
-        checkout = dag.host().directory(ardt_source, exclude=[".git", ".venv", "__pycache__"])
-        context = context.with_directory(recipes.LOCAL_ARDT_DIR, checkout)
-    return context, rendered
 
 
-@pipeline(name="ros-ci", doc="deps/build/test as image stages; publish the result on --publish")
-async def ros_ci(
-    ctx: Context,
-    dag: dagger.Client,
-    ardt_source: str = "",
-    platforms: list[str] = (),
-) -> None:
-    cfg = _config(ctx)
-    build_platforms = _selected_platforms(cfg, platforms)
-    secrets, ssh = _git_credentials(ctx, dag, cfg)
-    context, rendered = _build_context(ctx, dag, cfg, ardt_source)
+def _prepare_export(ctx: Context, rendered: str) -> Path:
+    """``pipeline-reports/``: wiped, then the rendered recipe and its context
+    excludes written into it; the bake outputs land beside them.
 
-    # Steps 1-4: the `test` target runs ardt deps/build/test as layers, on the
-    # native platform only. A red test does not fail the image build: the test
-    # layer stages its exit code with the results, so the reports of a red run
-    # are exported below before the pipeline fails on it. There is no separate
-    # test phase, and no other platform re-runs the suite: the runtime targets
-    # below fork from `build`, upstream of the tests. A fresh test-run arg makes
-    # every run execute the tests: the test layer never fails, so a cached one
-    # would replay a red result on retry.
-    test_stage = context.docker_build(
-        dockerfile=recipes.RENDERED_NAME,
-        target=recipes.TEST_TARGET,
-        build_args=[dagger.BuildArg(recipes.TEST_RUN_ARG, uuid.uuid4().hex)],
-        secrets=secrets,
-        ssh=ssh,
-    )
-    await test_stage.sync()
-
-    # Export the JUnit XMLs (CI renders them) and the rendered Dockerfile
-    # (the audit/`docker build` escape hatch ships with every run).
+    wipe: stale JUnit XMLs from a previous run must not survive into this
+    run's reports.
+    """
     export_dir = ctx.project_root / JUNIT_EXPORT_DIR
-    # wipe: stale JUnit XMLs from a previous run must not survive into this
-    # run's reports.
-    await test_stage.directory(recipes.RESULTS_DIR).export(str(export_dir), wipe=True)
-    rendered_path = export_dir / recipes.RENDERED_NAME
-    rendered_path.parent.mkdir(parents=True, exist_ok=True)
-    rendered_path.write_text(rendered, encoding="utf-8")
-    # The escape hatch needs the same context excludes the pipeline used.
+    shutil.rmtree(export_dir, ignore_errors=True)
+    export_dir.mkdir(parents=True)
+    (export_dir / recipes.RENDERED_NAME).write_text(rendered, encoding="utf-8")
+    # The pipeline's bake and the escape hatch read the same excludes.
     (export_dir / recipes.DOCKERIGNORE_NAME).write_text(
         recipes.render_dockerignore(std.SOURCE_EXCLUDES), encoding="utf-8"
     )
     # Self-ignoring, ruff-cache style: the reports dir stays out of git without
-    # a root .gitignore entry. Rewritten every run — the wipe above removed it.
+    # a root .gitignore entry.
     (export_dir / ".gitignore").write_text(
         "# Automatically created by ardt.\n*\n", encoding="utf-8"
     )
+    return export_dir
+
+
+def _cache(ctx: Context, cfg: RosCiConfig, target: str) -> tuple[list[str], list[str]]:
+    """``cache-from`` always when the project has a registry; ``cache-to`` on
+    CI only, so a laptop reads the fleet's cache and never writes it."""
+    ref = std.cache_ref(ctx, cfg.image, target)
+    if ref is None:
+        return [], []
+    cache_from = [f"type=registry,ref={ref}"]
+    cache_to = [f"type=registry,ref={ref},mode=max"] if ctx.ci.is_ci else []
+    return cache_from, cache_to
+
+
+def _runtime_output(
+    ctx: Context, cfg: RosCiConfig, platforms: list[str], *, split: bool
+) -> tuple[list[str], list[str]]:
+    """The runtime target's ``output`` and ``tags``.
+
+    No ``--publish``: the image is built and kept in the cache only (a broken
+    runtime stage fails the MR run). ``--publish`` with every configured
+    platform: one pushed manifest list under the image name. ``--publish`` on
+    a subset (``split``): pushed by digest, no tag, for ``ardt pipe merge``.
+    """
+    if not ctx.publish:
+        return ["type=cacheonly"], []
+    compression = f",compression={cfg.compression},oci-mediatypes=true,force-compression=true"
+    if split:
+        repository = std.image_repository(ctx, cfg.image)
+        return [
+            f"type=image,push=true,push-by-digest=true,name-canonical=true,name={repository}"
+            + compression
+        ], []
+    return [f"type=image,push=true{compression}"], [std.image_ref(ctx, cfg.image)]
+
+
+def plan(
+    ctx: Context, cfg: RosCiConfig, *, platforms: list[str], credentials: std.Credentials
+) -> list[Target]:
+    """The bake targets of one run: ``reports`` (the gate), ``runtime`` (the
+    shipped image for the selected platforms) and, with ``--load``, a
+    ``runtime-load`` of the native platform into the local daemon."""
+    dockerfile = f"{JUNIT_EXPORT_DIR}/{recipes.RENDERED_NAME}"
+    reports_from, reports_to = _cache(ctx, cfg, recipes.BUILD_TARGET)
+    targets = [
+        Target(
+            name=recipes.REPORTS_TARGET,
+            dockerfile=dockerfile,
+            target=recipes.REPORTS_TARGET,
+            # A fresh value per run: the test layer succeeds whatever the tests
+            # say, so a cached one would replay a red result on retry.
+            args={recipes.TEST_RUN_ARG: uuid.uuid4().hex},
+            output=[f"type=local,dest={JUNIT_EXPORT_DIR}"],
+            cache_from=reports_from,
+            cache_to=reports_to,
+            secret=credentials.secret,
+            ssh=credentials.ssh,
+        )
+    ]
+    split = sorted(platforms) != sorted(cfg.platforms)
+    output, tags = _runtime_output(ctx, cfg, platforms, split=split)
+    runtime_from, runtime_to = _cache(ctx, cfg, recipes.RUNTIME_TARGET)
+    targets.append(
+        Target(
+            name=recipes.RUNTIME_TARGET,
+            dockerfile=dockerfile,
+            target=recipes.RUNTIME_TARGET,
+            platforms=platforms,
+            output=output,
+            tags=tags,
+            # The build stage's cache serves the runtime's deps and build layers
+            # on every platform; the runtime's own layers get their own ref.
+            cache_from=reports_from + runtime_from,
+            cache_to=runtime_to,
+            secret=credentials.secret,
+            ssh=credentials.ssh,
+        )
+    )
+    if ctx.load:
+        native = _native_platform(platforms)
+        if native is None:
+            ctx.console.warn(
+                f"--load skipped: none of {platforms} matches this machine "
+                "(the daemon can hold a foreign-arch image but cannot run it)"
+            )
+        else:
+            targets.append(
+                Target(
+                    name=f"{recipes.RUNTIME_TARGET}-load",
+                    dockerfile=dockerfile,
+                    target=recipes.RUNTIME_TARGET,
+                    platforms=[native],
+                    output=["type=docker"],
+                    tags=std.load_names(ctx),
+                    cache_from=reports_from + runtime_from,
+                    secret=credentials.secret,
+                    ssh=credentials.ssh,
+                )
+            )
+    return targets
+
+
+@pipeline(name="ros-ci", doc="deps/build/test as image stages; publish the result on --publish")
+def ros_ci(
+    ctx: Context,
+    builder: Buildx,
+    ardt_source: str = "",
+    platforms: list[str] = (),  # pyright: ignore[reportArgumentType]
+) -> None:
+    cfg = _config(ctx)
+    build_platforms = _selected_platforms(cfg, platforms)
+    credentials = _git_credentials(ctx, cfg)
+    rendered = _render(ctx, cfg, ardt_source)
+    export_dir = _prepare_export(ctx, rendered)
+
+    targets = plan(ctx, cfg, platforms=build_platforms, credentials=credentials)
+    if ardt_source and Path(ardt_source).is_dir():
+        for target in targets:
+            target.contexts[recipes.LOCAL_ARDT_CONTEXT] = str(Path(ardt_source).resolve())
+    bake_file = export_dir / BAKE_FILE
+    bake_file.write_text(render_bake(targets), encoding="utf-8")
+    builder.with_env(credentials.env)
+    if ctx.publish:
+        builder.login()
+
+    # Steps 1-4: the `reports` target runs ardt deps/build/test as layers, on
+    # the native platform only, and exports the results beside the recipe. A
+    # red test does not fail the image build: the test layer stages its exit
+    # code with the results, so the reports of a red run are exported before
+    # the pipeline fails on it. No other platform re-runs the suite: the
+    # runtime target forks from `build`, upstream of the tests.
+    builder.bake(bake_file, [recipes.REPORTS_TARGET], cwd=ctx.project_root)
     exit_file = export_dir / recipes.TEST_EXIT_FILE
     test_exit = exit_file.read_text(encoding="utf-8").strip() if exit_file.is_file() else "unknown"
     tests_ok = test_exit == "0"
@@ -278,6 +377,7 @@ async def ros_ci(
         junit_dir=JUNIT_EXPORT_DIR,
         tests_ok=tests_ok,
         rendered_dockerfile=f"{JUNIT_EXPORT_DIR}/{recipes.RENDERED_NAME}",
+        bake_file=f"{JUNIT_EXPORT_DIR}/{BAKE_FILE}",
     )
     if not tests_ok:
         raise ArdtError(
@@ -286,42 +386,34 @@ async def ros_ci(
         )
 
     # Step 5: the runtime target — built even without --publish so a broken
-    # runtime stage fails the MR run, published only on --publish.
-    variants = [
-        context.docker_build(
-            dockerfile=recipes.RENDERED_NAME,
-            platform=dagger.Platform(p),
-            target=recipes.RUNTIME_TARGET,
-            # Non-native platforms rebuild the build stage, deps layer included
-            # (the deps layer is a cache hit on a warm engine unless a manifest
-            # changed — see the recipe's manifests-first COPY).
-            secrets=secrets,
-            ssh=ssh,
-        )
-        for p in build_platforms
-    ]
-    # gather, not a sequential loop: the engine overlaps one arch's
-    # network-bound apt with the other's CPU-bound (emulated) compile.
-    await asyncio.gather(*(variant.sync() for variant in variants))
+    # runtime stage fails the MR run, pushed only on --publish; the load
+    # target beside it puts the native image into the daemon.
+    runtime_targets = [t.name for t in targets if t.name != recipes.REPORTS_TARGET]
+    metadata = builder.bake(bake_file, runtime_targets, cwd=ctx.project_root)
 
-    if ctx.load:
-        native = _native_variant(build_platforms, variants)
-        if native is None:
-            ctx.console.warn(
-                f"--load skipped: none of {build_platforms} matches this machine "
-                "(the daemon can hold a foreign-arch image but cannot run it)"
-            )
-        else:
-            names = await std.load_local(ctx, native)
-            ctx.emit(loaded=names)
-            ctx.console.success(
-                f"loaded {', '.join(names)} into the local docker daemon (version {ctx.version})"
-            )
+    if ctx.load and f"{recipes.RUNTIME_TARGET}-load" in runtime_targets:
+        names = std.load_names(ctx)
+        ctx.emit(loaded=names)
+        ctx.console.success(
+            f"loaded {', '.join(names)} into the local docker daemon (version {ctx.version})"
+        )
 
     if not ctx.publish:
         ctx.console.info("runtime image built; skipping push (no --publish)")
         return
 
+    digest = str(metadata.get(recipes.RUNTIME_TARGET, {}).get("containerimage.digest", ""))
+    if sorted(build_platforms) != sorted(cfg.platforms):
+        repository = std.image_repository(ctx, cfg.image)
+        built = ",".join(build_platforms)
+        path = std.write_digest(ctx, repository=repository, platform=built, digest=digest)
+        ctx.console.info(f"recorded {built} as {digest} in {path.relative_to(ctx.project_root)}")
+        ctx.emit(image_repository=repository, image_digest=digest, platforms=build_platforms)
+        ctx.console.success(
+            f"pushed {repository}@{digest} for {', '.join(build_platforms)}; "
+            "`ardt pipe merge` creates the tag once every platform's record is in"
+        )
+        return
     ref = std.image_ref(ctx, cfg.image)
-    digest = await std.publish_multiarch(dag, ctx, ref, variants)
+    ctx.emit(image=ref, image_digest=digest)
     ctx.console.success(f"published {ref} @ {digest}")

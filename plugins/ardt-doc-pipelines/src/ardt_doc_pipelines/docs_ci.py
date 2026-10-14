@@ -327,7 +327,11 @@ async def _build_historical(
         return None
 
 
-@pipeline(name="docs-ci", doc="Build the versioned docs site into public/ (Pages-ready)")
+@pipeline(
+    name="docs-ci",
+    doc="Build the versioned docs site into public/ (Pages-ready)",
+    engine="dagger",  # not yet ported to the buildx executor
+)
 async def docs_ci(ctx: Context, dag: dagger.Client, ardt_source: str = "") -> None:
     cfg = _config(ctx)
     base = _builder(ctx, dag, cfg, ardt_source)

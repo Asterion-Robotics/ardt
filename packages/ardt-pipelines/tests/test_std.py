@@ -132,20 +132,6 @@ class TestDevTag:
         assert std.dev_tag("1.2.3") == "1.2.3-dev"
 
 
-class TestLoadedRef:
-    """Parsing `docker load`'s report — the contract load_local depends on."""
-
-    def test_image_id_form(self) -> None:
-        assert std._loaded_ref("Loaded image ID: sha256:abc123\n") == "sha256:abc123"
-
-    def test_named_form(self) -> None:
-        assert std._loaded_ref("Loaded image: repo/name:tag\n") == "repo/name:tag"
-
-    def test_no_report_is_a_clean_error(self) -> None:
-        with pytest.raises(ArdtError, match="reported no image"):
-            std._loaded_ref("something unexpected\n")
-
-
 class TestPathFromRemote:
     def test_path_only_remote_yields_none(self, repo: Path) -> None:
         git("remote", "add", "origin", "/srv/git/mirror", cwd=repo)
@@ -159,28 +145,19 @@ class TestGitCredentials:
     def test_no_credentials_is_a_clean_error(self, repo: Path) -> None:
         ctx = _context(repo, _ci())
         with pytest.raises(ArdtError, match="no git credentials"):
-            # The (stub) dagger client is never touched on the failure path.
-            std.git_credentials(object(), ctx, host="code.example.com")
+            std.git_credentials(ctx, host="code.example.com")
 
-    def test_job_token_becomes_the_named_secret(self, repo: Path) -> None:
-        class FakeDag:
-            def __init__(self) -> None:
-                self.named: list[str] = []
-
-            def set_secret(self, name: str, value: str) -> str:
-                self.named.append(name)
-                assert value == "tok"
-                return "secret-handle"
-
+    def test_job_token_becomes_the_named_secret_from_the_environment(self, repo: Path) -> None:
+        """The token reaches the build as a BuildKit secret read from the bake
+        command's environment: never a file, never an argument."""
         ctx = _context(
             repo,
             CIInfo(platform=Platform.GITLAB, is_ci=True, registry=REGISTRY, job_token="tok"),
         )
-        dag = FakeDag()
-        secrets, sock = std.git_credentials(dag, ctx, host="code.example.com")
-        assert dag.named == [std.GIT_TOKEN_SECRET]
-        assert secrets == ["secret-handle"]
-        assert sock is None
+        credentials = std.git_credentials(ctx, host="code.example.com")
+        assert credentials.secret == [f"id={std.GIT_TOKEN_SECRET},env={std.GIT_TOKEN_ENV}"]
+        assert credentials.env == {std.GIT_TOKEN_ENV: "tok"}
+        assert credentials.ssh == []
 
     def test_stale_agent_path_is_ignored(self, repo: Path, tmp_path: Path) -> None:
         """SSH_AUTH_SOCK pointing at nothing must not count as a credential."""
@@ -194,4 +171,39 @@ class TestGitCredentials:
             ),
         )
         with pytest.raises(ArdtError, match="no git credentials"):
-            std.git_credentials(object(), ctx, host="code.example.com")
+            std.git_credentials(ctx, host="code.example.com")
+
+
+class TestCacheRef:
+    """One cache sub-image per project, one tag per target, shared by every
+    branch and runner."""
+
+    def test_ci_project_gets_a_cache_ref_per_target(self, repo: Path) -> None:
+        ctx = _context(repo, _ci("example-group/my_robot"))
+        assert std.cache_ref(ctx, None, "build") == f"{REGISTRY}/example-group/my_robot/cache:build"
+        assert (
+            std.cache_ref(ctx, "slim", "runtime")
+            == f"{REGISTRY}/example-group/my_robot/cache:slim-runtime"
+        )
+
+    def test_no_registry_means_no_cache(self, repo: Path) -> None:
+        assert std.cache_ref(_context(repo, _ci(registry=None)), None, "build") is None
+
+    def test_unresolvable_path_means_no_cache(self, repo: Path) -> None:
+        assert std.cache_ref(_context(repo, _ci()), None, "build") is None
+
+
+class TestDigestRecords:
+    """What a per-platform publish leaves for `ardt pipe merge`."""
+
+    def test_round_trip(self, repo: Path) -> None:
+        ctx = _context(repo, _ci("example-group/my_robot"))
+        std.write_digest(ctx, repository="r/x", platform="linux/arm64", digest="sha256:a")
+        std.write_digest(ctx, repository="r/x", platform="linux/amd64", digest="sha256:b")
+        records = std.read_digests(ctx)
+        assert [r["platform"] for r in records] == ["linux/amd64", "linux/arm64"]
+        assert {r["digest"] for r in records} == {"sha256:a", "sha256:b"}
+
+    def test_no_records_is_a_clean_error(self, repo: Path) -> None:
+        with pytest.raises(ArdtError, match="no digest records"):
+            std.read_digests(_context(repo, _ci()))

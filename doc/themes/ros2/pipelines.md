@@ -13,9 +13,10 @@
 ```text
 ardt pipe run ros-ci
 │
-├─ render the recipe from config (base_image, base.Dockerfile…)
-│     → exported to pipeline-reports/Dockerfile.rendered on every run,
-│       so `docker build -f … .` always works with no ardt installed
+├─ render the recipe from config (base_image, base.Dockerfile…) and its bake file
+│     → exported to pipeline-reports/Dockerfile.rendered and bake.json on every run,
+│       so `docker buildx bake -f pipeline-reports/bake.json <target>` always
+│       works with no ardt installed
 │
 ├─ build the `build` target        FROM pipelines.ros_ci.builder
 │     1) ardt deps                 ← the same tasks, config and flags
@@ -32,8 +33,13 @@ ardt pipe run ros-ci
          ← exec deps only, resolved from the share/*/package.xml files
            the copy brought along; skips tasks.ros.rosdep_skip_keys
       → always built (a broken runtime stage fails the MR run)
-      → with --publish: one multi-arch manifest pushed as
-        <registry>/<project>:<ctx.version>, digest in the --json envelope
+      → with --publish and every configured platform: one multi-arch
+        manifest pushed as <registry>/<project>:<ctx.version>, digest in
+        the --json envelope; with --publish on a subset (`--arg platforms=`,
+        one CI job per platform on its native runner): pushed by digest,
+        recorded under pipeline-reports/digests/, tagged by `ardt pipe merge`
+      → the layer cache of every stage lives in the registry
+        (<registry>/<project>/cache:<stage>): CI runs write it, every run reads it
 ```
 
 Step 5b runs in the *runtime* stage, not the build stage, and it is raw `rosdep` rather than `ardt deps`. Both are deliberate. The runtime image starts from `base_image` alone, so everything rosdep installed into the builder is absent from it; and what it needs is the **exec** closure only, resolved from the install base it just copied, not the build and test dependencies `ardt deps` resolves from the source tree. There is no source tree and no ardt in the runtime image, and putting either there would ship a toolchain with the app. An unresolvable key fails the image build, which is the earliest moment it can be caught.
@@ -60,6 +66,7 @@ All knobs live under `pipelines.ros_ci:`.
 | `install_base` | where the workspace installs in the image (default `/opt/ros/app`) |
 | `strip_dev_files` | IP protection: strip headers, static libs and CMake/pkg-config exports before the runtime copy |
 | `platforms` | manifest platforms, e.g. `[linux/amd64, linux/arm64]` |
+| `compression` | layer compression of the published image: `gzip` (default) or `zstd` (smaller, faster to unpack; consumers on containerd 1.6 or Docker 23 and later) |
 | `git_host` / `git_ssh_port` | auth for private `.repos` deps: CI job token, or a local ssh agent |
 | `base.Dockerfile` (a file) | the only local Docker file a repo may carry: a single-stage base extension (`FROM ${BASE_IMAGE}` + layers below the app — drivers, kernel modules), spliced into the rendered recipe |
 

@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "ardt-pipelines"
 dynamic = ["version"]
-description = "ardt pipeline plane: the `ardt pipe` command group, pipeline registry, shared Dagger helpers"
+description = "ardt pipeline plane: the `ardt pipe` command group, pipeline registry, the buildx executor"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
@@ -15,7 +15,6 @@ authors = [{ name = "Thibault Poignonec", email = "t.poignonec@asterion-robotics
 # exact and bumped by deliberate MR run against the pipeline test suite.
 dependencies = [
     "ardt-core",
-    "dagger-io==0.21.7",
 ]
 
 [project.entry-points."ardt.commands"]

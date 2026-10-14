@@ -124,10 +124,18 @@ class TestTestStageSplit:
     def test_runtime_copies_from_build_not_test(self, tmp_path: Path) -> None:
         rendered = render(tmp_path)
         assert "COPY --from=build /opt/ros/app" in rendered
-        assert f"--from={recipes.TEST_TARGET}" not in rendered
+        # the reports stage is the one consumer of the test stage: nothing shipped is
+        runtime = rendered[rendered.index(f"AS {recipes.RUNTIME_TARGET}") :]
+        assert f"--from={recipes.TEST_TARGET}" not in runtime
         assert f"FROM {recipes.TEST_TARGET}" not in rendered.replace(
             f"FROM {recipes.BUILD_TARGET} AS {recipes.TEST_TARGET}", ""
         )
+
+    def test_reports_stage_carries_the_results_alone(self, tmp_path: Path) -> None:
+        """The local export of a scratch stage is the results and nothing else."""
+        rendered = render(tmp_path)
+        assert f"FROM scratch AS {recipes.REPORTS_TARGET}" in rendered
+        assert f"COPY --from={recipes.TEST_TARGET} {recipes.RESULTS_DIR} /" in rendered
 
     def test_tests_and_staging_live_in_the_test_stage(self, tmp_path: Path) -> None:
         rendered = render(tmp_path)
@@ -252,7 +260,7 @@ def test_git_install_by_default(tmp_path: Path) -> None:
     rendered = render(tmp_path)
     for requirement in REQUIREMENTS:
         assert f'"{requirement}"' in rendered
-    assert recipes.LOCAL_ARDT_DIR not in rendered
+    assert recipes.LOCAL_ARDT_CONTEXT not in rendered
 
 
 @pytest.mark.parametrize("local_ardt", [False, True])
@@ -279,7 +287,7 @@ def test_pinned_requirements_render_verbatim(tmp_path: Path) -> None:
 
 def test_local_install_copies_checkout(tmp_path: Path) -> None:
     rendered = render(tmp_path, local_ardt=True)
-    assert f"COPY {recipes.LOCAL_ARDT_DIR} /opt/ardt-src" in rendered
+    assert f"COPY --from={recipes.LOCAL_ARDT_CONTEXT} / /opt/ardt-src" in rendered
     for module in recipes.ARDT_MODULES:
         assert f"/opt/ardt-src/{dist.subdirectory(module)}" in rendered
     assert "git+" not in rendered

@@ -103,12 +103,14 @@ source = { editable = "plugins/ardt-doc-pipelines" }
 dependencies = [
     { name = "ardt-core" },
     { name = "ardt-pipelines" },
+    { name = "dagger-io" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "ardt-core", editable = "packages/ardt-core" },
     { name = "ardt-pipelines", editable = "packages/ardt-pipelines" },
+    { name = "dagger-io", specifier = "==0.21.7" },
 ]
 
 [[package]]
@@ -141,14 +143,10 @@ name = "ardt-pipelines"
 source = { editable = "packages/ardt-pipelines" }
 dependencies = [
     { name = "ardt-core" },
-    { name = "dagger-io" },
 ]
 
 [package.metadata]
-requires-dist = [
-    { name = "ardt-core", editable = "packages/ardt-core" },
-    { name = "dagger-io", specifier = "==0.21.7" },
-]
+requires-dist = [{ name = "ardt-core", editable = "packages/ardt-core" }]
 
 [[package]]
 name = "ardt-ros-dev"

@@ -60,6 +60,8 @@ TEST_TARGET = "test"
 runtime image depends on it — when ``runtime`` copied from a stage ending in
 ``ardt test``, every foreign-arch runtime build re-ran the whole suite under
 QEMU."""
+REPORTS_TARGET = "reports"
+"""A stage of nothing but the test results, for the pipeline's local export."""
 RUNTIME_TARGET = "runtime"
 RESULTS_DIR = "/results"
 # Written by the test stage beside the results: the exit code of `ardt test`.
@@ -79,8 +81,10 @@ STRIP_STAGE = "strip"
 the unstripped install — the pre-split behavior, where strip ran after the
 tests."""
 
-LOCAL_ARDT_DIR = ".ardt-src"
-"""Context subdirectory the pipeline injects a local ardt checkout into."""
+LOCAL_ARDT_CONTEXT = "ardt-src"
+"""Named build context the pipeline points at a local ardt checkout
+(``contexts = {ardt-src = "/path"}`` in the bake file): dev mode installs
+ardt from it instead of the configured git, and nothing lands in the repo."""
 
 ARDT_MODULES = ("ardt-core", "ardt-ros-tasks")
 """The ardt modules this recipe's build stage needs (it runs ``ardt deps`` /
@@ -116,7 +120,7 @@ def _local_install() -> str:
     paths = " ".join(dist.local_requirement(m, "/opt/ardt-src") for m in ARDT_MODULES)
     return (
         "# dev mode: ardt injected from a local checkout instead of the configured git\n"
-        f"COPY {LOCAL_ARDT_DIR} /opt/ardt-src\n" + _venv_install(paths)
+        f"COPY --from={LOCAL_ARDT_CONTEXT} / /opt/ardt-src\n" + _venv_install(paths)
     )
 
 
@@ -174,11 +178,10 @@ def _template(name: str) -> str:
 
 
 def render_dockerignore(excludes: tuple[str, ...]) -> str:
-    """Context excludes for the standalone ``docker build`` escape hatch.
-
-    ``.ardt-src`` must never appear here: the dev-mode recipe COPYs it
-    explicitly, and an ignored path would fail that COPY.
-    """
+    """Context excludes, next to the rendered recipe: BuildKit reads a
+    ``<Dockerfile>.dockerignore`` beside the Dockerfile it was given, for the
+    pipeline's own bake and for the standalone ``docker build`` escape hatch
+    alike."""
     lines = "\n".join(excludes)
     return f"# Rendered by ardt ros-ci — keep next to {RENDERED_NAME}.\n{lines}\n"
 

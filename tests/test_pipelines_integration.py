@@ -31,7 +31,7 @@ import pytest
 
 from ardt_core.context import Context
 from ardt_core.plugins import Registry
-from ardt_pipelines import pipeline, std
+from ardt_pipelines import std
 from ardt_pipelines.engine import run_pipeline
 
 pytestmark = pytest.mark.integration
@@ -149,12 +149,28 @@ def test_a_red_test_fails_the_pipeline_after_its_reports_are_exported(repo: Path
     assert second != first, "the retry replayed the cached red result instead of testing"
 
 
-def test_trivial_pipeline_against_real_engine(repo: Path) -> None:
-    @pipeline(name="trivial", doc="echo in alpine")
-    async def trivial(ctx: Context, dag, message: str = "hello") -> None:
-        out = await dag.container().from_("alpine:3.20").with_exec(["echo", message]).stdout()
-        ctx.emit(echoed=out.strip())
+def test_trivial_bake_against_the_real_builder(repo: Path) -> None:
+    """The executor end to end on a two-line recipe: the builder is created on
+    demand and a local output lands where the bake file says."""
+    from ardt_pipelines.buildx import Buildx, Target, render_bake
 
+    (repo / "Dockerfile").write_text(
+        "FROM alpine:3.20 AS run\nRUN echo ardt-buildx-ok > /hello\n"
+        "FROM scratch AS out\nCOPY --from=run /hello /hello\n"
+    )
+    bake = repo / "bake.json"
+    bake.write_text(
+        render_bake(
+            [
+                Target(
+                    name="out",
+                    dockerfile="Dockerfile",
+                    target="out",
+                    output=["type=local,dest=exported"],
+                )
+            ]
+        )
+    )
     ctx = Context.build(cwd=repo, registry=Registry(plugins=[], problems=[]))
-    run_pipeline(ctx, trivial, trivial.bind({"message": "ardt-engine-ok"}))
-    assert ctx.emitted["echoed"] == "ardt-engine-ok"
+    Buildx(ctx).bake(bake, ["out"], cwd=repo)
+    assert (repo / "exported" / "hello").read_text().strip() == "ardt-buildx-ok"

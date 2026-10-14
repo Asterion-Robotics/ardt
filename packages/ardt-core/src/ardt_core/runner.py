@@ -95,11 +95,15 @@ class Runner:
         check: bool = True,
         extra_env: Mapping[str, str] | None = None,
         quiet: bool = False,
+        stdin: str | None = None,
     ) -> Result:
         """Run ``command``, streaming its output.
 
         Raises :class:`RunnerError` on a non-zero exit unless ``check`` is False.
         Under ``--dry-run`` nothing runs and a successful, skipped result comes back.
+        ``stdin`` is written to the command and closed: how a secret reaches a
+        command without appearing on its argument line (``docker login
+        --password-stdin``).
         """
         argv = list(command)
         workdir = cwd or self.cwd
@@ -120,6 +124,7 @@ class Runner:
                 argv,
                 cwd=workdir,
                 env=child_env,
+                stdin=subprocess.PIPE if stdin is not None else None,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
@@ -134,6 +139,10 @@ class Runner:
         except OSError as exc:
             raise RunnerError(f"cannot run {argv[0]}: {exc}", command=argv, returncode=1) from exc
 
+        if stdin is not None:
+            assert proc.stdin is not None
+            proc.stdin.write(stdin)
+            proc.stdin.close()
         tail: deque[str] = deque(maxlen=TAIL_LINES)
         assert proc.stdout is not None
         with proc.stdout as stream:

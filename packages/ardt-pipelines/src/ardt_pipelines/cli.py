@@ -39,7 +39,7 @@ def _pipelines(ctx: Context) -> dict[str, PipelineDef]:
 
 @click.group()
 def pipe() -> None:
-    """Run and inspect pipelines (the Dagger plane)."""
+    """Run and inspect pipelines (the container plane, on docker buildx)."""
 
 
 @pipe.command(name="list")
@@ -117,19 +117,55 @@ def run_command(ctx: Context, name: str, args: tuple[str, ...], publish: bool, l
     if ctx.dry_run:
         _print_plan(ctx, definition, bound)
         return
-    # Imported here, not at module top: the engine imports the Dagger SDK, and
-    # this `pipe` group is an eagerly-loaded command — a top-level import would
-    # put dagger back on every invocation's startup path.
     from . import engine
 
     engine.run_pipeline(ctx, definition, bound)
+
+
+@pipe.command(name="merge")
+@click.option(
+    "--ref",
+    default=None,
+    help="The image reference to create; default: the one the per-platform runs recorded.",
+)
+@pass_ardt
+def merge_command(ctx: Context, ref: str | None) -> None:
+    """Merge per-platform images into one manifest list.
+
+    A publish split across runners (one job per platform, `--arg platforms=`
+    narrowing each) pushes its image by digest and records it under
+    pipeline-reports/digests/; once those records sit together (CI artifacts),
+    this creates the tag from them. A single run that built every platform
+    needs no merge: bake assembles the manifest itself.
+    """
+    from . import std
+    from .buildx import Buildx
+
+    records = std.read_digests(ctx)
+    repositories = {r["repository"] for r in records}
+    if len(repositories) != 1:
+        raise ArdtError(
+            f"the digest records name {len(repositories)} repositories, expected one",
+            hint=f"found: {', '.join(sorted(repositories)) or '(none)'} in {std.DIGESTS_DIR}/",
+        )
+    repository = repositories.pop()
+    target = ref or f"{repository}:{std.image_tag(ctx.version)}"
+    sources = [f"{repository}@{r['digest']}" for r in records]
+    if ctx.dry_run:
+        ctx.console.info(f"[dry-run] imagetools create {target} <- {' '.join(sources)}")
+        return
+    builder = Buildx(ctx)
+    builder.login()
+    digest = builder.imagetools_create(target, sources)
+    ctx.emit(image=target, image_digest=digest, platforms=[r["platform"] for r in records])
+    ctx.console.success(f"merged {len(records)} platform image(s) into {target} @ {digest}")
 
 
 def _print_plan(ctx: Context, definition: PipelineDef, bound: dict[str, object]) -> None:
     """The ``--dry-run`` plan: everything resolvable without the engine.
 
     Handled here, before the engine module is even imported, so a dry-run
-    needs neither the Dagger SDK nor a docker daemon.
+    needs no docker daemon.
     """
     rendered = " ".join(f"{k}={v!r}" for k, v in bound.items()) or "(no args)"
     ctx.console.info(f"[dry-run] pipe run {definition.name} {rendered}")

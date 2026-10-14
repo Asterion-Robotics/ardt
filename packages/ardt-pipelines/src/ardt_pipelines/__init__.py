@@ -15,12 +15,13 @@
 
 # Author: Thibault Poignonec <t.poignonec@asterion-robotics.com>
 
-"""ardt pipelines — the Dagger plane.
+"""ardt pipelines — the container plane.
 
-The one rule that contains Dagger churn (02): **all Dagger imports live in this
-package and in plugin ``pipelines`` modules — tasks and core never import it.**
-Pipelines orchestrate environments (containers, registries, services); the build
-logic itself stays in tasks, which pipelines run *inside* containers.
+Pipelines run on BuildKit through ``docker buildx`` (:mod:`.buildx`), the one
+module that invokes docker: a pipeline describes bake targets, and the build
+logic itself stays in tasks, which the recipes run *inside* the build stages.
+No executor is imported before a pipeline runs (02): tasks and core never see
+one, and the CLI's dry run never does either.
 """
 
 from __future__ import annotations

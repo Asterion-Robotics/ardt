@@ -1,6 +1,6 @@
 # ardt-devcontainers
 
-The devcontainer engine: renders `.devcontainer/` from package data, then drives `docker compose`. Dagger-free, and domain-neutral — what to render for a given kind of repo arrives as a {py:class}`~ardt_devcontainers.profiles.Profile` through the `ardt.dev_profiles` entry-point group, never as an import.
+The devcontainer engine: renders `.devcontainer/` from package data, then drives `docker compose`. Executor-free, and domain-neutral — what to render for a given kind of repo arrives as a {py:class}`~ardt_devcontainers.profiles.Profile` through the `ardt.dev_profiles` entry-point group, never as an import.
 
 ## `ardt_devcontainers.cli`
 

@@ -110,6 +110,13 @@ RUN --network=none (ardt test --install-base @INSTALL_BASE@; code=$?; mkdir -p /
 # wrote beside its XML (a launched process's output, a trace) ships with it.
 RUN cd /ws/build \
  && (find . \( -path '*test_results*' \( -name '*.xml' -o -name '*.log' \) -o -name 'pytest.xml' \) -exec cp --parents -t /results {} +)
+
+# ---- the results alone: what the pipeline exports (--output type=local) ----
+# A stage of nothing but /results, so the export carries the reports and the
+# exit code and not the test stage's whole filesystem:
+#   docker build -f <this file> --target reports --output pipeline-reports .
+FROM scratch AS reports
+COPY --from=test /results /
 @STRIP@@BASE_EXT@
 # ---- step 5: the shipped runtime image ----
 FROM @RUNTIME_FROM@ AS runtime

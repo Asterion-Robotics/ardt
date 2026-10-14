@@ -201,7 +201,7 @@ The monorepo is a uv workspace. Every distribution owns its unit tests; `tests/`
 ardt/
 ├── packages/                # the platform planes
 │   ├── ardt-core/           # cli, plugin loader, context, config, runner, console, version policy
-│   ├── ardt-pipelines/      # the generic Dagger plane: `ardt pipe`, @pipeline registry, std helpers
+│   ├── ardt-pipelines/      # the generic container plane: `ardt pipe`, @pipeline registry, buildx executor, std helpers
 │   └── ardt-devcontainers/  # the devcontainer plane: `ardt dev` renders and drives, profile-agnostic
 ├── plugins/                 # first-party theme plugins (ardt-<theme>-<plane>)
 │   ├── ardt-ros-tasks/      # deps / build / test (colcon, rosdep, vcs) — in-env tasks
