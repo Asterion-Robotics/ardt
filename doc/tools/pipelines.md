@@ -34,3 +34,26 @@ Reports and exported files land under `pipeline-reports/` at the project root, a
 ## Executor
 
 `docker buildx bake` against the `ardt` builder (a `docker-container` driver), created on first use; a CI job class may pre-create it and append native nodes for other architectures. The bake file of every run is exported as `pipeline-reports/bake.json` beside the rendered recipe, so `docker buildx bake -f pipeline-reports/bake.json reports` reproduces the gate with no ardt installed. The layer cache is a `cache` sub-image of the project in the registry, one tag per stage: CI runs write it, every run reads it.
+
+## The builder and its cache
+
+The builder is one container, `buildx_buildkit_ardt0`, running a pinned BuildKit, with its state in the volume `buildx_buildkit_ardt0_state`. That volume is what makes the second run fast, on a laptop as on a runner that keeps the builder between jobs:
+
+| It holds | Keyed by | Shared |
+|---|---|---|
+| the layer cache of every stage built on this builder | content | across the repositories built here |
+| the apt cache mounts (`/var/cache/apt`, the lists) | architecture | across repositories: a deb fetched for one module serves the next |
+| the ccache mount | architecture | across repositories, once the builder image ships `ccache` and the repo opts in |
+
+ardt creates the builder with a garbage-collection policy (`maxUsedSpace = "40GB"`, `minFreeSpace = "10%"` of the disk): BuildKit keeps the cache under that ceiling by itself, oldest and least used first, so nothing has to be purged by hand. The commands when you want to look or act anyway:
+
+```bash
+docker buildx du --builder ardt                 # what the cache holds, by record
+docker buildx prune --builder ardt              # drop the unused records now (the GC, forced)
+docker buildx prune --builder ardt --all        # drop everything, including the layers in use
+docker buildx rm --keep-state ardt              # remove the builder, keep its cache: the next run
+                                                #   recreates it, with a new configuration if you pass one
+docker buildx rm ardt                           # remove the builder and its cache: a full reset
+```
+
+A different ceiling, a registry mirror or an insecure registry go into the daemon's configuration: `docker buildx rm --keep-state ardt`, then `docker buildx create --name ardt --driver docker-container --buildkitd-config <your buildkitd.toml>`; ardt reattaches to a builder of that name whatever created it. On a CI runner the same builder is shared by every job that uses the host's Docker socket, so its ceiling is sized for the runner's disk, and a job needs no setup beyond the registry login.

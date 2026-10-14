@@ -82,7 +82,7 @@ jobs:
 
   # The engine-backed tests: the trivial engine smoke plus ros-ci end to end on
   # a fixture package (the shipping pipeline never ran anywhere before this).
-  # Hosted runners have Docker; Dagger provisions its engine over the socket.
+  # Hosted runners have Docker; buildx creates the builder over its socket on first use.
   integration:
     runs-on: ubuntu-latest
     steps:
@@ -102,8 +102,8 @@ jobs:
         run: uv run pytest -m integration
 
   # Dogfooding the pipeline plane: `docs-ci` builds the working tree plus every
-  # ref in `pipelines.docs_ci.versions` into a Pages-ready `public/`. Dagger
-  # provisions its engine over the runner's docker socket; nothing to install.
+  # ref in `pipelines.docs_ci.versions` into a Pages-ready `public/`. buildx
+  # creates its builder over the runner's docker socket; nothing to install.
   docs:
     runs-on: ubuntu-latest
     steps:

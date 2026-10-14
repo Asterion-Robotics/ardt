@@ -51,6 +51,26 @@ class may pre-create it, with native nodes appended for other architectures."""
 BAKE_FILE = "bake.json"
 """The bake file's name inside the export directory."""
 
+BUILDKIT_IMAGE = "moby/buildkit:v0.33.1"
+"""The BuildKit the builder runs: pinned, so every builder of a fleet (laptops
+and runners) resolves, caches and exports the same way whatever buildx the
+host carries. Bumped on purpose, with the pipeline tests."""
+
+BUILDKITD_CONFIG = """\
+# Written by ardt when it created this builder; change it with
+#   docker buildx rm --keep-state ardt && docker buildx create --name ardt \\
+#     --driver docker-container --buildkitd-config <your file>
+# (the cache survives the recreation).
+[worker.oci]
+  gc = true
+  # the garbage collector keeps the layer cache and the cache mounts (apt,
+  # ccache) under this ceiling, oldest and least used first
+  maxUsedSpace = "40GB"
+  minFreeSpace = "10%"
+"""
+"""The builder's default daemon configuration: a bounded cache instead of
+BuildKit's disk-relative default, so a laptop never finds its disk eaten."""
+
 
 @dataclass
 class Target:
@@ -145,20 +165,29 @@ class Buildx:
         runner.require("docker", hint="the pipeline plane runs on docker buildx")
         probe = runner.run(["docker", "buildx", "inspect", self.builder], check=False, quiet=True)
         if not probe.ok and not probe.skipped:
-            self.ctx.console.step(f"creating buildx builder `{self.builder}` (docker-container)")
-            runner.run(
-                [
-                    "docker",
-                    "buildx",
-                    "create",
-                    "--name",
-                    self.builder,
-                    "--driver",
-                    "docker-container",
-                    "--bootstrap",
-                ],
-                quiet=True,
+            self.ctx.console.step(
+                f"creating buildx builder `{self.builder}` (docker-container, {BUILDKIT_IMAGE})"
             )
+            with tempfile.TemporaryDirectory(prefix="ardt-builder-") as tmp:
+                config = Path(tmp) / "buildkitd.toml"
+                config.write_text(BUILDKITD_CONFIG, encoding="utf-8")
+                runner.run(
+                    [
+                        "docker",
+                        "buildx",
+                        "create",
+                        "--name",
+                        self.builder,
+                        "--driver",
+                        "docker-container",
+                        "--driver-opt",
+                        f"image={BUILDKIT_IMAGE}",
+                        "--buildkitd-config",
+                        str(config),
+                        "--bootstrap",
+                    ],
+                    quiet=True,
+                )
         self._ready = True
 
     def login(self) -> None:
