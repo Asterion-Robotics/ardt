@@ -15,7 +15,7 @@
 
 # Author: Thibault Poignonec <t.poignonec@asterion-robotics.com>
 
-"""The one engine-backed test: a trivial pipeline against real Dagger.
+"""The docker-backed tests: the executor against a real builder.
 
 Marked ``integration``: excluded by default, run with ``pytest -m integration``.
 Needs a Docker socket; the SDK auto-provisions the engine on first use, so the

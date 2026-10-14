@@ -12,7 +12,7 @@ license = "Apache-2.0"
 authors = [{ name = "Thibault Poignonec", email = "t.poignonec@asterion-robotics.com" }]
 
 # In-environment tasks: they wrap colcon/rosdep/vcs, they never vendor them.
-# Nothing here may import dagger (02, the two-plane rule).
+# Nothing here may import the pipeline plane (02, the two-plane rule).
 dependencies = ["ardt-core"]
 
 [project.entry-points."ardt.commands"]

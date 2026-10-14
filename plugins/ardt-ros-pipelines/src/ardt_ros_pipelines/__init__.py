@@ -19,7 +19,7 @@
 
 The domain plugin for the "ROS 2 workspace" repo type: the ``ros-ci`` pipeline
 and the ``ros2`` image recipe it renders. Builds on :mod:`ardt_pipelines` (the
-generic Dagger plane) and registers through the standard ``ardt.pipelines``
+generic pipeline plane) and registers through the standard ``ardt.pipelines``
 entry point — nothing here is special-cased by the machinery.
 """
 

@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
 authors = [{ name = "Thibault Poignonec", email = "t.poignonec@asterion-robotics.com" }]
-keywords = ["ci", "cli", "robotics", "sphinx", "dagger", "pages"]
+keywords = ["ci", "cli", "robotics", "sphinx", "pages"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Programming Language :: Python :: 3.11",
@@ -22,12 +22,9 @@ classifiers = [
 # The doc toolchain itself (sphinx, doxygen…) lives INSIDE the builder
 # container via ardt-doc-tasks — this package only orchestrates (two-plane
 # rule) and therefore depends on the pipeline plane alone.
-# Still on the Dagger executor until ported to buildx: the only package that
-# imports dagger, so the pin lives here now.
 dependencies = [
     "ardt-core",
     "ardt-pipelines",
-    "dagger-io==0.21.7",
 ]
 
 [project.entry-points."ardt.pipelines"]

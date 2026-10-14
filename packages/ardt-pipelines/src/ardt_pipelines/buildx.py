@@ -116,7 +116,8 @@ def _entitlements(bake_file: Path) -> list[str]:
         return []
     paths: list[str] = []
     for target in document.get("target", {}).values():
-        for path in (target.get("contexts") or {}).values():
+        contexts: dict[str, object] = target.get("contexts") or {}
+        for path in contexts.values():
             if isinstance(path, str) and Path(path).is_absolute() and path not in paths:
                 paths.append(path)
     return [f"--allow=fs.read={path}" for path in paths]

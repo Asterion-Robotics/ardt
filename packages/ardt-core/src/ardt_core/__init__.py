@@ -20,10 +20,10 @@
 Two execution planes, never mixed:
 
 * **tasks** run in whatever environment invokes them (dev shell, container, CI job);
-* **pipelines** orchestrate environments (containers, registries, services) via Dagger.
+* **pipelines** orchestrate image builds (stages, registries, manifests) on docker buildx.
 
 Pipelines call tasks inside containers; tasks never call pipelines. Core knows
-about neither ROS nor Dagger — installing it never drags in an engine.
+about neither ROS nor docker — installing it never drags in an executor.
 """
 
 from __future__ import annotations

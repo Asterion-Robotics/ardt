@@ -19,7 +19,7 @@
 
 A pipeline is a plain function, sync or async, taking ``(ctx, builder, *keyword
 params)``: the builder is the executor handle the runner injects (BuildKit
-through buildx by default). Parameters come from CLI ``--arg k=v`` and are
+through buildx). Parameters come from CLI ``--arg k=v`` and are
 coerced to the annotated types.
 Plugins expose pipelines by pointing an ``ardt.pipelines`` entry point at a module;
 every :class:`PipelineDef` found in that module is registered.
@@ -41,7 +41,6 @@ from ardt_core.errors import ArdtError
 PipelineFunc = Callable[..., Awaitable[None] | None]
 
 _SUPPORTED = ("str", "int", "float", "bool", "list[str]")
-_ENGINES = ("buildx", "dagger")
 
 
 @dataclass(frozen=True)
@@ -63,8 +62,6 @@ class PipelineDef:
     doc: str
     func: PipelineFunc
     params: tuple[Param, ...]
-    engine: str = "buildx"
-    """``buildx`` (the executor) or ``dagger`` for a pipeline not yet ported."""
 
     def bind(self, args: Mapping[str, str]) -> dict[str, object]:
         """Coerce ``--arg k=v`` strings to the annotated parameter types."""
@@ -121,16 +118,12 @@ def _coerce(pipeline_name: str, param: Param, raw: str) -> object:
         ) from exc
 
 
-def pipeline(
-    name: str, doc: str = "", engine: str = "buildx"
-) -> Callable[[PipelineFunc], PipelineDef]:
+def pipeline(name: str, doc: str = "") -> Callable[[PipelineFunc], PipelineDef]:
     """Register a function as a pipeline.
 
     The first two parameters (context and executor handle) are injected by the
     runner; everything after is a user parameter settable via ``--arg``.
     """
-    if engine not in _ENGINES:
-        raise ArdtError(f"pipeline `{name}`: unknown engine `{engine}`", hint=f"one of {_ENGINES}")
 
     def decorate(func: PipelineFunc) -> PipelineDef:
         signature = inspect.signature(func)
@@ -160,7 +153,6 @@ def pipeline(
             doc=doc or inspect.getdoc(func) or "",
             func=func,
             params=tuple(params),
-            engine=engine,
         )
 
     return decorate

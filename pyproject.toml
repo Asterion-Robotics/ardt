@@ -82,7 +82,7 @@ testpaths = [
 ]
 markers = [
     "unit: no docker, runs anywhere",
-    "integration: needs docker or a dagger engine",
+    "integration: needs docker",
     "e2e: the dogfood pipeline",
 ]
 addopts = "-m 'not integration and not e2e' --strict-markers"

@@ -33,6 +33,16 @@ root ``index.html`` redirecting to the default version. On GitLab the CI shim
 just declares ``public/`` as the pages artifact; a GitHub pages/gh-pages
 publish step can consume the same directory.
 
+The build is one rendered Dockerfile (exported as
+``pipeline-reports/Dockerfile.docs`` with its bake file): a ``builder`` stage
+with the toolchain and ardt installed, a ``tree`` stage building the working
+tree, one stage per historical ref cloning the repository's ``.git`` (a named
+build context) and building that ref, and a ``site`` stage of nothing but the
+built html, exported locally. A historical ref that fails to build leaves a
+marker instead of html and is left out of the site: refs are immutable, so a
+build that breaks on one can never be repaired, and failing the whole run
+over it would cost every other version. The working tree fails hard.
+
 PDF and the pinned doc-builder image are future additions; until then the
 builder is assembled on the fly (apt + pip install of ardt-doc-tasks).
 """
@@ -40,15 +50,17 @@ builder is assembled on the fly (apt + pip install of ardt-doc-tasks).
 from __future__ import annotations
 
 import json
+import shlex
+import shutil
 from pathlib import Path
 
-import dagger
 from pydantic import BaseModel, ConfigDict, Field
 
 from ardt_core import dist
 from ardt_core import git as git_module
 from ardt_core.context import Context
 from ardt_pipelines import pipeline, std
+from ardt_pipelines.buildx import Buildx, Target, render_bake
 
 ARDT_MODULES = ("ardt-core", "ardt-doc-tasks")
 """The ardt modules the docs builder needs (it runs ``ardt doc build``). Where
@@ -59,14 +71,25 @@ repo whose docs autodoc more of the toolchain adds them via
 SITE_DIR = "public"
 """Export directory — GitLab Pages' artifact convention."""
 
+EXPORT_DIR = "pipeline-reports"
+"""Where the rendered recipe and its bake file land, beside ros-ci's."""
+
+RENDERED_NAME = "Dockerfile.docs"
+BAKE_NAME = "bake.docs.json"
+SITE_TARGET = "site"
+GIT_CONTEXT = "gitdir"
+"""Named build context pointing at the repository's ``.git``: historical refs
+clone from it inside the build, while the main context excludes ``.git``."""
+LOCAL_ARDT_CONTEXT = "ardt-src"
+FAILED_MARKER = ".ardt-build-failed"
+"""Left in a version's directory by a historical build that failed; the
+pipeline drops the version and reports it."""
+
 STYLE_ENV = "ARDT_DOC_STYLE"
 """The contract with the doc *task* plane, carried as a name rather than an
 import: this package deliberately does not depend on ``ardt-doc-tasks`` (it
 installs it into the builder, it never runs it). ``ardt_doc_tasks.config``
 declares the same constant, and its preset reads it."""
-
-REPO_EXCLUDES = tuple(e for e in std.SOURCE_EXCLUDES if e != ".git")
-"""Historical builds need the git history the normal source context excludes."""
 
 
 class VersionsConfig(BaseModel):
@@ -230,154 +253,141 @@ def builder_modules(cfg: DocsCiConfig) -> tuple[str, ...]:
     return tuple(merged.values())
 
 
-def _builder(
-    ctx: Context, dag: dagger.Client, cfg: DocsCiConfig, ardt_source: str
-) -> dagger.Container:
-    """The container the docs build in: toolchain + ardt-doc-tasks installed."""
+def _stage_name(index: int) -> str:
+    return f"ref-{index}"
+
+
+def render(
+    ctx: Context, cfg: DocsCiConfig, *, refs: list[str], local_ardt: bool, ardt_source: str
+) -> str:
+    """The docs recipe: builder, the working tree, one stage per ref, the site."""
     modules = builder_modules(cfg)
-    container = dag.container().from_(cfg.builder)
+    lines = [
+        "# syntax=docker/dockerfile:1",
+        "# Rendered by `ardt pipe run docs-ci` — machine-owned, exported with every run.",
+        f"FROM {cfg.builder} AS builder",
+    ]
     if cfg.apt_packages:
-        packages = " ".join(cfg.apt_packages)
-        container = container.with_exec(
-            [
-                "bash",
-                "-lc",
-                f"apt-get update && apt-get install -y --no-install-recommends {packages}"
-                " && rm -rf /var/lib/apt/lists/*",
-            ]
+        lines.append(
+            "RUN apt-get update && apt-get install -y --no-install-recommends "
+            f"{' '.join(cfg.apt_packages)} && rm -rf /var/lib/apt/lists/*"
         )
     # Ahead of the ardt install: a style package moves per release, the ardt
     # layer moves every commit, so this order keeps the cheaper layer cached.
     if cfg.pip_packages:
-        container = container.with_exec(["pip", "install", "--no-cache-dir", *cfg.pip_packages])
-    if ardt_source and Path(ardt_source).is_dir():
-        checkout = dag.host().directory(ardt_source, exclude=[".git", ".venv", "__pycache__"])
-        container = container.with_directory("/opt/ardt-src", checkout).with_exec(
-            [
-                "pip",
-                "install",
-                "--no-cache-dir",
-                *(dist.local_requirement(m, "/opt/ardt-src") for m in modules),
-            ]
-        )
+        lines.append(f"RUN pip install --no-cache-dir {shlex.join(cfg.pip_packages)}")
+    if local_ardt:
+        lines.append(f"COPY --from={LOCAL_ARDT_CONTEXT} / /opt/ardt-src")
+        requirements = [dist.local_requirement(m, "/opt/ardt-src") for m in modules]
     else:
         section = ctx.cfg.ardt
         if ardt_source:
             section = section.model_copy(update={"git": ardt_source})
-        container = container.with_exec(
-            ["pip", "install", "--no-cache-dir", *section.requirements(modules)]
-        )
-    # The working tree's style, imposed on every ref this container builds.
-    #
-    # Without it a style only reaches refs whose own conf.py names it, so a
-    # release cut before the style existed renders unthemed forever. Set here, it
-    # behaves like the rest of the toolchain: the site restyles whole on the next
-    # run. `tasks.doc` is the task plane's section, read directly rather than
-    # duplicated into `pipelines.docs_ci`.
+        requirements = list(section.requirements(modules))
+    lines.append(f"RUN pip install --no-cache-dir {shlex.join(requirements)}")
+    # The working tree's style, imposed on every ref this builder builds: a
+    # release cut before the style existed would otherwise render unthemed
+    # forever; set here, the site restyles whole on the next run.
     styles = ctx.cfg.section_as("tasks", TasksSection).doc.style
     if styles:
-        container = container.with_env_variable(STYLE_ENV, " ".join(styles))
-
-    # Mounted/cloned repos belong to a different uid inside the container.
-    return container.with_exec(
-        [
-            "bash",
-            "-lc",
-            "command -v git >/dev/null && git config --global --add safe.directory '*' || true",
-        ]
+        lines.append(f"ENV {STYLE_ENV}={shlex.quote(' '.join(styles))}")
+    # Cloned repos belong to a different uid inside the container.
+    lines.append(
+        "RUN command -v git >/dev/null && git config --global --add safe.directory '*' || true"
     )
 
-
-def _build_docs(container: dagger.Container) -> dagger.Directory:
-    """Run the doc task in ``/ws`` and return the built html."""
-    return (
-        container.with_workdir("/ws")
-        .with_exec(["ardt", "doc", "build"])
-        .directory("/ws/build/doc/html")
-    )
-
-
-async def _build_historical(
-    ctx: Context, ref: str, built: dagger.Directory
-) -> dagger.Directory | None:
-    """Force ``ref``'s build now, or report it and leave it out of the site.
-
-    Historical refs fail *soft*, and the working tree does not. The asymmetry is
-    the point: a ref is immutable, so a build that breaks on it can never be
-    repaired, and failing the whole run over it only costs you every *other*
-    version of the site. The working tree is the half you can still fix, so it
-    keeps failing hard (its build is not forced here — the export at the end
-    raises for it).
-
-    What breaks an old ref is normally the builder: docs-ci installs one module
-    set, from the working tree, and then checks every ref out inside it, so a
-    ref whose ``conf.py`` imports a distribution that has since been renamed
-    cannot resolve it. Dropping that version beats maintaining a glob that
-    excludes it by hand.
-
-    ``sync()`` is what makes this possible at all: without it the directory is a
-    lazy handle and the failure would not surface until ``export``, by which
-    point it is the whole site failing, not one version.
-    """
-    try:
-        return await built.sync()
-    except dagger.DaggerError as exc:
-        detail = str(exc).splitlines()[0] if str(exc) else type(exc).__name__
-        ctx.console.warn(f"docs-ci: `{ref}` failed to build; leaving it out of the site ({detail})")
-        return None
-
-
-@pipeline(
-    name="docs-ci",
-    doc="Build the versioned docs site into public/ (Pages-ready)",
-    engine="dagger",  # not yet ported to the buildx executor
-)
-async def docs_ci(ctx: Context, dag: dagger.Client, ardt_source: str = "") -> None:
-    cfg = _config(ctx)
-    base = _builder(ctx, dag, cfg, ardt_source)
-
-    current = working_tree_name(ctx)
-    ctx.console.step(f"docs: building working tree as `{current}`")
-    entries: list[tuple[str, dagger.Directory]] = [
-        (current, _build_docs(base.with_directory("/ws", std.source_dir(dag, ctx))))
+    lines += [
+        "",
+        "# the working tree: fails hard, it is the half that can still be fixed",
+        "FROM builder AS tree",
+        "COPY . /ws",
+        "WORKDIR /ws",
+        "RUN ardt doc build",
     ]
-
-    repo_with_history: dagger.Directory | None = None
-    skipped: list[str] = []
-    for ref in historical_refs(ctx, cfg):
-        if repo_with_history is None:
-            repo_with_history = dag.host().directory(
-                str(ctx.project_root), exclude=list(REPO_EXCLUDES)
-            )
-        ctx.console.step(f"docs: building `{ref}` from git history")
-        checkout = (
-            base.with_directory("/repo", repo_with_history)
+    for index, ref in enumerate(refs):
+        lines += [
+            "",
+            f"# {ref}, from git history: a failure leaves a marker, not a broken site",
+            f"FROM builder AS {_stage_name(index)}",
+            f"COPY --from={GIT_CONTEXT} / /repo.git",
             # --no-hardlinks: a local clone hardlinks the object store by default,
-            # which fails across the container's overlay mount ("hardlink
-            # different from source"). Copying costs a repo-sized read, once.
-            .with_exec(["git", "clone", "-q", "--no-hardlinks", "/repo", "/ws"])
-            .with_exec(["git", "-C", "/ws", "checkout", "-q", ref])
-        )
-        built = await _build_historical(ctx, ref, _build_docs(checkout))
-        if built is None:
+            # which fails across the build's overlay mount.
+            "RUN git clone -q --no-hardlinks /repo.git /ws"
+            f" && git -C /ws checkout -q {shlex.quote(ref)}",
+            "WORKDIR /ws",
+            "RUN mkdir -p build/doc/html"
+            f" && (ardt doc build || touch build/doc/html/{FAILED_MARKER})",
+        ]
+    lines += [
+        "",
+        "FROM scratch AS site",
+        f"COPY --from=tree /ws/build/doc/html /{working_tree_name(ctx)}",
+    ]
+    for index, ref in enumerate(refs):
+        lines.append(f"COPY --from={_stage_name(index)} /ws/build/doc/html /{site_name(ref)}")
+    return "\n".join(lines) + "\n"
+
+
+def collect_site(
+    ctx: Context, site: Path, *, current: str, refs: list[str], default: str
+) -> tuple[list[str], list[str]]:
+    """Drop the versions whose build left a marker, write the switcher data and
+    the root redirect; returns the versions kept and the refs skipped."""
+    names: list[str] = [current]
+    skipped: list[str] = []
+    for ref in refs:
+        name = site_name(ref)
+        if (site / name / FAILED_MARKER).exists():
+            shutil.rmtree(site / name, ignore_errors=True)
+            ctx.console.warn(f"docs-ci: `{ref}` failed to build; leaving it out of the site")
             skipped.append(ref)
-            continue
-        entries.append((site_name(ref), built))
+        else:
+            names.append(name)
+    (site / "versions.json").write_text(versions_json(names, default), encoding="utf-8")
+    (site / "index.html").write_text(redirect_html(default), encoding="utf-8")
+    return names, skipped
 
-    names = [name for name, _ in entries]
-    default = cfg.default or current
-    if default not in names:
-        ctx.console.warn(f"docs-ci: default `{default}` was not built; the redirect uses it anyway")
 
-    site = dag.directory()
-    for name, html in entries:
-        site = site.with_directory(name, html)
-    site = site.with_new_file("versions.json", versions_json(names, default))
-    site = site.with_new_file("index.html", redirect_html(default))
+@pipeline(name="docs-ci", doc="Build the versioned docs site into public/ (Pages-ready)")
+def docs_ci(ctx: Context, builder: Buildx, ardt_source: str = "") -> None:
+    cfg = _config(ctx)
+    current = working_tree_name(ctx)
+    refs = historical_refs(ctx, cfg)
+    local_ardt = bool(ardt_source) and Path(ardt_source).is_dir()
+    rendered = render(ctx, cfg, refs=refs, local_ardt=local_ardt, ardt_source=ardt_source)
+
+    export_dir = ctx.project_root / EXPORT_DIR
+    export_dir.mkdir(parents=True, exist_ok=True)
+    (export_dir / RENDERED_NAME).write_text(rendered, encoding="utf-8")
+    (export_dir / f"{RENDERED_NAME}.dockerignore").write_text(
+        "\n".join(std.SOURCE_EXCLUDES) + "\n", encoding="utf-8"
+    )
+    contexts = {GIT_CONTEXT: str(ctx.project_root / ".git")}
+    if local_ardt:
+        contexts[LOCAL_ARDT_CONTEXT] = str(Path(ardt_source).resolve())
+    target = Target(
+        name=SITE_TARGET,
+        dockerfile=f"{EXPORT_DIR}/{RENDERED_NAME}",
+        target=SITE_TARGET,
+        output=[f"type=local,dest={SITE_DIR}"],
+        contexts=contexts,
+    )
+    bake_file = export_dir / BAKE_NAME
+    bake_file.write_text(render_bake([target]), encoding="utf-8")
 
     # wipe: a version removed from the config must also leave public/ — a stale
     # directory would otherwise ride along into the Pages artifact forever.
-    await site.export(str(ctx.project_root / SITE_DIR), wipe=True)
+    site = ctx.project_root / SITE_DIR
+    shutil.rmtree(site, ignore_errors=True)
+    ctx.console.step(f"docs: building `{current}` and {len(refs)} historical version(s)")
+    builder.bake(bake_file, [SITE_TARGET], cwd=ctx.project_root)
+    if ctx.dry_run:
+        return
+
+    default = cfg.default or current
+    names, skipped = collect_site(ctx, site, current=current, refs=refs, default=default)
+    if default not in names:
+        ctx.console.warn(f"docs-ci: default `{default}` was not built; the redirect uses it anyway")
     ctx.emit(site_dir=SITE_DIR, versions=names, default=default, skipped=skipped)
     ctx.console.success(f"site at {SITE_DIR}/ ({', '.join(names)}; default -> {default})")
     if skipped:

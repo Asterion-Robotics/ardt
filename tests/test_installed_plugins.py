@@ -45,7 +45,7 @@ def test_the_ros_dev_profile_matches_the_ci_recipes_module_set() -> None:
     from the same `ardt:` pin, so drift here is drift between the container a
     developer works in and the image CI builds. The check lives at the root
     because it crosses two distributions that must never import each other —
-    the recipes module pulls dagger, which no dev-side test may pay for.
+    the recipes module belongs to the pipeline plane, which no dev-side test may pay for.
     """
     from ardt_ros_dev.profile import ROS2
     from ardt_ros_pipelines.recipes import ARDT_MODULES

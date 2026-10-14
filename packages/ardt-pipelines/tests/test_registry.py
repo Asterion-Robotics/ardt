@@ -17,7 +17,7 @@
 
 """The pipeline registry, engine-free: decorator, param binding, collection.
 
-Nothing here opens a Dagger connection. The engine path is covered
+Nothing here touches docker. The engine path is covered
 by the docker-marked test in the workspace-level tests/.
 """
 

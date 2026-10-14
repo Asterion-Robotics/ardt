@@ -29,7 +29,7 @@ from .registry import PipelineDef, collect
 
 
 def _pipelines(ctx: Context) -> dict[str, PipelineDef]:
-    ctx.registry.load_deferred()  # pipeline modules (and dagger) import here, not at startup
+    ctx.registry.load_deferred()  # pipeline modules import here, not at startup
     modules: dict[str, object] = {}
     for plugin in ctx.registry.plugins:
         for entry_name, module in plugin.pipelines.items():
