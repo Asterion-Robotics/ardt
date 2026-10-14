@@ -161,3 +161,15 @@ class TestLoad:
             ros_ci.plan(ctx, cfg, platforms=list(cfg.platforms), credentials=std.Credentials())
         )
         assert f"{recipes.RUNTIME_TARGET}-load" not in targets
+
+
+class TestExportDir:
+    def test_the_wipe_keeps_the_digest_records(self, repo: Path) -> None:
+        """One platform per run writes a record; the next run's wipe must not eat it."""
+        ctx = _context(repo)
+        std.write_digest(ctx, repository="r/x", platform="linux/arm64", digest="sha256:a")
+        stale = repo / ros_ci.JUNIT_EXPORT_DIR / "old.xml"
+        stale.write_text("x")
+        ros_ci._prepare_export(ctx, "FROM scratch\n")
+        assert not stale.exists()
+        assert (repo / std.DIGESTS_DIR / "linux-arm64.json").exists()

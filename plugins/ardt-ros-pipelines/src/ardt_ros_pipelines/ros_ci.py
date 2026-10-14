@@ -226,8 +226,11 @@ def _prepare_export(ctx: Context, rendered: str) -> Path:
     run's reports.
     """
     export_dir = ctx.project_root / JUNIT_EXPORT_DIR
-    shutil.rmtree(export_dir, ignore_errors=True)
-    export_dir.mkdir(parents=True)
+    # the digest records survive the wipe: one platform per run, merged after the last
+    for stale in export_dir.iterdir() if export_dir.is_dir() else []:
+        if stale.name != Path(std.DIGESTS_DIR).name:
+            shutil.rmtree(stale, ignore_errors=True) if stale.is_dir() else stale.unlink()
+    export_dir.mkdir(parents=True, exist_ok=True)
     (export_dir / recipes.RENDERED_NAME).write_text(rendered, encoding="utf-8")
     # The pipeline's bake and the escape hatch read the same excludes.
     (export_dir / recipes.DOCKERIGNORE_NAME).write_text(
