@@ -4,6 +4,10 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 
 ## Unreleased
 
+### Fixed
+
+- `ros-ci`: the runtime stage's rosdep pass keeps the .debs it fetches in the shared apt cache mount (docker-clean is moved aside for that one command and put back), so a rebuilt runtime layer installs its exec dependencies from the cache instead of the mirror; the shipped image's apt behaviour is unchanged.
+
 ### Changed
 
 - The pipeline plane runs on BuildKit through `docker buildx bake` instead of Dagger. A pipeline renders bake targets (`ardt_pipelines.buildx`), the `ardt` builder (`docker-container` driver) is created on first use, and the bake file is exported as `pipeline-reports/bake.json` beside the rendered recipe. Why: an image published through Dagger carried re-serialised copies of its base layers (different diff IDs and blobs from the registry's), so a host stored and downloaded the base chain once per build tool, and the engine-local cache was evicted between runs; buildx reuses the registry's blobs byte for byte and keeps the layer cache in the registry (`<project>/cache:<stage>`, written by CI runs, read by every run).

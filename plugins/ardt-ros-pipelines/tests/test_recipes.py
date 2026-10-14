@@ -416,19 +416,23 @@ class TestCacheMounts:
         template's own comment quotes the command without it.)"""
         assert "rm -rf /var/lib/apt/lists/*" not in render(tmp_path)
 
-    def test_docker_clean_removed_in_build_kept_in_runtime(self, tmp_path: Path) -> None:
-        """Build stage keeps .debs in the cache mount; the SHIPPED image's apt
-        behavior is not ours to change."""
+    def test_docker_clean_removed_in_build_moved_aside_then_back_in_runtime(
+        self, tmp_path: Path
+    ) -> None:
+        """Build stage keeps .debs in the cache mount by removing the hook for
+        good; the runtime stage keeps them too, but only moves the hook aside
+        for its one command and puts it back: the SHIPPED image's apt behavior
+        is not ours to change."""
         rendered = render(tmp_path)
         build_stage = rendered.split(f"AS {recipes.TEST_TARGET}")[0]
         runtime_stage = rendered.split(f"AS {recipes.RUNTIME_TARGET}")[1]
         assert "rm -f /etc/apt/apt.conf.d/docker-clean" in build_stage
-        assert (
-            "docker-clean"
-            not in runtime_stage.replace(
-                "# alone here (removing it would change the SHIPPED image's apt behavior), so", ""
-            ).split("RUN", 1)[1]
-        )
+        assert "rm -f /etc/apt/apt.conf.d/docker-clean" not in runtime_stage
+        aside = runtime_stage.index("mv /etc/apt/apt.conf.d/docker-clean /tmp/docker-clean")
+        update = runtime_stage.index("apt-get update")
+        back = runtime_stage.index("mv /tmp/docker-clean /etc/apt/apt.conf.d/docker-clean")
+        assert aside < update < back
+        assert "RUN" not in runtime_stage[aside:back], "away for one command only"
 
     def test_deps_layer_keeps_cache_mounts_alongside_git_mounts(self, tmp_path: Path) -> None:
         rendered = render(tmp_path, git_host="code.example.com")
