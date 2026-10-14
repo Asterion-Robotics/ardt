@@ -130,6 +130,8 @@ class TestBuilder:
         ]
         create = runner.calls[1]
         assert create[create.index("--driver") + 1] == "docker-container"
+        assert f"image={buildx.BUILDKIT_IMAGE}" in create, "the BuildKit version is pinned"
+        assert "--buildkitd-config" in create, "the builder gets ardt's bounded GC policy"
         bake = runner.calls[2]
         assert bake[bake.index("--builder") + 1] == buildx.BUILDER
         assert bake[-1] == "reports"
