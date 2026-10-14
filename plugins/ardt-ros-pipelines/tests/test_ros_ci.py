@@ -118,31 +118,25 @@ class TestPlatformSelection:
         assert "platforms=['linux/amd64']" in err
 
 
-class TestNativeVariant:
-    """--load picks the one variant this machine can run."""
+class TestNativePlatform:
+    """--load picks the one platform this machine can run."""
 
     def test_single_platform_taken_at_face_value(self) -> None:
-        variant = object()
-        assert ros_ci._native_variant(["linux/riscv64"], [variant]) is variant  # type: ignore[arg-type]
+        assert ros_ci._native_platform(["linux/riscv64"]) == "linux/riscv64"
 
     def test_multi_platform_picks_the_native_arch(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(ros_ci.platform, "machine", lambda: "x86_64")
-        amd, arm = object(), object()
-        picked = ros_ci._native_variant(["linux/arm64", "linux/amd64"], [arm, amd])  # type: ignore[arg-type]
-        assert picked is amd
+        assert ros_ci._native_platform(["linux/arm64", "linux/amd64"]) == "linux/amd64"
 
     def test_no_native_match_yields_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(ros_ci.platform, "machine", lambda: "x86_64")
-        a, b = object(), object()
-        assert ros_ci._native_variant(["linux/arm64", "linux/arm/v7"], [a, b]) is None  # type: ignore[arg-type]
+        assert ros_ci._native_platform(["linux/arm64", "linux/arm/v7"]) is None
 
 
 class TestGitCredentials:
     """The fail-fast gate: git_host set, nothing to authenticate with."""
 
     def test_fail_fast_without_credentials(self, repo: Path) -> None:
-        import asyncio
-
         import pytest
 
         from ardt_core.context import Context
@@ -153,5 +147,5 @@ class TestGitCredentials:
         ctx = Context.build(cwd=repo)
         assert ctx.ci.job_token is None and ctx.ci.ssh_auth_sock is None
         with pytest.raises(ArdtError, match="no git credentials"):
-            # The gate raises before the (stub) dagger client is ever touched.
-            asyncio.run(ros_ci_module.ros_ci.func(ctx, object()))
+            # The gate raises before the (stub) builder is ever touched.
+            ros_ci_module.ros_ci.func(ctx, object())

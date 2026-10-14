@@ -1,12 +1,13 @@
 # Pipelines
 
-`ardt pipe` is the CI-facing half of ardt: it stands a container up with Dagger and runs tasks inside it. [Pipelines](../concepts/pipelines.md) is the model and the authoring guide; this page is the command surface.
+`ardt pipe` is the CI-facing half of ardt: it builds the images a recipe describes on docker buildx and runs tasks inside their stages. [Pipelines](../concepts/pipelines.md) is the model and the authoring guide; this page is the command surface.
 
 | Command | Does |
 |---|---|
 | `ardt pipe list` | every registered pipeline, with its `--arg` parameters, types and defaults |
 | `ardt pipe run <name>` | run one |
-| `ardt pipe run <name> --dry-run` | bind the arguments and print the plan, without Dagger or a docker daemon |
+| `ardt pipe run <name> --dry-run` | bind the arguments and print the plan, without a docker daemon |
+| `ardt pipe merge` | one manifest list from the per-platform images a split publish pushed by digest |
 
 | Flag on `run` | Does |
 |---|---|
@@ -24,12 +25,12 @@ An unknown name fails with the registered names as the hint, and a malformed `--
 
 ## What a run costs before it runs
 
-The Dagger SDK is imported only when a run actually begins. `ardt pipe list`, `--help` and `--dry-run` never touch it, so they stay fast and work on a machine with no daemon running. That is also what makes `--dry-run` a usable check in a pre-commit hook or a CI lint job.
+Docker is invoked only when a run actually begins. `ardt pipe list`, `--help` and `--dry-run` never touch it, so they stay fast and work on a machine with no daemon running. That is also what makes `--dry-run` a usable check in a pre-commit hook or a CI lint job.
 
 ## Artifacts
 
 Reports and exported files land under `pipeline-reports/` at the project root, a fixed convention so nothing needs per-repo wiring: the JUnit XMLs and the logs staged beside them, `test-exit-code` (the exit code of the test step, on which a run fails after the export), and the rendered recipe. `pipeline-reports/Dockerfile.rendered` is the ardt-free escape hatch: `docker build -f pipeline-reports/Dockerfile.rendered .` reproduces the image on a machine with nothing installed but Docker with BuildKit (the default since Docker 23.0; the recipe's test step uses `RUN --network=none`, which the legacy builder rejects).
 
-## Engine
+## Executor
 
-Locally the Dagger engine is auto-provisioned from the Docker socket, with nothing to set up. On a CI runner, point `_EXPERIMENTAL_DAGGER_RUNNER_HOST` at a persistent engine so successive jobs share its cache. `dagger-io` is pinned exactly; bumps are deliberate and run against the pipeline test suite.
+`docker buildx bake` against the `ardt` builder (a `docker-container` driver), created on first use; a CI job class may pre-create it and append native nodes for other architectures. The bake file of every run is exported as `pipeline-reports/bake.json` beside the rendered recipe, so `docker buildx bake -f pipeline-reports/bake.json reports` reproduces the gate with no ardt installed. The layer cache is a `cache` sub-image of the project in the registry, one tag per stage: CI runs write it, every run reads it.

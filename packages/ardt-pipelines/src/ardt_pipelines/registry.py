@@ -17,13 +17,15 @@
 
 """The ``@pipeline`` decorator and registry.
 
-A pipeline is a plain async function taking ``(ctx, dag, *keyword params)``;
-parameters come from CLI ``--arg k=v`` and are coerced to the annotated types.
+A pipeline is a plain function, sync or async, taking ``(ctx, builder, *keyword
+params)``: the builder is the executor handle the runner injects (BuildKit
+through buildx). Parameters come from CLI ``--arg k=v`` and are
+coerced to the annotated types.
 Plugins expose pipelines by pointing an ``ardt.pipelines`` entry point at a module;
 every :class:`PipelineDef` found in that module is registered.
 
-No Dagger import here: the registry and parameter binding are engine-free so they
-stay unit-testable anywhere.
+No executor import here: the registry and parameter binding are engine-free so
+they stay unit-testable anywhere.
 """
 
 from __future__ import annotations
@@ -36,7 +38,7 @@ from typing import Any
 
 from ardt_core.errors import ArdtError
 
-PipelineFunc = Callable[..., Awaitable[None]]
+PipelineFunc = Callable[..., Awaitable[None] | None]
 
 _SUPPORTED = ("str", "int", "float", "bool", "list[str]")
 
@@ -117,9 +119,9 @@ def _coerce(pipeline_name: str, param: Param, raw: str) -> object:
 
 
 def pipeline(name: str, doc: str = "") -> Callable[[PipelineFunc], PipelineDef]:
-    """Register an async function as a pipeline.
+    """Register a function as a pipeline.
 
-    The first two parameters (context and Dagger client) are injected by the
+    The first two parameters (context and executor handle) are injected by the
     runner; everything after is a user parameter settable via ``--arg``.
     """
 
@@ -127,7 +129,9 @@ def pipeline(name: str, doc: str = "") -> Callable[[PipelineFunc], PipelineDef]:
         signature = inspect.signature(func)
         parameters = list(signature.parameters.values())
         if len(parameters) < 2:
-            raise ArdtError(f"pipeline `{name}` must take (ctx, dag) as its first two parameters")
+            raise ArdtError(
+                f"pipeline `{name}` must take (ctx, builder) as its first two parameters"
+            )
         params: list[Param] = []
         for p in parameters[2:]:
             annotation = _annotation_name(p.annotation)

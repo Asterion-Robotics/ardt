@@ -202,13 +202,17 @@ def test_a_single_group_can_be_loaded_without_the_others(
     """`ardt dev` resolves a profile without importing any pipeline module.
 
     The pipeline entry point here explodes on load: asking for dev profiles
-    alone must never touch it, or every laptop render would pay for dagger.
+    alone must never touch it, or every laptop render would pay for the pipeline plane.
     """
     fake_package("acme_plugin", plugins.ARDT_PLUGIN_API)
     _version_ok(monkeypatch)
     eps = _four_group_entry_points()
     eps[1] = FakeEntryPoint(
-        "pipe", plugins.PIPELINES_GROUP, "acme_plugin.pipe", RuntimeError("dagger"), dist="acme"
+        "pipe",
+        plugins.PIPELINES_GROUP,
+        "acme_plugin.pipe",
+        RuntimeError("heavy import"),
+        dist="acme",
     )
 
     registry = discover(eps)
@@ -248,7 +252,7 @@ def test_a_failed_group_does_not_empty_the_groups_it_was_not_asked_for(
 def test_pipeline_groups_do_not_load_at_discovery(
     monkeypatch: pytest.MonkeyPatch, fake_package
 ) -> None:
-    """`ardt --help` must not pay for pipeline modules (they import dagger):
+    """`ardt --help` must not pay for pipeline modules (they import the executor):
     an exploding pipeline entry point is only touched by load_deferred()."""
     fake_package("acme_plugin", plugins.ARDT_PLUGIN_API)
     _version_ok(monkeypatch)

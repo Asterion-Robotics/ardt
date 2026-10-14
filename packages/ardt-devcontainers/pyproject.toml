@@ -12,7 +12,7 @@ license = "Apache-2.0"
 authors = [{ name = "Thibault Poignonec", email = "t.poignonec@asterion-robotics.com" }]
 
 # The devcontainer plane: it renders files and shells out to docker compose.
-# Nothing here may import dagger (02, the two-plane rule), any ROS package, or
+# Nothing here may import the pipeline plane (02, the two-plane rule), any ROS package, or
 # any profile plugin — repo-type knowledge arrives as data through
 # `ardt.dev_profiles`, and the dependency points this way, never back.
 dependencies = ["ardt-core"]

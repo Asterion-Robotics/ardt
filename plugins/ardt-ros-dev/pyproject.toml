@@ -12,7 +12,7 @@ license = "Apache-2.0"
 authors = [{ name = "Thibault Poignonec", email = "t.poignonec@asterion-robotics.com" }]
 
 # Data, not code: one Profile and one Dockerfile template. It depends on the
-# devcontainer engine for the Profile contract and on nothing else — no dagger
+# devcontainer engine for the Profile contract and on nothing else — no executor
 # (02, the two-plane rule), and no ROS package either, since a profile only
 # *describes* a ROS environment and is resolved on hosts that have none.
 dependencies = ["ardt-core", "ardt-devcontainers"]

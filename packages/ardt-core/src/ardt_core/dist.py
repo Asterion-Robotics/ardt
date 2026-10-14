@@ -55,7 +55,7 @@ ARDT_GIT = "git+https://github.com/Asterion-Robotics/ardt.git"
 _PACKAGES = frozenset({"ardt-core", "ardt-pipelines", "ardt-devcontainers"})
 """Monorepo modules living under ``packages/``; everything else is a plugin.
 
-The platform planes: the CLI itself, the Dagger plane, the devcontainer plane.
+The platform planes: the CLI itself, the pipeline plane, the devcontainer plane.
 Theme knowledge (``ardt-ros-tasks``, ``ardt-ros-dev``, …) is always a plugin."""
 
 

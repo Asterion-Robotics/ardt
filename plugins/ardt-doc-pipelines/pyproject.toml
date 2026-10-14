@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
 authors = [{ name = "Thibault Poignonec", email = "t.poignonec@asterion-robotics.com" }]
-keywords = ["ci", "cli", "robotics", "sphinx", "dagger", "pages"]
+keywords = ["ci", "cli", "robotics", "sphinx", "pages"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Programming Language :: Python :: 3.11",

@@ -22,7 +22,7 @@ ardt dev up    # the repo's devcontainer         (ardt-devcontainers)
 | HTML docs | `build/doc/html` |
 | Doxygen XML | `build/doc/doxygen/xml` |
 
-**No engine.** A task plugin never imports Dagger. That is a hard boundary, not a style preference: it keeps `ardt build` usable on a machine with no Docker.
+**No executor.** A task plugin never invokes docker. That is a hard boundary, not a style preference: it keeps `ardt build` usable on a machine with no Docker.
 
 ## Anatomy
 

@@ -11,8 +11,7 @@ requires-python = ">=3.11"
 license = "Apache-2.0"
 authors = [{ name = "Thibault Poignonec", email = "t.poignonec@asterion-robotics.com" }]
 
-# Depends on ardt-pipelines (which owns the exact dagger-io pin) — never on
-# dagger directly.
+# Depends on ardt-pipelines, which owns the executor; never on docker directly.
 dependencies = [
     "ardt-core",
     "ardt-pipelines",

@@ -15,48 +15,25 @@
 
 # Author: Thibault Poignonec <t.poignonec@asterion-robotics.com>
 
-"""Connecting to Dagger and executing a pipeline.
-
-All engine mechanics live here so that a ``dagger-io`` API bump lands in one file
-The SDK auto-provisions the engine when it finds a Docker socket; on
-CI runners the shim points ``_EXPERIMENTAL_DAGGER_RUNNER_HOST`` at the persistent
-engine instead — both are transparent to this code.
-"""
+"""Executing a pipeline: the function runs with the context and a
+:class:`~ardt_pipelines.buildx.Buildx` handle; an async pipeline is awaited."""
 
 from __future__ import annotations
 
 import asyncio
-import sys
-
-import dagger
+import inspect
 
 from ardt_core.context import Context
-from ardt_core.errors import ArdtError
 
+from .buildx import Buildx
 from .registry import PipelineDef
 
 
 def run_pipeline(ctx: Context, definition: PipelineDef, bound: dict[str, object]) -> None:
-    """Execute one pipeline. ``--dry-run`` never reaches the engine: the CLI
-    prints the plan and returns before this module is even imported."""
+    """Execute one pipeline. ``--dry-run`` never reaches here: the CLI prints
+    the plan and returns before this module is even imported."""
     rendered = " ".join(f"{k}={v!r}" for k, v in bound.items()) or "(no args)"
     ctx.console.step(f"pipeline {definition.name} ({rendered})")
-    try:
-        asyncio.run(_execute(ctx, definition, bound))
-    except dagger.DaggerError as exc:
-        raise ArdtError(
-            f"pipeline `{definition.name}` failed: {_first_line(exc)}",
-            hint="see the engine log above",
-        ) from exc
-
-
-async def _execute(ctx: Context, definition: PipelineDef, bound: dict[str, object]) -> None:
-    # Engine logs go to stderr: stdout stays reserved for the --json envelope.
-    config = dagger.Config(log_output=sys.stderr)
-    async with dagger.connection(config):
-        await definition.func(ctx, dagger.dag, **bound)
-
-
-def _first_line(exc: Exception) -> str:
-    text = str(exc) or exc.__class__.__name__
-    return text.splitlines()[0]
+    outcome = definition.func(ctx, Buildx(ctx), **bound)
+    if inspect.iscoroutine(outcome):
+        asyncio.run(outcome)

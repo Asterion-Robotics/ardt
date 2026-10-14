@@ -1,6 +1,6 @@
 # Overview
 
-Two independent axes describe every plugin. A **theme** is one concern ardt knows how to handle: ROS 2, documentation. A **plane** is *how* a command runs: in the environment you invoke it from, inside a container Dagger builds, or inside the container you develop in. A plugin is one cell of that grid, which is what its name spells out: `ardt-<theme>-<plane>`.
+Two independent axes describe every plugin. A **theme** is one concern ardt knows how to handle: ROS 2, documentation. A **plane** is *how* a command runs: in the environment you invoke it from, inside an image stage buildx builds, or inside the container you develop in. A plugin is one cell of that grid, which is what its name spells out: `ardt-<theme>-<plane>`.
 
 The planes are platform packages, documented on their own: [tasks](../concepts/tasks.md), [pipelines](../concepts/pipelines.md), [devcontainer](../devcontainer/index.md). Themes fill them in:
 

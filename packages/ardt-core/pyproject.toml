@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
 authors = [{ name = "Thibault Poignonec", email = "t.poignonec@asterion-robotics.com" }]
-keywords = ["ci", "cli", "robotics", "ros2", "dagger"]
+keywords = ["ci", "cli", "robotics", "ros2", "buildx"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Programming Language :: Python :: 3.11",
@@ -19,7 +19,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 
-# The core has zero heavy deps, by rule. dagger-io lives only in
+# The core has zero heavy deps, by rule. The executor lives only in
 # ardt-pipelines; anything ROS only in ardt-ros-tasks.
 dependencies = [
     "click>=8.1",

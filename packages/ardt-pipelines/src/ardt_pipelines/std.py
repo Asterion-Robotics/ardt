@@ -17,18 +17,18 @@
 
 """Shared pipeline helpers.
 
-Plugin pipelines build on these instead of raw Dagger calls where possible, so
-most SDK churn lands here and in :mod:`.engine` rather than in every plugin.
+Plugin pipelines build on these instead of hand-writing bake entries, so the
+conventions (image names, cache references, how credentials reach a build,
+the digest records a split publish leaves) live in one place.
 """
 
 from __future__ import annotations
 
-import tempfile
-from collections.abc import Sequence
+import json
+import re
+from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlsplit
-
-import dagger
 
 from ardt_core.context import Context
 from ardt_core.errors import ArdtError
@@ -43,17 +43,11 @@ SOURCE_EXCLUDES = (
     "pipeline-reports",
     "public",
 )
-"""Never ship the workspace's derived state into a build container."""
+"""Never ship the workspace's derived state into a build context."""
 
-
-def source_dir(dag: dagger.Client, ctx: Context) -> dagger.Directory:
-    """The project's source tree, minus derived state."""
-    return dag.host().directory(str(ctx.project_root), exclude=list(SOURCE_EXCLUDES))
-
-
-def cache_volume(dag: dagger.Client, ctx: Context, purpose: str) -> dagger.CacheVolume:
-    """Deterministic cache-volume naming: ``<purpose>-<project>``."""
-    return dag.cache_volume(f"{purpose}-{ctx.project}")
+DIGESTS_DIR = "pipeline-reports/digests"
+"""Where a per-platform publish records what it pushed, one JSON file per
+platform, for ``ardt pipe merge``."""
 
 
 def _path_from_remote(url: str) -> str | None:
@@ -81,10 +75,10 @@ def project_path(ctx: Context) -> str | None:
     return None
 
 
-def image_ref(ctx: Context, name: str | None = None) -> str:
-    """``<registry>/<group>/<project>[/<name>]:<version>`` — the one image name.
+def image_repository(ctx: Context, name: str | None = None) -> str:
+    """``<registry>/<group>/<project>[/<name>]`` — the image name without its tag.
 
-    The reference is identical wherever it is computed (the parity rule): the
+    The name is identical wherever it is computed (the parity rule): the
     project path comes from CI (``$CI_PROJECT_PATH`` / ``GITHUB_REPOSITORY``),
     else ``project_path:`` in ``~/.config/ardt/credentials.yaml``, else the git
     ``origin`` remote. GitLab's registry accepts nothing outside that
@@ -110,34 +104,55 @@ def image_ref(ctx: Context, name: str | None = None) -> str:
     repository = f"{path}/{name}" if name else path
     # Registry repository paths must be lowercase (GitLab lowercases
     # CI_REGISTRY_IMAGE; ghcr rejects uppercase).
-    return f"{ctx.ci.registry}/{repository.lower()}:{image_tag(ctx.version)}"
+    return f"{ctx.ci.registry}/{repository.lower()}"
 
 
-async def load_local(ctx: Context, container: dagger.Container) -> list[str]:
-    """Put a built image into the local docker daemon; returns its local tags.
+def image_ref(ctx: Context, name: str | None = None) -> str:
+    """``<registry>/<group>/<project>[/<name>]:<version>`` — the one image name."""
+    return f"{image_repository(ctx, name)}:{image_tag(ctx.version)}"
 
-    The engine's image store is not the daemon's, so the image travels as a
-    docker-format tarball through ``docker load`` (the daemon-local counterpart
-    of :func:`publish_multiarch`, single-arch by nature).
 
-    Tagged ``<project>:<X.Y.Z>-dev`` for the release being developed — a
-    *moving* tag, unlike the registry's immutable ones: each load overwrites
-    it, so the daemon holds one dev image per release line whose stale
-    predecessors dangle for ``docker image prune``, instead of one tag per
-    commit piling up. A release load (exact tag, clean tree) additionally gets
-    the pinned ``<project>:<version>``.
+def cache_ref(ctx: Context, name: str | None, target: str) -> str | None:
+    """The registry reference of a target's layer cache, or None when the
+    project has no registry to speak of (a local run with no credentials).
+
+    One ``cache`` sub-image per project, one tag per target: the cache of a
+    stage is shared by every branch and every runner, and survives any daemon.
+    """
+    try:
+        repository = image_repository(ctx, "cache")
+    except ArdtError:
+        return None
+    if "<project-path>" in repository:
+        return None
+    suffix = name or ""
+    tag = _slug(f"{suffix}-{target}" if suffix else target)
+    return f"{repository}:{tag}"
+
+
+def _slug(text: str) -> str:
+    return re.sub(r"[^A-Za-z0-9_.-]+", "-", text).strip("-")
+
+
+def platform_slug(platform: str) -> str:
+    """``linux/arm64`` -> ``linux-arm64``: a platform as a tag or file name."""
+    return _slug(platform)
+
+
+def load_names(ctx: Context) -> list[str]:
+    """The local tags of a ``--load`` image.
+
+    ``<project>:<X.Y.Z>-dev`` for the release being developed — a *moving*
+    tag, unlike the registry's immutable ones: each load overwrites it, so the
+    daemon holds one dev image per release line whose stale predecessors
+    dangle for ``docker image prune``, instead of one tag per commit piling
+    up. A release load (exact tag, clean tree) additionally gets the pinned
+    ``<project>:<version>``.
     """
     project = ctx.project.lower()
     names = [f"{project}:{dev_tag(ctx.version)}"]
     if ctx.is_release:
         names.append(f"{project}:{image_tag(ctx.version)}")
-    with tempfile.TemporaryDirectory(prefix="ardt-load-") as tmp:
-        tarball = str(Path(tmp) / "image.tar")
-        await container.export(tarball, media_types=dagger.ImageMediaTypes.DockerMediaTypes)
-        result = ctx.runner.run(["docker", "load", "-i", tarball], quiet=True)
-    loaded = _loaded_ref(result.tail)
-    for name in names:
-        ctx.runner.run(["docker", "tag", loaded, name], quiet=True)
     return names
 
 
@@ -145,18 +160,6 @@ def dev_tag(version: str) -> str:
     """``0.1.1.dev3+g…`` -> ``0.1.1-dev``: the release being developed, as a tag."""
     base = version.split("+")[0].partition(".dev")[0]
     return f"{base}-dev"
-
-
-def _loaded_ref(output: str) -> str:
-    """The image docker just loaded, from `docker load`'s own report."""
-    for line in output.splitlines():
-        for prefix in ("Loaded image ID: ", "Loaded image: "):
-            if line.startswith(prefix):
-                return line.removeprefix(prefix).strip()
-    raise ArdtError(
-        "docker load reported no image",
-        hint="is the docker CLI unusually old? `docker load` normally prints the loaded ref",
-    )
 
 
 def image_tag(version: str) -> str:
@@ -176,77 +179,74 @@ GIT_TOKEN_SECRET = "git_token"
 passes the same id the existing repo CI already uses:
 ``docker build --secret id=git_token,env=CI_JOB_TOKEN``."""
 
+GIT_TOKEN_ENV = "ARDT_GIT_TOKEN"
+"""The environment variable the secret is read from, set for the bake command
+only (``secret = ["id=git_token,env=ARDT_GIT_TOKEN"]``): the token lands in
+no file and on no command line."""
 
-def git_credentials(
-    dag: dagger.Client, ctx: Context, *, host: str
-) -> tuple[list[dagger.Secret], dagger.Socket | None]:
+
+@dataclass(frozen=True)
+class Credentials:
+    """What a build that clones private repos gets: bake ``secret`` and
+    ``ssh`` entries, and the environment the bake command needs for them."""
+
+    secret: list[str] = field(default_factory=list[str])
+    ssh: list[str] = field(default_factory=list[str])
+    env: dict[str, str] = field(default_factory=dict[str, str])
+
+
+def git_credentials(ctx: Context, *, host: str) -> Credentials:
     """Credentials for a build that clones private repos from ``host``.
 
-    Domain-agnostic, natively forwarded by Dagger: the job token travels as a
-    secret named :data:`GIT_TOKEN_SECRET` (scrubbed, never a layer), a local
-    ssh agent as a forwarded socket; the recipe's runtime branching picks
-    whichever arrived. Raises when neither exists — failing fast beats a
-    mid-build clone error.
+    Domain-agnostic: the job token travels as the BuildKit secret
+    :data:`GIT_TOKEN_SECRET` (read from the environment of the bake command,
+    never a layer), a local ssh agent as a forwarded socket; the recipe's
+    runtime branching picks whichever arrived. Raises when neither exists —
+    failing fast beats a mid-build clone error.
     """
-    secrets: list[dagger.Secret] = []
-    socket: dagger.Socket | None = None
+    secret: list[str] = []
+    ssh: list[str] = []
+    env: dict[str, str] = {}
     if ctx.ci.job_token is not None:
-        secrets.append(dag.set_secret(GIT_TOKEN_SECRET, ctx.ci.job_token))
+        secret.append(f"id={GIT_TOKEN_SECRET},env={GIT_TOKEN_ENV}")
+        env[GIT_TOKEN_ENV] = ctx.ci.job_token
     if ctx.ci.ssh_auth_sock is not None and Path(ctx.ci.ssh_auth_sock).is_socket():
-        socket = dag.host().unix_socket(ctx.ci.ssh_auth_sock)
-    if not secrets and socket is None:
+        ssh.append(f"default={ctx.ci.ssh_auth_sock}")
+    if not secret and not ssh:
         raise ArdtError(
             f"no git credentials available for `{host}`",
             hint="CI provides the job token; locally run an ssh agent or set "
             "`job_token:` (a PAT) in ~/.config/ardt/credentials.yaml",
         )
-    return secrets, socket
+    return Credentials(secret=secret, ssh=ssh, env=env)
 
 
-def registry_secret(dag: dagger.Client, ctx: Context) -> dagger.Secret:
-    """The registry password as a Dagger secret (scrubbed from logs)."""
-    if ctx.ci.registry_password is None:
+def write_digest(ctx: Context, *, repository: str, platform: str, digest: str) -> Path:
+    """Record what a per-platform publish pushed, for ``ardt pipe merge``."""
+    directory = ctx.project_root / DIGESTS_DIR
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / f"{platform_slug(platform)}.json"
+    path.write_text(
+        json.dumps({"repository": repository, "platform": platform, "digest": digest}) + "\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def read_digests(ctx: Context) -> list[dict[str, str]]:
+    """Every digest record of the project, sorted by platform."""
+    directory = ctx.project_root / DIGESTS_DIR
+    records: list[dict[str, str]] = []
+    for path in sorted(directory.glob("*.json")) if directory.is_dir() else []:
+        loaded = json.loads(path.read_text(encoding="utf-8"))
+        missing = {"repository", "platform", "digest"} - set(loaded)
+        if missing:
+            raise ArdtError(f"{path} lacks {', '.join(sorted(missing))}")
+        records.append({key: str(loaded[key]) for key in ("repository", "platform", "digest")})
+    if not records:
         raise ArdtError(
-            "no registry credentials available",
-            hint="CI provides them; locally fill ~/.config/ardt/credentials.yaml",
+            f"no digest records under {DIGESTS_DIR}/",
+            hint="a per-platform `ardt pipe run <pipeline> --publish --arg platforms=<one>` "
+            "writes one; collect them as artifacts before merging",
         )
-    return dag.set_secret("registry-password", ctx.ci.registry_password)
-
-
-def build_variants(
-    dag: dagger.Client,
-    src: dagger.Directory,
-    *,
-    dockerfile: str = "Dockerfile",
-    platforms: Sequence[str] = ("linux/amd64",),
-    build_args: dict[str, str] | None = None,
-) -> list[dagger.Container]:
-    """One container per platform, built from the repo's Dockerfile.
-
-    The Dockerfile defines the artifact; this only fans out the build: shipped
-    layers are never assembled in pipeline code.
-    """
-    args = [dagger.BuildArg(k, v) for k, v in (build_args or {}).items()]
-    return [
-        src.docker_build(dockerfile=dockerfile, platform=dagger.Platform(p), build_args=args)
-        for p in platforms
-    ]
-
-
-async def publish_multiarch(
-    dag: dagger.Client,
-    ctx: Context,
-    ref: str,
-    variants: Sequence[dagger.Container],
-) -> str:
-    """Push the platform variants as one manifest; returns and emits the digest.
-
-    Credentials enter here and only here — build containers never see them.
-    """
-    secret = registry_secret(dag, ctx)
-    user = ctx.ci.registry_user or ""
-    registry_host = ref.split("/", 1)[0]
-    target = dag.container().with_registry_auth(registry_host, user, secret)
-    digest = await target.publish(ref, platform_variants=list(variants))
-    ctx.emit(image=ref, image_digest=digest)
-    return digest
+    return records

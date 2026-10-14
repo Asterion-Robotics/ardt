@@ -1,6 +1,6 @@
 # ardt-pipelines
 
-The generic Dagger plane: the `@pipeline` registry and parameter binding, the `ardt pipe` CLI, the engine connection (the single place the exact `dagger-io` pin is exercised) and the `std` helpers. It knows nothing about ROS or any repo type.
+The generic container plane: the `@pipeline` registry and parameter binding, the `ardt pipe` CLI, the `buildx` executor (the single place docker is invoked) and the `std` helpers. It knows nothing about ROS or any repo type.
 
 ## `ardt_pipelines`
 

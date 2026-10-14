@@ -19,7 +19,7 @@
 
 In-environment and engine-free by design: these run wherever they are invoked —
 a dev shell, a devcontainer, or a CI container started by a pipeline. That is the
-property that keeps the inner loop working without Dagger installed.
+property that keeps the inner loop working without docker installed.
 """
 
 from __future__ import annotations

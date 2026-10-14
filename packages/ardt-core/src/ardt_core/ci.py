@@ -23,7 +23,7 @@ different variable names collapse into the same handful of fields. This is it.
 
 Everything a pipeline needs about "where am I running and what may I push to"
 arrives as :class:`CIInfo`. Secrets are carried as plain strings here and handed
-to Dagger's secret store at the publish step; they are never interpolated into a
+to the build as BuildKit secrets and to the registry login; they are never interpolated into a
 build container.
 """
 

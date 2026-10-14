@@ -36,14 +36,14 @@ incompatible or undeclared API version is **refused loudly and skipped whole**
 Loading is two-speed. Commands load at discovery (almost every invocation,
 ``--help`` included, needs them) with the whole-or-nothing rule above. The other
 three groups defer until :meth:`Registry.load_deferred` — pipeline modules
-import the Dagger SDK, which no ``ardt build`` should pay for. A deferred load
+import the pipeline plane, which no ``ardt build`` should pay for. A deferred load
 failure is reported as a :class:`Problem` and the group stays empty; the
 plugin's already-mounted commands remain (the one place a plugin can be observed
 part-loaded, and only when its own pipeline module is broken).
 
 Deferred loading is *per group*: ``ardt dev`` asks for ``ardt.dev_profiles``
 alone, so resolving a dev profile never imports a pipeline module (and so never
-drags Dagger onto a laptop). ``ardt plugins`` asks for all of them, which is the
+drags the pipeline plane onto a laptop). ``ardt plugins`` asks for all of them, which is the
 whole point of that command.
 
 Core never type-checks what a deferred entry point loaded to — that contract
@@ -154,7 +154,7 @@ class Registry:
 
         ``groups`` narrows the load to a subset of :data:`DEFERRED_GROUPS`:
         ``ardt dev`` passes ``[DEV_PROFILES_GROUP]`` so that finding a dev
-        profile never imports a pipeline module, and so never pays for Dagger.
+        profile never imports a pipeline module, and so never pays for the pipeline plane.
         Whatever is left unloaded stays deferred for a later, wider call.
         """
         wanted = frozenset(groups) if groups is not None else frozenset(DEFERRED_GROUPS)
@@ -266,7 +266,7 @@ def _load_distribution(
 
     # Commands load whole-or-nothing: one bad entry point disqualifies the
     # distribution, so a plugin never contributes half its commands. Every other
-    # group defers (Registry.load_deferred): pipeline modules import the Dagger
+    # group defers (Registry.load_deferred): pipeline modules import the executor
     # SDK, which most invocations never need.
     for entry_point in entry_points:
         if entry_point.group != COMMANDS_GROUP:

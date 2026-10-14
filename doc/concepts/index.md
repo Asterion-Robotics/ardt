@@ -8,7 +8,7 @@ Eight words carry all of ardt. Everything else in these pages is detail:
 | **pipeline** | the same tasks run *inside* containers — `ardt pipe run ros-ci` is CI |
 | **plugin** | a Python package adding tasks, pipelines or dev profiles; every command past `ardt info` is one |
 | **module** | an installable piece of ardt (technically: a Python distribution) — the platform packages and the plugins; the name `install.sh`, `ARDT_MODULES` and the `ardt:` config section address |
-| **plane** | *where* a command runs: in the environment you typed it in (task), in a container Dagger builds (pipeline), or in the container you develop in (devcontainer). A platform package owns each |
+| **plane** | *where* a command runs: in the environment you typed it in (task), in an image stage buildx builds (pipeline), or in the container you develop in (devcontainer). A platform package owns each |
 | **theme** | a family of plugins for one concern (ROS 2, docs) — up to one per plane, named `ardt-<theme>-<plane>` |
 | **profile** | a dev-container flavor a repo picks (`ros2` is the only one today) |
 | **render** | files ardt generates, gitignored and machine-owned — never edited, always re-derived |
@@ -23,9 +23,9 @@ Everything a developer actually runs arrives as a **plugin**, discovered through
 :align: center
 ```
 
-One plane holds the **tasks**, the commands that run where you type them. The other two each stand a container up and run those same tasks inside it: the pipeline plane for CI, driven by Dagger, and the devcontainer plane for the inner loop, driven by `docker compose`. Tasks never call either one back.
+One plane holds the **tasks**, the commands that run where you type them. The other two each stand a container up and run those same tasks inside it: the pipeline plane for CI, driven by docker buildx, and the devcontainer plane for the inner loop, driven by `docker compose`. Tasks never call either one back.
 
-That the two container planes run the *same* task plane, installed from the same `ardt:` pin, is what the parity rule is: the image CI builds and the container you work in cannot quietly diverge, and `ardt dev doctor` fails when they do. Core imports neither ROS nor Dagger, so the inner loop works with no engine installed.
+That the two container planes run the *same* task plane, installed from the same `ardt:` pin, is what the parity rule is: the image CI builds and the container you work in cannot quietly diverge, and `ardt dev doctor` fails when they do. Core imports neither ROS nor docker, so the inner loop works with no engine installed.
 
 The dotted boxes are the extension points. A plugin of your own joins the plane it contributes to through the same entry points the shipped ones use, and core is none the wiser ([extending ardt](extending.md)).
 

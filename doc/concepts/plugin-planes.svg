@@ -13,7 +13,7 @@
   <!--
     Three bands, not two. The pipeline plane and the devcontainer plane are
     *peers*: both stand up a container and run the task plane inside it, and
-    they differ only in engine (Dagger vs docker compose) and audience (CI vs a
+    they differ only in engine (docker buildx vs docker compose) and audience (CI vs a
     human). This diagram used to draw ardt-devcontainers inside the task plane,
     which held while `ardt dev` was one undivided distribution; it put the
     engine at the head of the "runs tasks inside containers" arrow when it
@@ -63,7 +63,7 @@
 
   <rect class="node" x="296" y="66" width="172" height="80" rx="6" stroke="#b9c4ff"/>
   <text class="node-name" x="382" y="101" fill="#030189">ardt-pipelines</text>
-  <text class="node-sub"  x="382" y="120" fill="#4a5bc8">@pipeline registry · Dagger</text>
+  <text class="node-sub"  x="382" y="120" fill="#4a5bc8">@pipeline registry · buildx</text>
 
   <rect class="node" x="484" y="66" width="172" height="80" rx="6" stroke="#b9c4ff"/>
   <text class="node-name" x="570" y="111" fill="#030189">ardt-ros-pipelines</text>

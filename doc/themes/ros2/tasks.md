@@ -1,6 +1,6 @@
 # ROS 2 tasks
 
-`ardt-ros-tasks` runs wherever it is invoked — dev shell, devcontainer, CI container — and never imports Dagger.
+`ardt-ros-tasks` runs wherever it is invoked — dev shell, devcontainer, CI container — and never invokes docker.
 
 | Command | Wraps |
 |---|---|

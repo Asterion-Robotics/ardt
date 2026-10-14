@@ -129,7 +129,7 @@ def profiles(registry: Registry) -> dict[str, Profile]:
     """Every profile installed plugins contribute, keyed by name.
 
     The deferred load is narrowed to ``ardt.dev_profiles``: rendering a
-    devcontainer must not import a pipeline module, which would pull dagger onto
+    devcontainer must not import a pipeline module, which would pull the pipeline plane onto
     a laptop for a command that never touches it.
 
     An entry point aimed at something that is not a :class:`Profile` is refused
