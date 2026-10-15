@@ -31,7 +31,21 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked,id=apt-cache-${TARGE
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked,id=apt-lists-${TARGETARCH} \
     rm -f /etc/apt/apt.conf.d/docker-clean \
  && apt-get update && apt-get install -y --no-install-recommends \
-      build-essential git python3-pip python3-venv openssh-client
+      build-essential git python3-pip python3-venv openssh-client curl libxml2-utils
+
+# ament_xmllint validates each package.xml against the schema its xml-model
+# line names (http://download.ros.org/schema/...), and the tests run without
+# network. The schemas are fetched here and libxml2's catalog maps that URL to
+# them, so xmllint resolves it offline. Refreshed whenever the builder changes;
+# download.ros.org answers on http only.
+RUN mkdir -p /usr/share/xml/ros/schema \
+ && for f in package_format1.xsd package_format2.xsd package_format3.xsd; do \
+      curl -fsS --retry 3 -o /usr/share/xml/ros/schema/$f http://download.ros.org/schema/$f || exit 1; \
+    done \
+ && for entry in rewriteURI rewriteSystem; do \
+      xmlcatalog --noout --create --add $entry http://download.ros.org/schema/ \
+        file:///usr/share/xml/ros/schema/ /etc/xml/catalog || exit 1; \
+    done
 
 # The same ardt tasks as on a dev machine run the build (two-plane rule).
 @ARDT_INSTALL@

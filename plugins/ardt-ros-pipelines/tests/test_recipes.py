@@ -83,6 +83,21 @@ def test_the_tests_run_without_network(tmp_path: Path) -> None:
     assert "RUN --network=none (ardt test --install-base" in rendered
 
 
+def test_the_package_schemas_resolve_offline(tmp_path: Path) -> None:
+    """ament_xmllint validates package.xml against the schema its xml-model line
+    names on download.ros.org; the tests have no network, so the build stage
+    fetches the schemas and libxml2's catalog maps the URL to them."""
+    rendered = render(tmp_path)
+    build = rendered.split("AS test\n", 1)[0]
+    step = build.index("RUN mkdir -p /usr/share/xml/ros/schema")
+    assert "libxml2-utils" in build[:step] and "curl" in build[:step]
+    for fmt in (1, 2, 3):
+        assert f"package_format{fmt}.xsd" in build[step:]
+    for entry in ("rewriteURI", "rewriteSystem"):
+        assert entry in build[step:]
+    assert step < build.index("ardt deps"), "fetched before the deps layer, refreshed with the base"
+
+
 def test_the_test_layer_is_keyed_by_a_per_run_arg(tmp_path: Path) -> None:
     """The test layer always succeeds, so BuildKit caches a red result like a green
     one: a per-run ARG right before it makes every run execute the tests, and only
