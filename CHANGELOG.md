@@ -4,6 +4,10 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 
 ## Unreleased
 
+### Added
+
+- The CI image `ghcr.io/asterion-robotics/ardt-ci:<tag>` is built from `images/ardt-ci` and published by the release workflow, for amd64 and arm64, with that release installed: a CI job pins ardt by pinning the image. Pull requests build and smoke-test it without pushing.
+
 ## [0.6.0] - 2026-10-15
 
 ### Fixed

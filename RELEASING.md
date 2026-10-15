@@ -5,7 +5,7 @@ A release is a git tag; there is no version file to bump. hatch-vcs derives ever
 ## Procedure
 
 1. Update [CHANGELOG.md](CHANGELOG.md): retitle *Unreleased* to the new version with today's date, and start a fresh empty *Unreleased* section. Commit on `main`.
-2. Tag and push. The tag trigger in `ci.yml` runs the full pipeline; the docs site deploys only if lint and tests are green.
+2. Tag and push. The tag trigger in `ci.yml` runs the full pipeline; once lint and tests are green, the docs site deploys and the CI image is published as `ghcr.io/asterion-robotics/ardt-ci:vX.Y.Z` (amd64 and arm64), with that release installed in it.
 
    ```bash
    git tag -a vX.Y.Z -m "vX.Y.Z"
