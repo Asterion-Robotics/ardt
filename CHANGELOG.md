@@ -4,15 +4,19 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 
 ## Unreleased
 
+## [0.6.0] - 2026-10-15
+
 ### Fixed
 
+- `ros-ci`: the registry cache export never fails a build (`ignore-error`), and the daemon is logged in whenever credentials exist, not only on `--publish`: a CI run whose token cannot write the project's cache (a fork's MR) builds and leaves no cache behind, one whose token can writes it on the gate run too.
+- `docs-ci`: the repository's git directory handed to the build is the common dir, so a linked worktree (whose `.git` is a file) builds its historical versions too.
 - `ros-ci`: the runtime stage's rosdep pass keeps the .debs it fetches in the shared apt cache mount (docker-clean is moved aside for that one command and put back), so a rebuilt runtime layer installs its exec dependencies from the cache instead of the mirror; the shipped image's apt behaviour is unchanged.
 
 ### Changed
 
 - The pipeline plane runs on BuildKit through `docker buildx bake` instead of Dagger. A pipeline renders bake targets (`ardt_pipelines.buildx`), the `ardt` builder (`docker-container` driver) is created on first use, and the bake file is exported as `pipeline-reports/bake.json` beside the rendered recipe. Why: an image published through Dagger carried re-serialised copies of its base layers (different diff IDs and blobs from the registry's), so a host stored and downloaded the base chain once per build tool, and the engine-local cache was evicted between runs; buildx reuses the registry's blobs byte for byte and keeps the layer cache in the registry (`<project>/cache:<stage>`, written by CI runs, read by every run).
 - `ros-ci`: the test results are exported through a `reports` stage of nothing but `/results`; `--load` is a `type=docker` output of the native platform; `--publish` on a subset of the configured platforms (`--arg platforms=`, one CI job per platform on a native runner) pushes by digest and records it under `pipeline-reports/digests/`. New knob `pipelines.ros_ci.compression` (`gzip`, `zstd`). A local ardt checkout (`--arg ardt_source=<dir>`) reaches the build as a named context instead of a copy inside the repo.
-- `@pipeline` functions take `(ctx, builder)` and may be plain functions. `docs-ci` runs on the executor too: one rendered recipe (`pipeline-reports/Dockerfile.docs`, exported with its bake file) builds the working tree and one stage per historical ref from the repository's `.git` handed in as a named context, into a `site` stage exported as `public/`; a historical ref that fails leaves a marker and is dropped from the site as before. No ardt package depends on Dagger any more.
+- **Breaking:** `@pipeline` functions take `(ctx, builder)` instead of `(ctx, dag)` and may be plain functions. `docs-ci` runs on the executor too: one rendered recipe (`pipeline-reports/Dockerfile.docs`, exported with its bake file) builds the working tree and one stage per historical ref from the repository's `.git` handed in as a named context, into a `site` stage exported as `public/`; a historical ref that fails leaves a marker and is dropped from the site as before. No ardt package depends on Dagger any more.
 - `Runner.run` takes `stdin`, how `docker login --password-stdin` gets the registry password without it appearing on a command line.
 
 ### Added
@@ -21,7 +25,7 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 
 ### Removed
 
-- `ardt_pipelines.std`: `source_dir`, `cache_volume`, `build_variants`, `publish_multiarch`, `load_local`, `registry_secret` (Dagger helpers); `git_credentials` returns bake `secret`/`ssh` entries and the environment they read from.
+- **Breaking:** `ardt_pipelines.std`: `source_dir`, `cache_volume`, `build_variants`, `publish_multiarch`, `load_local`, `registry_secret` (Dagger helpers); `git_credentials` returns bake `secret`/`ssh` entries and the environment they read from.
 
 ## [0.5.6] - 2026-10-08
 

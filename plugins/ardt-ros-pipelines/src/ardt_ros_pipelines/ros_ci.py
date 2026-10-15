@@ -251,7 +251,9 @@ def _cache(ctx: Context, cfg: RosCiConfig, target: str) -> tuple[list[str], list
     if ref is None:
         return [], []
     cache_from = [f"type=registry,ref={ref}"]
-    cache_to = [f"type=registry,ref={ref},mode=max"] if ctx.ci.is_ci else []
+    # ignore-error: a run whose token cannot write the cache (a fork's MR) is
+    # not a failed build, it is a build that left no cache behind
+    cache_to = [f"type=registry,ref={ref},mode=max,ignore-error=true"] if ctx.ci.is_ci else []
     return cache_from, cache_to
 
 
@@ -363,8 +365,8 @@ def ros_ci(
     bake_file = export_dir / BAKE_FILE
     bake_file.write_text(render_bake(targets), encoding="utf-8")
     builder.with_env(credentials.env)
-    if ctx.publish:
-        builder.login()
+    # a no-op without credentials; with them the cache export and the push need it
+    builder.login()
 
     # Steps 1-4: the `reports` target runs ardt deps/build/test as layers, on
     # the native platform only, and exports the results beside the recipe. A

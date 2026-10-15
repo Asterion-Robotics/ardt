@@ -131,3 +131,16 @@ def test_missing_git_binary_is_not_fatal(monkeypatch, tmp_path: Path) -> None:
 
     monkeypatch.setattr(git_module.subprocess, "run", boom)
     assert git_module.collect(tmp_path).is_repo is False
+
+
+def test_common_dir_is_the_main_repository_for_a_worktree(repo: Path, tmp_path: Path) -> None:
+    """A linked worktree's `.git` is a file; what a build must mount is the
+    directory it points to."""
+    from ardt_core import git as git_module
+    from ardt_core.testing import git
+
+    assert git_module.common_dir(repo) == (repo / ".git").resolve()
+    linked = tmp_path / "linked"
+    git("worktree", "add", "-q", str(linked), "HEAD", cwd=repo)
+    assert (linked / ".git").is_file()
+    assert git_module.common_dir(linked) == (repo / ".git").resolve()

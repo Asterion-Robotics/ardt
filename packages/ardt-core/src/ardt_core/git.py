@@ -132,6 +132,14 @@ def path_exists_at(cwd: Path, ref: str, path: str) -> bool:
     return _run(["cat-file", "-e", f"{ref}:{path}"], cwd) is not None
 
 
+def common_dir(cwd: Path) -> Path:
+    """The repository's git directory as an absolute path: ``.git`` for a
+    clone, the main repository's for a linked worktree (whose ``.git`` is a
+    file pointing there)."""
+    out = _run(["rev-parse", "--git-common-dir"], cwd) or ".git"
+    return (cwd / out).resolve()
+
+
 def is_shallow(cwd: Path) -> bool:
     """True in a shallow clone — CI depth limits hide tags and history."""
     return _run(["rev-parse", "--is-shallow-repository"], cwd) == "true"

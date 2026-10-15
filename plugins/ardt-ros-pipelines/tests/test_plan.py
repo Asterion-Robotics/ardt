@@ -63,7 +63,9 @@ class TestGate:
         assert recipes.TEST_RUN_ARG in reports.args, "a fresh value per run reruns the tests"
         cache = f"{REGISTRY}/example-group/my_robot/cache:{recipes.BUILD_TARGET}"
         assert reports.cache_from == [f"type=registry,ref={cache}"]
-        assert reports.cache_to == [f"type=registry,ref={cache},mode=max"], "CI writes the cache"
+        assert reports.cache_to == [f"type=registry,ref={cache},mode=max,ignore-error=true"], (
+            "CI writes the cache, and a failed write never fails the build"
+        )
 
     def test_a_laptop_reads_the_cache_and_never_writes_it(self, repo: Path) -> None:
         from ardt_core.testing import git
