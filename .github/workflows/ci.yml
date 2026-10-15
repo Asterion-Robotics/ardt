@@ -177,7 +177,7 @@ jobs:
         run: |
           docker run --rm --network none ardt-ci:test ardt --version
           docker run --rm --network none ardt-ci:test docker buildx version
-          docker run --rm --network none ardt-ci:test uv --version
+          docker run --rm --network none ardt-ci:test ardt pipe list
 
       - name: Log in to ghcr.io
         if: startsWith(github.ref, 'refs/tags/v')

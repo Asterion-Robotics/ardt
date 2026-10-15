@@ -20,42 +20,50 @@
 # ardt release, so a CI job pins ardt by pinning this image and pays for no
 # installer, no uv download and no CPython download at run time.
 #
-# The docker client is the base because the pipeline plane drives
-# `docker buildx bake` against the daemon the job provides; the docker:cli
-# image ships the buildx plugin. `docker login` writes ~/.docker/config.json,
-# which is how registry credentials reach pulls, the cache and the push.
-FROM docker:27-cli
+# Two stages: ardt is installed with uv in `build`, and the shipped image takes
+# only what a job runs: the docker CLI with its buildx plugin (the pipeline
+# plane drives `docker buildx bake` against the daemon the job provides, and
+# `docker login` writes the credentials pulls, the cache and the push read),
+# the CPython ardt runs on, and ardt's environment. Not shipped: uv itself, its
+# download cache, and the compose plugin the docker:cli image carries.
 
+FROM docker:27-cli AS docker
+
+FROM alpine:3.21 AS build
 # uv from a versioned image rather than an install script; the musl build,
 # which this alpine base needs.
-COPY --from=ghcr.io/astral-sh/uv:0.12.0 /uv /uvx /usr/local/bin/
-
+COPY --from=ghcr.io/astral-sh/uv:0.12.0 /uv /usr/local/bin/
 # bash: install.sh is bash. git: the modules install from a git repository.
 RUN apk add --no-cache bash curl git
-
 # Before the install step: install.sh ends with its own `command -v ardt`
 # check and fails if the tool is not reachable yet.
-ENV PATH="/root/.local/bin:${PATH}"
-
+ENV PATH="/root/.local/bin:${PATH}" UV_NO_CACHE=1
 # The CPython uv would otherwise download on first use, a musl build here.
 ARG PYTHON_VERSION=3.12
 ENV UV_PYTHON=${PYTHON_VERSION}
 RUN uv python install ${PYTHON_VERSION}
-
 # The module set is stated, not left to install.sh's contextual default (which
 # reads CI and any ardt.yaml in the working directory): the image must not
 # depend on where it is built. The CI bundle (no devcontainer modules, a runner
 # never opens one) plus the doc modules.
 ENV ARDT_MODULES="ardt-core ardt-pipelines ardt-ros-tasks ardt-ros-pipelines ardt-doc-tasks ardt-doc-pipelines"
-
 # The ardt to install: a tag on release, a commit on a pull request. It must
 # exist on GitHub, since install.sh and the modules are fetched from it, which
 # is also what proves the published installer works.
 ARG ARDT_REF
 RUN test -n "${ARDT_REF}" || { echo "ARDT_REF is required (a tag or a commit)"; exit 1; } \
  && curl -fLsS "https://raw.githubusercontent.com/Asterion-Robotics/ardt/${ARDT_REF}/install.sh" -o /tmp/install.sh \
- && CI=true ARDT_REF="${ARDT_REF}" bash /tmp/install.sh \
- && rm -f /tmp/install.sh
+ && CI=true ARDT_REF="${ARDT_REF}" bash /tmp/install.sh
 
+FROM alpine:3.21
+# git: ardt reads the repository (version, tags, history for docs). bash and
+# curl: what CI job scripts commonly call.
+RUN apk add --no-cache bash ca-certificates curl git
+COPY --from=docker /usr/local/bin/docker /usr/local/bin/docker
+COPY --from=docker /usr/local/libexec/docker/cli-plugins/docker-buildx /usr/local/libexec/docker/cli-plugins/docker-buildx
+# the CPython and ardt's tool environment, at the paths the environment's
+# links point to
+COPY --from=build /root/.local /root/.local
+ENV PATH="/root/.local/bin:${PATH}"
 # Fail the build rather than ship an image whose tooling is missing.
-RUN ardt --version && docker --version && docker buildx version && uv --version
+RUN ardt --version && docker --version && docker buildx version
