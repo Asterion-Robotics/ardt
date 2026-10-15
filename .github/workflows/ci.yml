@@ -137,6 +137,78 @@ jobs:
         with:
           path: public
 
+  # The CI image, built from images/ardt-ci with this very ref installed in it:
+  # checked on every pull request and push to main (amd64, loaded and smoke-
+  # tested, nothing pushed), published on a tag as
+  # ghcr.io/asterion-robotics/ardt-ci:<tag> for amd64 and arm64, once the rest
+  # of the pipeline is green. A release is an ardt version and an image, cut
+  # together.
+  ardt-ci-image:
+    needs: [check, lint, integration]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # push to ghcr.io under this repository's package
+    env:
+      IMAGE: ghcr.io/asterion-robotics/ardt-ci
+      # a tag on release; the commit under test otherwise (it exists on GitHub,
+      # which install.sh fetches from)
+      ARDT_REF: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-qemu-action@v3
+        if: startsWith(github.ref, 'refs/tags/v')
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build and smoke-test (amd64, not pushed)
+        if: "!startsWith(github.ref, 'refs/tags/v')"
+        uses: docker/build-push-action@v6
+        with:
+          context: images/ardt-ci
+          build-args: ARDT_REF=${{ env.ARDT_REF }}
+          platforms: linux/amd64
+          load: true
+          tags: ardt-ci:test
+
+      - name: The tooling runs, offline
+        if: "!startsWith(github.ref, 'refs/tags/v')"
+        run: |
+          docker run --rm --network none ardt-ci:test ardt --version
+          docker run --rm --network none ardt-ci:test docker buildx version
+          docker run --rm --network none ardt-ci:test ardt pipe list
+
+      - name: Log in to ghcr.io
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish (amd64 and arm64)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: docker/build-push-action@v6
+        with:
+          context: images/ardt-ci
+          build-args: ARDT_REF=${{ env.ARDT_REF }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ env.IMAGE }}:${{ github.ref_name }}
+          # links the package to this repository: it inherits its visibility
+          # (public) and its permissions
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ github.ref_name }}
+
+      - name: The published image reports this release
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          got=$(docker run --rm "$IMAGE:$GITHUB_REF_NAME" ardt --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+          test "$got" = "${GITHUB_REF_NAME#v}" || { echo "image has ardt $got, the tag is $GITHUB_REF_NAME"; exit 1; }
+          echo "ardt $got in $IMAGE:$GITHUB_REF_NAME"
+
   # Publishing is tag-only: main and pull requests build the site and stop.
   # Gated on the whole pipeline, not just `docs`: a tag is a release, and a
   # release whose tests or lint are red must not ship its site either.
