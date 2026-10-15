@@ -327,8 +327,8 @@ def ros_ci(
     bake_file = export_dir / BAKE_FILE
     bake_file.write_text(render_bake(targets), encoding="utf-8")
     builder.with_env(credentials.env)
-    # a no-op without credentials; with them the cache export and the push need it
-    builder.login()
+    # a no-op without credentials; the cache export wants it, the push needs it
+    builder.login(required=ctx.publish)
 
     # Steps 1-4: the `reports` target runs ardt deps/build/test as layers, on
     # the native platform only, and exports the results beside the recipe. A

@@ -55,7 +55,9 @@ class FakeRunner:
         key = " ".join(argv[:3])
         result = self.answers.get(key, Result(command=argv, returncode=0, tail=""))
         if check and not result.ok:
-            raise AssertionError(f"unexpected failure for {key}")
+            from ardt_core.runner import RunnerError
+
+            raise RunnerError(f"`{key}` exited {result.returncode}", command=argv, returncode=1)
         return result
 
 
@@ -147,6 +149,30 @@ class TestBuilder:
         assert login[:3] == ["docker", "login", "reg.example"]
         assert "s3cret" not in login
         assert runner.stdins == ["s3cret"]
+
+    def test_failed_login_warns_unless_required(self, repo: Path) -> None:
+        """A gate run builds without the registry cache; a publish cannot."""
+        from ardt_core.runner import RunnerError
+        from ardt_core.testing import build_context, console_output
+
+        runner = FakeRunner(
+            answers={
+                "docker login reg.example": Result(command=["docker"], returncode=1, tail="denied")
+            }
+        )
+        ctx = build_context(repo)
+        ctx.ci = CIInfo(
+            platform=Platform.GITLAB,
+            is_ci=True,
+            registry="reg.example",
+            registry_user="bot",
+            registry_password="s3cret",
+        )
+        ctx.runner = runner  # type: ignore[assignment]
+        buildx.Buildx(ctx).login()
+        assert "building without its cache" in console_output(ctx)
+        with pytest.raises(RunnerError):
+            buildx.Buildx(ctx).login(required=True)
 
     def test_login_is_a_no_op_without_credentials(self, repo: Path) -> None:
         runner = FakeRunner()
