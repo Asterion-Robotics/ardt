@@ -125,6 +125,12 @@ class RosCiConfig(BaseModel):
     git_token_user: str = "gitlab-ci-token"
     """Username the token authenticates as (GitLab job tokens require this
     literal; PATs accept any username, so the default serves both)."""
+    registry_cache: bool = True
+    """Keep the layer cache of every stage in the registry, as the ``cache``
+    sub-image of the project (one tag per stage): CI runs write it, every run
+    that can reach the registry reads it. Off, the cache is the builder's
+    own only (a registry that should hold nothing but images, or none at
+    all)."""
     compression: str = "gzip"
     """Layer compression of the published image: ``gzip`` (every consumer
     reads it) or ``zstd`` (smaller and faster to unpack, needs a consumer on
@@ -247,7 +253,7 @@ def _prepare_export(ctx: Context, rendered: str) -> Path:
 def _cache(ctx: Context, cfg: RosCiConfig, target: str) -> tuple[list[str], list[str]]:
     """``cache-from`` always when the project has a registry; ``cache-to`` on
     CI only, so a laptop reads the fleet's cache and never writes it."""
-    ref = std.cache_ref(ctx, cfg.image, target)
+    ref = std.cache_ref(ctx, cfg.image, target) if cfg.registry_cache else None
     if ref is None:
         return [], []
     cache_from = [f"type=registry,ref={ref}"]

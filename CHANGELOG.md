@@ -21,6 +21,7 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 
 ### Added
 
+- `pipelines.ros_ci.registry_cache` (default on): the layer cache in the registry can be switched off for a repository whose registry should hold images only.
 - `ardt pipe merge`: one manifest list from the digest records of a split publish.
 
 ### Removed

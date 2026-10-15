@@ -66,6 +66,7 @@ All knobs live under `pipelines.ros_ci:`.
 | `install_base` | where the workspace installs in the image (default `/opt/ros/app`) |
 | `strip_dev_files` | IP protection: strip headers, static libs and CMake/pkg-config exports before the runtime copy |
 | `platforms` | manifest platforms, e.g. `[linux/amd64, linux/arm64]` |
+| `registry_cache` | keep every stage's layer cache in the registry as `<project>/cache:<stage>` (default on; CI writes, every run reads); off, the builder's own cache alone |
 | `compression` | layer compression of the published image: `gzip` (default) or `zstd` (smaller, faster to unpack; consumers on containerd 1.6 or Docker 23 and later) |
 | `git_host` / `git_ssh_port` | auth for private `.repos` deps: CI job token, or a local ssh agent |
 | `base.Dockerfile` (a file) | the only local Docker file a repo may carry: a single-stage base extension (`FROM ${BASE_IMAGE}` + layers below the app — drivers, kernel modules), spliced into the rendered recipe |
