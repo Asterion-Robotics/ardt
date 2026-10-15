@@ -30,8 +30,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from pydantic import BaseModel, ConfigDict, Field
+
 from ardt_core.context import Context
 from ardt_core.errors import ArdtError
+
+from .buildx import Target
 
 SOURCE_EXCLUDES = (
     ".git",
@@ -250,3 +254,189 @@ def read_digests(ctx: Context) -> list[dict[str, str]]:
             "writes one; collect them as artifacts before merging",
         )
     return records
+
+
+# ---- what every image-producing pipeline shares: the recipe knows its stages,
+# this knows how a stage becomes a gate, an image, a cached layer or a record ----
+
+
+class ImagesConfig(BaseModel):
+    """``pipelines.images:`` — the knobs of every image-producing pipeline."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    registry_cache: bool = True
+    """Keep the layer cache of every stage in the registry, as the ``cache``
+    sub-image of the project (one tag per stage): CI runs write it, every run
+    that can reach the registry reads it. Off, the cache is the builder's own
+    only (a registry that should hold nothing but images, or none at all)."""
+    compression: str = "gzip"
+    """Layer compression of a published image: ``gzip`` (every consumer reads
+    it) or ``zstd`` (smaller and faster to unpack, needs a consumer on
+    containerd 1.6 or Docker 23 and later)."""
+
+
+class _ImagesSection(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    images: ImagesConfig = Field(default_factory=ImagesConfig)
+
+
+def images_config(ctx: Context) -> ImagesConfig:
+    return ctx.cfg.section_as("pipelines", _ImagesSection).images
+
+
+def cache_entries(
+    ctx: Context, cfg: ImagesConfig, image: str | None, stage: str
+) -> tuple[list[str], list[str]]:
+    """``cache-from`` when the project has a registry, ``cache-to`` on CI only,
+    nothing when the knob is off: a laptop reads the fleet's cache and never
+    writes it."""
+    ref = cache_ref(ctx, image, stage) if cfg.registry_cache else None
+    if ref is None:
+        return [], []
+    # ignore-error: a run whose token cannot write the cache (a fork's MR) is
+    # not a failed build, it is a build that left no cache behind
+    cache_to = [f"type=registry,ref={ref},mode=max,ignore-error=true"] if ctx.ci.is_ci else []
+    return [f"type=registry,ref={ref}"], cache_to
+
+
+def gate_target(
+    ctx: Context,
+    cfg: ImagesConfig,
+    *,
+    name: str,
+    dockerfile: str,
+    stage: str,
+    dest: str,
+    image: str | None = None,
+    args: dict[str, str] | None = None,
+    credentials: Credentials | None = None,
+    cache_stage: str | None = None,
+) -> Target:
+    """A stage exported to a local directory: test reports, a docs site.
+
+    ``cache_stage`` names the stage whose cache the export rides on when it is
+    not the exported one (a scratch stage of results caches nothing itself)."""
+    credentials = credentials or Credentials()
+    cache_from, cache_to = cache_entries(ctx, cfg, image, cache_stage or stage)
+    return Target(
+        name=name,
+        dockerfile=dockerfile,
+        target=stage,
+        args=dict(args or {}),
+        output=[f"type=local,dest={dest}"],
+        cache_from=cache_from,
+        cache_to=cache_to,
+        secret=list(credentials.secret),
+        ssh=list(credentials.ssh),
+    )
+
+
+def image_output(
+    ctx: Context, cfg: ImagesConfig, image: str | None, *, split: bool
+) -> tuple[list[str], list[str]]:
+    """An image target's ``output`` and ``tags``.
+
+    No ``--publish``: built and kept in the cache only (a broken stage still
+    fails the run). ``--publish`` with every configured platform: one pushed
+    manifest list under the image name. ``--publish`` on a subset (``split``):
+    pushed by digest, no tag, for ``ardt pipe merge``.
+    """
+    if not ctx.publish:
+        return ["type=cacheonly"], []
+    compression = f",compression={cfg.compression},oci-mediatypes=true,force-compression=true"
+    if split:
+        repository = image_repository(ctx, image)
+        return [
+            f"type=image,push=true,push-by-digest=true,name-canonical=true,name={repository}"
+            + compression
+        ], []
+    return [f"type=image,push=true{compression}"], [image_ref(ctx, image)]
+
+
+def image_target(
+    ctx: Context,
+    cfg: ImagesConfig,
+    *,
+    name: str,
+    dockerfile: str,
+    stage: str,
+    image: str | None,
+    platforms: list[str],
+    all_platforms: list[str],
+    credentials: Credentials | None = None,
+    extra_cache_from: list[str] | None = None,
+) -> Target:
+    """The shipped image for the selected platforms; ``extra_cache_from`` adds
+    the caches of the stages it forks from."""
+    credentials = credentials or Credentials()
+    output, tags = image_output(ctx, cfg, image, split=sorted(platforms) != sorted(all_platforms))
+    cache_from, cache_to = cache_entries(ctx, cfg, image, stage)
+    return Target(
+        name=name,
+        dockerfile=dockerfile,
+        target=stage,
+        platforms=list(platforms),
+        output=output,
+        tags=tags,
+        cache_from=[*(extra_cache_from or []), *cache_from],
+        cache_to=cache_to,
+        secret=list(credentials.secret),
+        ssh=list(credentials.ssh),
+    )
+
+
+def load_target(
+    ctx: Context,
+    *,
+    name: str,
+    dockerfile: str,
+    stage: str,
+    platform: str,
+    cache_from: list[str],
+    credentials: Credentials | None = None,
+) -> Target:
+    """The native image into the local daemon (``--load``), tagged
+    :func:`load_names`."""
+    credentials = credentials or Credentials()
+    return Target(
+        name=name,
+        dockerfile=dockerfile,
+        target=stage,
+        platforms=[platform],
+        output=["type=docker"],
+        tags=load_names(ctx),
+        cache_from=list(cache_from),
+        secret=list(credentials.secret),
+        ssh=list(credentials.ssh),
+    )
+
+
+def finish_publish(
+    ctx: Context,
+    metadata: dict[str, dict[str, object]],
+    *,
+    target: str,
+    image: str | None,
+    platforms: list[str],
+    all_platforms: list[str],
+) -> None:
+    """After a ``--publish`` bake: the digest bake reported, recorded for the
+    merge when the run built a subset of the platforms, emitted as the tag
+    when it built them all."""
+    digest = str(metadata.get(target, {}).get("containerimage.digest", ""))
+    if sorted(platforms) != sorted(all_platforms):
+        repository = image_repository(ctx, image)
+        built = ",".join(platforms)
+        path = write_digest(ctx, repository=repository, platform=built, digest=digest)
+        ctx.console.info(f"recorded {built} as {digest} in {path.relative_to(ctx.project_root)}")
+        ctx.emit(image_repository=repository, image_digest=digest, platforms=platforms)
+        ctx.console.success(
+            f"pushed {repository}@{digest} for {built}; "
+            "`ardt pipe merge` creates the tag once every platform's record is in"
+        )
+        return
+    ref = image_ref(ctx, image)
+    ctx.emit(image=ref, image_digest=digest)
+    ctx.console.success(f"published {ref} @ {digest}")

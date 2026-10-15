@@ -54,7 +54,13 @@ class TestGate:
         ctx = _context(repo)
         cfg = ros_ci.RosCiConfig()
         targets = _by_name(
-            ros_ci.plan(ctx, cfg, platforms=["linux/amd64"], credentials=std.Credentials())
+            ros_ci.plan(
+                ctx,
+                cfg,
+                std.ImagesConfig(),
+                platforms=["linux/amd64"],
+                credentials=std.Credentials(),
+            )
         )
         reports = targets[recipes.REPORTS_TARGET]
         assert reports.target == recipes.REPORTS_TARGET
@@ -74,7 +80,11 @@ class TestGate:
         ctx = _context(repo, ci=False)
         targets = _by_name(
             ros_ci.plan(
-                ctx, ros_ci.RosCiConfig(), platforms=["linux/amd64"], credentials=std.Credentials()
+                ctx,
+                ros_ci.RosCiConfig(),
+                std.ImagesConfig(),
+                platforms=["linux/amd64"],
+                credentials=std.Credentials(),
             )
         )
         reports = targets[recipes.REPORTS_TARGET]
@@ -82,9 +92,13 @@ class TestGate:
         assert reports.cache_to == []
 
     def test_registry_cache_can_be_switched_off(self, repo: Path) -> None:
-        cfg = ros_ci.RosCiConfig(registry_cache=False)
+        images = std.ImagesConfig(registry_cache=False)
         targets = ros_ci.plan(
-            _context(repo), cfg, platforms=["linux/amd64"], credentials=std.Credentials()
+            _context(repo),
+            ros_ci.RosCiConfig(),
+            images,
+            platforms=["linux/amd64"],
+            credentials=std.Credentials(),
         )
         assert all(t.cache_from == [] and t.cache_to == [] for t in targets)
 
@@ -93,6 +107,7 @@ class TestGate:
             ros_ci.plan(
                 _context(repo),
                 ros_ci.RosCiConfig(),
+                std.ImagesConfig(),
                 platforms=["linux/amd64"],
                 credentials=std.Credentials(),
             )
@@ -107,7 +122,11 @@ class TestGate:
             secret=["id=git_token,env=ARDT_GIT_TOKEN"], ssh=["default=/s"]
         )
         targets = ros_ci.plan(
-            _context(repo), ros_ci.RosCiConfig(), platforms=["linux/amd64"], credentials=credentials
+            _context(repo),
+            ros_ci.RosCiConfig(),
+            std.ImagesConfig(),
+            platforms=["linux/amd64"],
+            credentials=credentials,
         )
         assert all(t.secret == credentials.secret and t.ssh == credentials.ssh for t in targets)
 
@@ -117,7 +136,13 @@ class TestPublish:
         ctx = _context(repo, publish=True)
         cfg = ros_ci.RosCiConfig(platforms=["linux/amd64", "linux/arm64"])
         runtime = _by_name(
-            ros_ci.plan(ctx, cfg, platforms=list(cfg.platforms), credentials=std.Credentials())
+            ros_ci.plan(
+                ctx,
+                cfg,
+                std.ImagesConfig(),
+                platforms=list(cfg.platforms),
+                credentials=std.Credentials(),
+            )
         )[recipes.RUNTIME_TARGET]
         assert runtime.tags == [f"{REGISTRY}/example-group/my_robot:{std.image_tag(ctx.version)}"]
         assert runtime.output == [
@@ -129,7 +154,13 @@ class TestPublish:
         ctx = _context(repo, publish=True)
         cfg = ros_ci.RosCiConfig(platforms=["linux/amd64", "linux/arm64"])
         runtime = _by_name(
-            ros_ci.plan(ctx, cfg, platforms=["linux/arm64"], credentials=std.Credentials())
+            ros_ci.plan(
+                ctx,
+                cfg,
+                std.ImagesConfig(),
+                platforms=["linux/arm64"],
+                credentials=std.Credentials(),
+            )
         )[recipes.RUNTIME_TARGET]
         assert runtime.tags == []
         [output] = runtime.output
@@ -138,9 +169,15 @@ class TestPublish:
 
     def test_zstd_is_a_config_knob(self, repo: Path) -> None:
         ctx = _context(repo, publish=True)
-        cfg = ros_ci.RosCiConfig(compression="zstd")
+        cfg, images = ros_ci.RosCiConfig(), std.ImagesConfig(compression="zstd")
         runtime = _by_name(
-            ros_ci.plan(ctx, cfg, platforms=["linux/amd64"], credentials=std.Credentials())
+            ros_ci.plan(
+                ctx,
+                cfg,
+                images,
+                platforms=["linux/amd64"],
+                credentials=std.Credentials(),
+            )
         )[recipes.RUNTIME_TARGET]
         assert "compression=zstd" in runtime.output[0]
 
@@ -153,7 +190,13 @@ class TestLoad:
         ctx = _context(repo, load=True)
         cfg = ros_ci.RosCiConfig(platforms=["linux/amd64", "linux/arm64"])
         targets = _by_name(
-            ros_ci.plan(ctx, cfg, platforms=list(cfg.platforms), credentials=std.Credentials())
+            ros_ci.plan(
+                ctx,
+                cfg,
+                std.ImagesConfig(),
+                platforms=list(cfg.platforms),
+                credentials=std.Credentials(),
+            )
         )
         load = targets[f"{recipes.RUNTIME_TARGET}-load"]
         assert load.platforms == ["linux/amd64"]
@@ -167,7 +210,13 @@ class TestLoad:
         ctx = _context(repo, load=True)
         cfg = ros_ci.RosCiConfig(platforms=["linux/arm64", "linux/arm/v7"])
         targets = _by_name(
-            ros_ci.plan(ctx, cfg, platforms=list(cfg.platforms), credentials=std.Credentials())
+            ros_ci.plan(
+                ctx,
+                cfg,
+                std.ImagesConfig(),
+                platforms=list(cfg.platforms),
+                credentials=std.Credentials(),
+            )
         )
         assert f"{recipes.RUNTIME_TARGET}-load" not in targets
 

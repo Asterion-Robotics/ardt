@@ -190,17 +190,27 @@ class Buildx:
                 )
         self._ready = True
 
-    def login(self) -> None:
-        """Log the daemon in to the registry with the CI credentials, when
-        there are any; the password travels on stdin, never on the command."""
+    def login(self, *, required: bool = False) -> None:
+        """Log the daemon in to the registry with the credentials at hand, when
+        there are any; the password travels on stdin, never on the command.
+
+        A failed login is fatal only when ``required`` (a publish needs it);
+        otherwise it is a warning: a gate run reads the registry cache if it
+        can and builds without it if it cannot."""
         ci = self.ctx.ci
         if ci.registry is None or ci.registry_password is None:
             return
-        self.ctx.runner.run(
+        result = self.ctx.runner.run(
             ["docker", "login", ci.registry, "-u", ci.registry_user or "", "--password-stdin"],
             stdin=ci.registry_password,
             quiet=True,
+            check=required,
         )
+        if not result.ok and not result.skipped:
+            self.ctx.console.warn(
+                f"registry login to {ci.registry} failed; building without its cache "
+                f"({result.tail.strip().splitlines()[-1] if result.tail.strip() else 'no detail'})"
+            )
 
     def bake(
         self, bake_file: Path, targets: Sequence[str], *, cwd: Path
