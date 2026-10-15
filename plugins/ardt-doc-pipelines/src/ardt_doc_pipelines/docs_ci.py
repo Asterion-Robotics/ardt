@@ -60,7 +60,7 @@ from ardt_core import dist
 from ardt_core import git as git_module
 from ardt_core.context import Context
 from ardt_pipelines import pipeline, std
-from ardt_pipelines.buildx import Buildx, Target, render_bake
+from ardt_pipelines.buildx import Buildx, render_bake
 
 ARDT_MODULES = ("ardt-core", "ardt-doc-tasks")
 """The ardt modules the docs builder needs (it runs ``ardt doc build``). Where
@@ -366,13 +366,17 @@ def docs_ci(ctx: Context, builder: Buildx, ardt_source: str = "") -> None:
     contexts = {GIT_CONTEXT: str(git_module.common_dir(ctx.project_root))}
     if local_ardt:
         contexts[LOCAL_ARDT_CONTEXT] = str(Path(ardt_source).resolve())
-    target = Target(
+    target = std.gate_target(
+        ctx,
+        std.images_config(ctx),
         name=SITE_TARGET,
         dockerfile=f"{EXPORT_DIR}/{RENDERED_NAME}",
-        target=SITE_TARGET,
-        output=[f"type=local,dest={SITE_DIR}"],
-        contexts=contexts,
+        stage=SITE_TARGET,
+        dest=SITE_DIR,
+        image="docs",
+        cache_stage="builder",
     )
+    target.contexts = contexts
     bake_file = export_dir / BAKE_NAME
     bake_file.write_text(render_bake([target]), encoding="utf-8")
 

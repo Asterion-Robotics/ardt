@@ -125,16 +125,6 @@ class RosCiConfig(BaseModel):
     git_token_user: str = "gitlab-ci-token"
     """Username the token authenticates as (GitLab job tokens require this
     literal; PATs accept any username, so the default serves both)."""
-    registry_cache: bool = True
-    """Keep the layer cache of every stage in the registry, as the ``cache``
-    sub-image of the project (one tag per stage): CI runs write it, every run
-    that can reach the registry reads it. Off, the cache is the builder's
-    own only (a registry that should hold nothing but images, or none at
-    all)."""
-    compression: str = "gzip"
-    """Layer compression of the published image: ``gzip`` (every consumer
-    reads it) or ``zstd`` (smaller and faster to unpack, needs a consumer on
-    containerd 1.6 or Docker 23 and later)."""
 
 
 class PipelinesSection(BaseModel):
@@ -233,9 +223,14 @@ def _prepare_export(ctx: Context, rendered: str) -> Path:
     """
     export_dir = ctx.project_root / JUNIT_EXPORT_DIR
     # the digest records survive the wipe: one platform per run, merged after the last
-    for stale in export_dir.iterdir() if export_dir.is_dir() else []:
-        if stale.name != Path(std.DIGESTS_DIR).name:
-            shutil.rmtree(stale, ignore_errors=True) if stale.is_dir() else stale.unlink()
+    if export_dir.is_dir():
+        for stale in export_dir.iterdir():
+            if stale.name == Path(std.DIGESTS_DIR).name:
+                continue
+            if stale.is_dir():
+                shutil.rmtree(stale, ignore_errors=True)
+            else:
+                stale.unlink()
     export_dir.mkdir(parents=True, exist_ok=True)
     (export_dir / recipes.RENDERED_NAME).write_text(rendered, encoding="utf-8")
     # The pipeline's bake and the escape hatch read the same excludes.
@@ -250,83 +245,46 @@ def _prepare_export(ctx: Context, rendered: str) -> Path:
     return export_dir
 
 
-def _cache(ctx: Context, cfg: RosCiConfig, target: str) -> tuple[list[str], list[str]]:
-    """``cache-from`` always when the project has a registry; ``cache-to`` on
-    CI only, so a laptop reads the fleet's cache and never writes it."""
-    ref = std.cache_ref(ctx, cfg.image, target) if cfg.registry_cache else None
-    if ref is None:
-        return [], []
-    cache_from = [f"type=registry,ref={ref}"]
-    # ignore-error: a run whose token cannot write the cache (a fork's MR) is
-    # not a failed build, it is a build that left no cache behind
-    cache_to = [f"type=registry,ref={ref},mode=max,ignore-error=true"] if ctx.ci.is_ci else []
-    return cache_from, cache_to
-
-
-def _runtime_output(
-    ctx: Context, cfg: RosCiConfig, platforms: list[str], *, split: bool
-) -> tuple[list[str], list[str]]:
-    """The runtime target's ``output`` and ``tags``.
-
-    No ``--publish``: the image is built and kept in the cache only (a broken
-    runtime stage fails the MR run). ``--publish`` with every configured
-    platform: one pushed manifest list under the image name. ``--publish`` on
-    a subset (``split``): pushed by digest, no tag, for ``ardt pipe merge``.
-    """
-    if not ctx.publish:
-        return ["type=cacheonly"], []
-    compression = f",compression={cfg.compression},oci-mediatypes=true,force-compression=true"
-    if split:
-        repository = std.image_repository(ctx, cfg.image)
-        return [
-            f"type=image,push=true,push-by-digest=true,name-canonical=true,name={repository}"
-            + compression
-        ], []
-    return [f"type=image,push=true{compression}"], [std.image_ref(ctx, cfg.image)]
-
-
 def plan(
-    ctx: Context, cfg: RosCiConfig, *, platforms: list[str], credentials: std.Credentials
+    ctx: Context,
+    cfg: RosCiConfig,
+    images: std.ImagesConfig,
+    *,
+    platforms: list[str],
+    credentials: std.Credentials,
 ) -> list[Target]:
     """The bake targets of one run: ``reports`` (the gate), ``runtime`` (the
     shipped image for the selected platforms) and, with ``--load``, a
     ``runtime-load`` of the native platform into the local daemon."""
     dockerfile = f"{JUNIT_EXPORT_DIR}/{recipes.RENDERED_NAME}"
-    reports_from, reports_to = _cache(ctx, cfg, recipes.BUILD_TARGET)
-    targets = [
-        Target(
-            name=recipes.REPORTS_TARGET,
-            dockerfile=dockerfile,
-            target=recipes.REPORTS_TARGET,
-            # A fresh value per run: the test layer succeeds whatever the tests
-            # say, so a cached one would replay a red result on retry.
-            args={recipes.TEST_RUN_ARG: uuid.uuid4().hex},
-            output=[f"type=local,dest={JUNIT_EXPORT_DIR}"],
-            cache_from=reports_from,
-            cache_to=reports_to,
-            secret=credentials.secret,
-            ssh=credentials.ssh,
-        )
-    ]
-    split = sorted(platforms) != sorted(cfg.platforms)
-    output, tags = _runtime_output(ctx, cfg, platforms, split=split)
-    runtime_from, runtime_to = _cache(ctx, cfg, recipes.RUNTIME_TARGET)
-    targets.append(
-        Target(
-            name=recipes.RUNTIME_TARGET,
-            dockerfile=dockerfile,
-            target=recipes.RUNTIME_TARGET,
-            platforms=platforms,
-            output=output,
-            tags=tags,
-            # The build stage's cache serves the runtime's deps and build layers
-            # on every platform; the runtime's own layers get their own ref.
-            cache_from=reports_from + runtime_from,
-            cache_to=runtime_to,
-            secret=credentials.secret,
-            ssh=credentials.ssh,
-        )
+    reports = std.gate_target(
+        ctx,
+        images,
+        name=recipes.REPORTS_TARGET,
+        dockerfile=dockerfile,
+        stage=recipes.REPORTS_TARGET,
+        dest=JUNIT_EXPORT_DIR,
+        image=cfg.image,
+        # A fresh value per run: the test layer succeeds whatever the tests
+        # say, so a cached one would replay a red result on retry.
+        args={recipes.TEST_RUN_ARG: uuid.uuid4().hex},
+        credentials=credentials,
+        cache_stage=recipes.BUILD_TARGET,
     )
+    runtime = std.image_target(
+        ctx,
+        images,
+        name=recipes.RUNTIME_TARGET,
+        dockerfile=dockerfile,
+        stage=recipes.RUNTIME_TARGET,
+        image=cfg.image,
+        platforms=platforms,
+        all_platforms=cfg.platforms,
+        credentials=credentials,
+        # the build stage's cache serves the runtime's deps and build layers
+        extra_cache_from=reports.cache_from,
+    )
+    targets = [reports, runtime]
     if ctx.load:
         native = _native_platform(platforms)
         if native is None:
@@ -336,16 +294,14 @@ def plan(
             )
         else:
             targets.append(
-                Target(
+                std.load_target(
+                    ctx,
                     name=f"{recipes.RUNTIME_TARGET}-load",
                     dockerfile=dockerfile,
-                    target=recipes.RUNTIME_TARGET,
-                    platforms=[native],
-                    output=["type=docker"],
-                    tags=std.load_names(ctx),
-                    cache_from=reports_from + runtime_from,
-                    secret=credentials.secret,
-                    ssh=credentials.ssh,
+                    stage=recipes.RUNTIME_TARGET,
+                    platform=native,
+                    cache_from=runtime.cache_from,
+                    credentials=credentials,
                 )
             )
     return targets
@@ -358,13 +314,13 @@ def ros_ci(
     ardt_source: str = "",
     platforms: list[str] = (),  # pyright: ignore[reportArgumentType]
 ) -> None:
-    cfg = _config(ctx)
+    cfg, images = _config(ctx), std.images_config(ctx)
     build_platforms = _selected_platforms(cfg, platforms)
     credentials = _git_credentials(ctx, cfg)
     rendered = _render(ctx, cfg, ardt_source)
     export_dir = _prepare_export(ctx, rendered)
 
-    targets = plan(ctx, cfg, platforms=build_platforms, credentials=credentials)
+    targets = plan(ctx, cfg, images, platforms=build_platforms, credentials=credentials)
     if ardt_source and Path(ardt_source).is_dir():
         for target in targets:
             target.contexts[recipes.LOCAL_ARDT_CONTEXT] = str(Path(ardt_source).resolve())
@@ -413,18 +369,11 @@ def ros_ci(
         ctx.console.info("runtime image built; skipping push (no --publish)")
         return
 
-    digest = str(metadata.get(recipes.RUNTIME_TARGET, {}).get("containerimage.digest", ""))
-    if sorted(build_platforms) != sorted(cfg.platforms):
-        repository = std.image_repository(ctx, cfg.image)
-        built = ",".join(build_platforms)
-        path = std.write_digest(ctx, repository=repository, platform=built, digest=digest)
-        ctx.console.info(f"recorded {built} as {digest} in {path.relative_to(ctx.project_root)}")
-        ctx.emit(image_repository=repository, image_digest=digest, platforms=build_platforms)
-        ctx.console.success(
-            f"pushed {repository}@{digest} for {', '.join(build_platforms)}; "
-            "`ardt pipe merge` creates the tag once every platform's record is in"
-        )
-        return
-    ref = std.image_ref(ctx, cfg.image)
-    ctx.emit(image=ref, image_digest=digest)
-    ctx.console.success(f"published {ref} @ {digest}")
+    std.finish_publish(
+        ctx,
+        metadata,
+        target=recipes.RUNTIME_TARGET,
+        image=cfg.image,
+        platforms=build_platforms,
+        all_platforms=cfg.platforms,
+    )
