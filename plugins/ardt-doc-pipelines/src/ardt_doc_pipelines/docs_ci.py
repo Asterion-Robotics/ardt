@@ -362,7 +362,8 @@ def docs_ci(ctx: Context, builder: Buildx, ardt_source: str = "") -> None:
     (export_dir / f"{RENDERED_NAME}.dockerignore").write_text(
         "\n".join(std.SOURCE_EXCLUDES) + "\n", encoding="utf-8"
     )
-    contexts = {GIT_CONTEXT: str(ctx.project_root / ".git")}
+    # the common dir, not `.git`: a linked worktree's `.git` is a file
+    contexts = {GIT_CONTEXT: str(git_module.common_dir(ctx.project_root))}
     if local_ardt:
         contexts[LOCAL_ARDT_CONTEXT] = str(Path(ardt_source).resolve())
     target = Target(

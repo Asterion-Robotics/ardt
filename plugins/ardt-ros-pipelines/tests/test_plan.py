@@ -63,7 +63,9 @@ class TestGate:
         assert recipes.TEST_RUN_ARG in reports.args, "a fresh value per run reruns the tests"
         cache = f"{REGISTRY}/example-group/my_robot/cache:{recipes.BUILD_TARGET}"
         assert reports.cache_from == [f"type=registry,ref={cache}"]
-        assert reports.cache_to == [f"type=registry,ref={cache},mode=max"], "CI writes the cache"
+        assert reports.cache_to == [f"type=registry,ref={cache},mode=max,ignore-error=true"], (
+            "CI writes the cache, and a failed write never fails the build"
+        )
 
     def test_a_laptop_reads_the_cache_and_never_writes_it(self, repo: Path) -> None:
         from ardt_core.testing import git
@@ -78,6 +80,13 @@ class TestGate:
         reports = targets[recipes.REPORTS_TARGET]
         assert reports.cache_from, "the fleet's cache is read"
         assert reports.cache_to == []
+
+    def test_registry_cache_can_be_switched_off(self, repo: Path) -> None:
+        cfg = ros_ci.RosCiConfig(registry_cache=False)
+        targets = ros_ci.plan(
+            _context(repo), cfg, platforms=["linux/amd64"], credentials=std.Credentials()
+        )
+        assert all(t.cache_from == [] and t.cache_to == [] for t in targets)
 
     def test_runtime_is_built_but_not_pushed_without_publish(self, repo: Path) -> None:
         targets = _by_name(
