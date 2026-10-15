@@ -4,9 +4,15 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 
 ## Unreleased
 
+## [0.6.1] - 2026-10-15
+
 ### Added
 
 - The CI image `ghcr.io/asterion-robotics/ardt-ci:<tag>` is built from `images/ardt-ci` and published by the release workflow, for amd64 and arm64, with that release installed: a CI job pins ardt by pinning the image. It ships the docker CLI with buildx, CPython and ardt's environment only (no uv, no compose plugin, no download cache), about 316 MB on disk. Pull requests build and smoke-test it without pushing.
+
+### Fixed
+
+- `ros-ci`: `ament_xmllint` passes in the offline test stage. It validates each `package.xml` against the schema its `xml-model` line names on download.ros.org, which the tests (run without network since 0.5.4) could not reach, so every repo using `ament_lint_auto` failed its xmllint test. The build stage now fetches the package format 1 to 3 schemas (about 21 KB, refreshed whenever the builder changes) and adds libxml2 catalog entries mapping `http://download.ros.org/schema/` to them; `curl` and `libxml2-utils` join the build stage's packages. The shipped runtime image is unchanged.
 
 ## [0.6.0] - 2026-10-15
 
