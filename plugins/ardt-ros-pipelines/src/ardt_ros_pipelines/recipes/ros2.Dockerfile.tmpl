@@ -18,11 +18,7 @@ ARG BASE_IMAGE=@BASE_IMAGE@
 # secret the step runs as written. A secret, not a build arg: the cache's
 # address is no part of any layer's cache key, so builds with and without it
 # share every layer. ----
-FROM scratch AS @APT_STAGE@
-COPY --chmod=0755 <<'ARDT_APT' /ardt-apt
-@APT_SCRIPT@
-ARDT_APT
-
+@APT_STAGE@
 # ---- steps 1-2: deps + build (the shared root of test and runtime) ----
 FROM ${BUILDER_IMAGE} AS build
 

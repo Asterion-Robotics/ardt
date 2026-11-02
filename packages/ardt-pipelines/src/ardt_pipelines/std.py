@@ -27,6 +27,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
+from importlib import resources
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -277,6 +278,50 @@ class _AptProxySection(BaseModel):
 
 def apt_proxy_config(ctx: Context) -> AptProxyConfig:
     return ctx.cfg.section_as("pipelines", _AptProxySection).apt_proxy
+
+
+APT_STAGE = "ardt-apt"
+"""Scratch stage holding the apt step wrapper (``ardt-apt.sh``), bind-mounted
+into every apt-running step and never copied into an image."""
+
+APT_WRAPPER = "/run/ardt/ardt-apt"
+"""Where an apt step finds the wrapper: a mount target, which BuildKit removes
+after the step, so no layer carries it."""
+
+APT_MOUNTS = (
+    f"--mount=type=secret,id={APT_PROXY_SECRET},required=false \\\n"
+    f"    --mount=type=bind,from={APT_STAGE},source=/ardt-apt,target={APT_WRAPPER} \\\n"
+    "    "
+)
+"""The two mounts of an apt step, ready to sit between ``RUN`` (and any mounts of
+the recipe's own) and :data:`APT_WRAPPER`."""
+
+
+def apt_stage() -> str:
+    """The recipe stage holding the apt step wrapper, to render ahead of the
+    first stage that runs apt.
+
+    The wrapper runs a step through the cache named by the :data:`APT_PROXY_SECRET`
+    secret when that cache answers, and again from the image's own sources when it
+    does not or when the step fails through it; without the secret the step runs
+    as written. A recipe gets it by rendering this stage and running each apt step
+    through :func:`apt_step` (or :data:`APT_MOUNTS` and :data:`APT_WRAPPER` with a
+    heredoc of its own), and the pipeline by adding :func:`apt_proxy` to the
+    target's secrets.
+    """
+    script = (resources.files("ardt_pipelines") / "ardt-apt.sh").read_text(encoding="utf-8")
+    return (
+        f"FROM scratch AS {APT_STAGE}\n"
+        "COPY --chmod=0755 <<'ARDT_APT' /ardt-apt\n"
+        f"{script.rstrip(chr(10))}\n"
+        "ARDT_APT\n"
+    )
+
+
+def apt_step(body: str) -> str:
+    """A ``RUN`` of ``body`` (shell, may span lines) through the apt step wrapper.
+    The body is a heredoc the wrapper reads, so it can run it twice."""
+    return f"RUN {APT_MOUNTS}{APT_WRAPPER} <<'STEP'\n{body.rstrip(chr(10))}\nSTEP"
 
 
 def apt_proxy(ctx: Context) -> Credentials:

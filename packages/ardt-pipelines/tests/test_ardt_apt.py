@@ -37,7 +37,7 @@ pytestmark = pytest.mark.skipif(
     reason="the wrapper runs under a POSIX shell with bash and coreutils",
 )
 
-SCRIPT = str(resources.files("ardt_ros_pipelines.recipes") / "ardt-apt.sh")
+SCRIPT = str(resources.files("ardt_pipelines") / "ardt-apt.sh")
 
 DEB822 = """Types: deb
 URIs: https://snapshot.ubuntu.com/ubuntu/20260925T000000Z/

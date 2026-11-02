@@ -97,16 +97,9 @@ GIT_TOKEN_SECRET = std.GIT_TOKEN_SECRET
 ``ardt_pipelines.std.git_credentials``."""
 
 APT_PROXY_SECRET = std.APT_PROXY_SECRET
-"""BuildKit secret id the apt steps read the apt cache from — the contract with
-``ardt_pipelines.std.apt_proxy``."""
-
-APT_STAGE = "ardt-apt"
-"""Scratch stage holding the apt step wrapper (``ardt-apt.sh``), bind-mounted
-into every apt-running step and never copied into an image."""
-
-APT_WRAPPER = "/run/ardt/ardt-apt"
-"""Where the apt steps find the wrapper: a mount target, which BuildKit removes
-after the step, so no layer carries it."""
+APT_STAGE = std.APT_STAGE
+APT_WRAPPER = std.APT_WRAPPER
+"""The apt step wrapper's contract, owned by :mod:`ardt_pipelines.std`."""
 
 
 ARDT_VENV = "/opt/ardt"
@@ -176,11 +169,6 @@ RUN find {{base}} -type d \\( -name include -o -name cmake -o -name pkgconfig \\
       -prune -exec rm -rf {{{{}}}} + \\
  && find {{base}} -name '*.a' -delete
 """
-
-
-_APT_MOUNTS = f"""--mount=type=secret,id={APT_PROXY_SECRET},required=false \\
-    --mount=type=bind,from={APT_STAGE},source=/ardt-apt,target={APT_WRAPPER} \\
-    """
 
 
 def _runtime_skip(keys: Sequence[str]) -> str:
@@ -318,8 +306,7 @@ def render_ros2(
         .replace("@BASE_EXT@", base_ext)
         .replace("@RUNTIME_FROM@", runtime_from)
         .replace("@CMD@", rendered_cmd)
-        .replace("@APT_STAGE@", APT_STAGE)
-        .replace("@APT_MOUNTS@", _APT_MOUNTS)
+        .replace("@APT_STAGE@", std.apt_stage())
+        .replace("@APT_MOUNTS@", std.APT_MOUNTS)
         .replace("@APT_RUN@", APT_WRAPPER)
-        .replace("@APT_SCRIPT@", _template("ardt-apt.sh").rstrip("\n"))
     )

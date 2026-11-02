@@ -26,6 +26,7 @@ fallback (GitLab's registry would reject it anyway).
 from __future__ import annotations
 
 import re
+from importlib import resources
 from pathlib import Path
 
 import pytest
@@ -216,6 +217,20 @@ class TestAptProxy:
         self._configure(repo, "  apt_proxy:\n    url: https://cache.example\n")
         with pytest.raises(ArdtError, match="not an http:// URL"):
             std.apt_proxy(_context(repo, _ci()))
+
+    def test_the_stage_embeds_the_packaged_wrapper(self) -> None:
+        script = (resources.files("ardt_pipelines") / "ardt-apt.sh").read_text(encoding="utf-8")
+        stage = std.apt_stage()
+        assert stage.startswith(f"FROM scratch AS {std.APT_STAGE}\n")
+        assert f"/ardt-apt\n{script.rstrip()}\nARDT_APT\n" in stage
+
+    def test_a_step_reads_its_body_from_a_heredoc_through_both_mounts(self) -> None:
+        step = std.apt_step("apt-get update \\\n && apt-get install -y git\n")
+        assert step.startswith("RUN --mount=type=secret,id=apt_proxy,required=false")
+        assert f"from={std.APT_STAGE},source=/ardt-apt,target={std.APT_WRAPPER}" in step
+        assert step.endswith(
+            f"{std.APT_WRAPPER} <<'STEP'\napt-get update \\\n && apt-get install -y git\nSTEP"
+        )
 
     def test_combine_keeps_every_entry_in_order(self) -> None:
         git = std.Credentials(secret=["id=a,env=A"], ssh=["default=/s"], env={"A": "1"})

@@ -20,13 +20,13 @@
 from __future__ import annotations
 
 import re
-from importlib import resources
 from pathlib import Path
 
 import pytest
 
 from ardt_core import dist
 from ardt_core.errors import ArdtError
+from ardt_pipelines import std
 from ardt_ros_pipelines import recipes
 
 REQUIREMENTS = (
@@ -486,14 +486,8 @@ class TestAptCache:
         )
         assert f"--from={recipes.APT_STAGE}" not in rendered
 
-    def test_the_embedded_script_is_the_packaged_one(self, tmp_path: Path) -> None:
-        packaged = (
-            (resources.files("ardt_ros_pipelines.recipes") / "ardt-apt.sh")
-            .read_text(encoding="utf-8")
-            .rstrip("\n")
-        )
-        rendered = render(tmp_path)
-        assert f"/ardt-apt\n{packaged}\nARDT_APT\n" in rendered
+    def test_the_wrapper_stage_is_the_shared_one(self, tmp_path: Path) -> None:
+        assert std.apt_stage() in render(tmp_path)
 
     def test_heredoc_steps_close(self, tmp_path: Path) -> None:
         steps = self._steps(render(tmp_path))
