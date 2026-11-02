@@ -225,6 +225,80 @@ def git_credentials(ctx: Context, *, host: str) -> Credentials:
     return Credentials(secret=secret, ssh=ssh, env=env)
 
 
+def combine(*parts: Credentials) -> Credentials:
+    """Several sets of build secrets as one, in order."""
+    return Credentials(
+        secret=[entry for part in parts for entry in part.secret],
+        ssh=[entry for part in parts for entry in part.ssh],
+        env={key: value for part in parts for key, value in part.env.items()},
+    )
+
+
+APT_PROXY_SECRET = "apt_proxy"
+"""BuildKit secret id for the apt cache, the contract between :func:`apt_proxy`
+and a recipe's apt steps. It holds ``key=value`` lines: ``url`` and
+``probe_timeout``."""
+
+APT_PROXY_ENV = "ARDT_APT_PROXY_SPEC"
+"""The environment variable the apt cache secret is read from, set for the bake
+command only."""
+
+
+class AptProxyConfig(BaseModel):
+    """``pipelines.apt_proxy:`` — an apt cache the image builds fetch through.
+
+    The recipe's apt steps try it first and fall back to the image's own sources
+    when it does not answer within ``probe_timeout`` or a step fails through it,
+    so a build off the cache's network, or with the cache down, is slower at
+    worst, never red. The address reaches the build as a secret, not a build
+    arg: it is no part of any layer's cache key, and no image carries it.
+    ``ARDT_APT_PROXY`` in the environment replaces ``url`` for one run, and an
+    empty value switches the cache off.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    url: str | None = None
+    """``http://host[:port]`` of an apt-cacher-ng. Sources are read through it in
+    its URL-prefix form (``http://<cache>/<host>/<path>``); an HTTPS source needs
+    a ``Remap-`` rule with an ``https://`` backend on the cache."""
+    probe_timeout: float = Field(default=2.0, gt=0)
+    """Seconds the cache has to answer before a step goes to the image's own
+    sources."""
+
+
+class _AptProxySection(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    apt_proxy: AptProxyConfig = Field(default_factory=AptProxyConfig)
+
+
+def apt_proxy_config(ctx: Context) -> AptProxyConfig:
+    return ctx.cfg.section_as("pipelines", _AptProxySection).apt_proxy
+
+
+def apt_proxy(ctx: Context) -> Credentials:
+    """The apt cache secret of a build, empty when no cache is configured.
+
+    ``ctx.ci.apt_proxy`` (``ARDT_APT_PROXY``) wins over ``pipelines.apt_proxy.url``
+    when set, an empty value meaning no cache for this run.
+    """
+    cfg = apt_proxy_config(ctx)
+    url = cfg.url if ctx.ci.apt_proxy is None else ctx.ci.apt_proxy
+    if not url:
+        return Credentials()
+    if urlsplit(url).scheme != "http":
+        raise ArdtError(
+            f"apt cache `{url}` is not an http:// URL",
+            hint="an apt-cacher-ng serves plain HTTP and fetches HTTPS sources itself; "
+            "set pipelines.apt_proxy.url to http://host[:port]",
+        )
+    return Credentials(
+        secret=[f"id={APT_PROXY_SECRET},env={APT_PROXY_ENV}"],
+        env={APT_PROXY_ENV: f"url={url.rstrip('/')}\nprobe_timeout={cfg.probe_timeout:g}\n"},
+    )
+
+
 def write_digest(ctx: Context, *, repository: str, platform: str, digest: str) -> Path:
     """Record what a per-platform publish pushed, for ``ardt pipe merge``."""
     directory = ctx.project_root / DIGESTS_DIR

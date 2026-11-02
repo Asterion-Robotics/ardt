@@ -97,6 +97,12 @@ tasks:
 #     git_host: code.asterion-robotics.com # auth for private `.repos` deps:
 #     git_ssh_port: 5022                   # CI job token, or a local ssh agent
 #     git_token_user: gitlab-ci-token # username the job token authenticates as
+#
+# ardt-pipelines — the `pipelines.apt_proxy:` subsection, read by every image build.
+#   apt_proxy:
+#     url: http://apt-cache.lan:3142 # an apt-cacher-ng the apt steps fetch through;
+#                                    # ARDT_APT_PROXY overrides it, empty switches it off
+#     probe_timeout: 2 # seconds it has to answer before a step uses the image's sources
 
 # ardt-doc-pipelines — the `pipelines.docs_ci:` subsection.
 #   docs_ci:

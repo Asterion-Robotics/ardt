@@ -69,6 +69,10 @@ class CIInfo:
     """The local SSH agent socket, when one is running (local platform only).
     Pipelines forward it into builds that must clone private repos — the
     environment stays reachable only through this normalization."""
+    apt_proxy: str | None = None
+    """``ARDT_APT_PROXY``: the apt cache image builds fetch through, replacing
+    ``pipelines.apt_proxy.url`` for this run. None when unset; an empty string
+    when set empty, which switches the cache off."""
 
     def redacted(self) -> dict[str, object]:
         """Serializable view with secrets replaced by a presence marker."""
@@ -84,6 +88,7 @@ class CIInfo:
             "is_default_branch": self.is_default_branch,
             "project_path": self.project_path,
             "ssh_auth_sock": self.ssh_auth_sock,
+            "apt_proxy": self.apt_proxy,
         }
 
 
@@ -112,6 +117,16 @@ def _load_credentials() -> dict[str, str]:
     return {str(k): str(v) for k, v in mapping.items() if v is not None}
 
 
+APT_PROXY_VAR = "ARDT_APT_PROXY"
+
+
+def _apt_proxy() -> str | None:
+    """Set empty, the variable still counts: it switches the configured cache off."""
+    if not env.has(APT_PROXY_VAR):
+        return None
+    return env.get(APT_PROXY_VAR) or ""
+
+
 def detect() -> CIInfo:
     """Build :class:`CIInfo` from the environment. Called once, by the Context."""
     if env.flag("GITLAB_CI"):
@@ -138,6 +153,7 @@ def _gitlab() -> CIInfo:
         is_tag=tag is not None,
         is_default_branch=branch is not None and branch == default_branch,
         project_path=env.get("CI_PROJECT_PATH"),
+        apt_proxy=_apt_proxy(),
     )
 
 
@@ -181,6 +197,7 @@ def _github() -> CIInfo:
         is_tag=ref_type == "tag",
         is_default_branch=ref_type == "branch" and ref_name == default_branch,
         project_path=env.get("GITHUB_REPOSITORY"),
+        apt_proxy=_apt_proxy(),
     )
 
 
@@ -195,4 +212,5 @@ def _local() -> CIInfo:
         job_token=creds.get("job_token"),
         project_path=creds.get("project_path"),
         ssh_auth_sock=env.get("SSH_AUTH_SOCK"),
+        apt_proxy=_apt_proxy(),
     )

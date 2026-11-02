@@ -174,6 +174,58 @@ class TestGitCredentials:
             std.git_credentials(ctx, host="code.example.com")
 
 
+class TestAptProxy:
+    """The apt cache reaches a build as a secret read from the bake command's
+    environment, from ardt.yaml or the ARDT_APT_PROXY override."""
+
+    @staticmethod
+    def _configure(repo: Path, body: str) -> None:
+        (repo / "ardt.yaml").write_text(f"project:\n  name: demo\npipelines:\n{body}")
+
+    def test_nothing_configured_means_no_secret(self, repo: Path) -> None:
+        assert std.apt_proxy(_context(repo, _ci())) == std.Credentials()
+
+    def test_configured_cache_becomes_the_named_secret(self, repo: Path) -> None:
+        self._configure(repo, "  apt_proxy:\n    url: http://cache.example:3142/\n")
+        credentials = std.apt_proxy(_context(repo, _ci()))
+        assert credentials.secret == [f"id={std.APT_PROXY_SECRET},env={std.APT_PROXY_ENV}"]
+        assert credentials.env == {
+            std.APT_PROXY_ENV: "url=http://cache.example:3142\nprobe_timeout=2\n"
+        }
+        assert credentials.ssh == []
+
+    def test_probe_timeout_is_configurable(self, repo: Path) -> None:
+        self._configure(
+            repo, "  apt_proxy:\n    url: http://cache.example:3142\n    probe_timeout: 0.5\n"
+        )
+        env = std.apt_proxy(_context(repo, _ci())).env[std.APT_PROXY_ENV]
+        assert "probe_timeout=0.5\n" in env
+
+    def test_override_replaces_the_configured_url(self, repo: Path) -> None:
+        self._configure(repo, "  apt_proxy:\n    url: http://cache.example:3142\n")
+        ci = CIInfo(platform=Platform.LOCAL, is_ci=False, apt_proxy="http://other.example:3142")
+        env = std.apt_proxy(_context(repo, ci)).env[std.APT_PROXY_ENV]
+        assert env.startswith("url=http://other.example:3142\n")
+
+    def test_override_set_empty_switches_the_cache_off(self, repo: Path) -> None:
+        self._configure(repo, "  apt_proxy:\n    url: http://cache.example:3142\n")
+        ci = CIInfo(platform=Platform.LOCAL, is_ci=False, apt_proxy="")
+        assert std.apt_proxy(_context(repo, ci)) == std.Credentials()
+
+    def test_https_cache_is_a_clean_error(self, repo: Path) -> None:
+        self._configure(repo, "  apt_proxy:\n    url: https://cache.example\n")
+        with pytest.raises(ArdtError, match="not an http:// URL"):
+            std.apt_proxy(_context(repo, _ci()))
+
+    def test_combine_keeps_every_entry_in_order(self) -> None:
+        git = std.Credentials(secret=["id=a,env=A"], ssh=["default=/s"], env={"A": "1"})
+        apt = std.Credentials(secret=["id=b,env=B"], env={"B": "2"})
+        combined = std.combine(git, apt)
+        assert combined.secret == ["id=a,env=A", "id=b,env=B"]
+        assert combined.ssh == ["default=/s"]
+        assert combined.env == {"A": "1", "B": "2"}
+
+
 class TestCacheRef:
     """One cache sub-image per project, one tag per target, shared by every
     branch and runner."""

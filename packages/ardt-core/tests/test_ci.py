@@ -146,6 +146,20 @@ def test_local_carries_the_ssh_agent_socket(monkeypatch: pytest.MonkeyPatch) -> 
     assert info.ssh_auth_sock == "/tmp/agent.sock"
 
 
+def test_apt_proxy_override_is_read_on_every_platform(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert ci.detect().apt_proxy is None
+    monkeypatch.setenv("ARDT_APT_PROXY", "http://cache.example:3142")
+    assert ci.detect().apt_proxy == "http://cache.example:3142"
+    monkeypatch.setenv("GITLAB_CI", "true")
+    assert ci.detect().apt_proxy == "http://cache.example:3142"
+
+
+def test_apt_proxy_set_empty_switches_the_cache_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Empty is not unset: it overrides a configured cache with none."""
+    monkeypatch.setenv("ARDT_APT_PROXY", "")
+    assert ci.detect().apt_proxy == ""
+
+
 def test_malformed_credentials_file_is_a_clean_error(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

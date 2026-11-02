@@ -20,6 +20,7 @@
 from __future__ import annotations
 
 import re
+from importlib import resources
 from pathlib import Path
 
 import pytest
@@ -458,11 +459,52 @@ class TestCacheMounts:
         assert "id=apt-cache-${TARGETARCH}" in deps_run
 
 
+class TestAptCache:
+    """Every apt-running step goes through the wrapper, which no image carries."""
+
+    @staticmethod
+    def _steps(rendered: str) -> str:
+        """The recipe without the wrapper script embedded in it."""
+        return rendered.split("\nARDT_APT\n", 1)[1]
+
+    def test_every_apt_update_runs_through_the_wrapper(self, tmp_path: Path) -> None:
+        steps = self._steps(render(tmp_path, git_host="code.example.com"))
+        runs = [block for block in steps.split("\nRUN ")[1:] if "apt-get update" in block]
+        assert len(runs) == 3, "builder packages, ardt deps, runtime exec deps"
+        for block in runs:
+            assert f"--mount=type=secret,id={recipes.APT_PROXY_SECRET},required=false" in block
+            assert f"from={recipes.APT_STAGE},source=/ardt-apt,target={recipes.APT_WRAPPER}" in (
+                block
+            )
+            assert f"{recipes.APT_WRAPPER} <<'STEP'\n" in block
+            assert block.index("<<'STEP'\n") < block.index("apt-get update")
+
+    def test_the_wrapper_stage_comes_first_and_is_never_copied(self, tmp_path: Path) -> None:
+        rendered = render(tmp_path)
+        assert rendered.index(f"FROM scratch AS {recipes.APT_STAGE}") < rendered.index(
+            f"AS {recipes.BUILD_TARGET}"
+        )
+        assert f"--from={recipes.APT_STAGE}" not in rendered
+
+    def test_the_embedded_script_is_the_packaged_one(self, tmp_path: Path) -> None:
+        packaged = (
+            (resources.files("ardt_ros_pipelines.recipes") / "ardt-apt.sh")
+            .read_text(encoding="utf-8")
+            .rstrip("\n")
+        )
+        rendered = render(tmp_path)
+        assert f"/ardt-apt\n{packaged}\nARDT_APT\n" in rendered
+
+    def test_heredoc_steps_close(self, tmp_path: Path) -> None:
+        steps = self._steps(render(tmp_path))
+        assert steps.count("<<'STEP'\n") == steps.count("\nSTEP\n") == 3
+
+
 class TestGitAuth:
     def test_off_by_default(self, tmp_path: Path) -> None:
         rendered = render(tmp_path)
         assert "--mount=type=ssh" not in rendered
-        assert "--mount=type=secret" not in rendered
+        assert f"id={recipes.GIT_TOKEN_SECRET}" not in rendered
         assert "credential" not in rendered
 
     def test_syntax_directive_is_the_first_line(self, tmp_path: Path) -> None:

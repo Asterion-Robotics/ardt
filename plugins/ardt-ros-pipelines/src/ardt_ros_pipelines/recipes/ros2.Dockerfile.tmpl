@@ -11,6 +11,18 @@
 ARG BUILDER_IMAGE=@BUILDER@
 ARG BASE_IMAGE=@BASE_IMAGE@
 
+# ---- the apt step wrapper: bind-mounted into every apt-running step, never
+# copied into an image. It runs the step through the apt cache named by the
+# `apt_proxy` build secret when that cache answers, and again from the image's
+# own sources when it does not or when the step fails through it; without the
+# secret the step runs as written. A secret, not a build arg: the cache's
+# address is no part of any layer's cache key, so builds with and without it
+# share every layer. ----
+FROM scratch AS @APT_STAGE@
+COPY --chmod=0755 <<'ARDT_APT' /ardt-apt
+@APT_SCRIPT@
+ARDT_APT
+
 # ---- steps 1-2: deps + build (the shared root of test and runtime) ----
 FROM ${BUILDER_IMAGE} AS build
 
@@ -29,9 +41,11 @@ ARG TARGETARCH
 # cache.
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked,id=apt-cache-${TARGETARCH} \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked,id=apt-lists-${TARGETARCH} \
-    rm -f /etc/apt/apt.conf.d/docker-clean \
+    @APT_MOUNTS@@APT_RUN@ <<'STEP'
+rm -f /etc/apt/apt.conf.d/docker-clean \
  && apt-get update && apt-get install -y --no-install-recommends \
       build-essential git python3-pip python3-venv openssh-client curl libxml2-utils
+STEP
 
 # ament_xmllint validates each package.xml against the schema its xml-model
 # line names (http://download.ros.org/schema/...), and the tests run without
@@ -70,8 +84,10 @@ WORKDIR /ws/src/@PROJECT@
 # 1) deps (exclusions come from ardt.yaml: tasks.ros.exclude_packages / rosdep_skip_keys)
 RUN @GIT_MOUNTS@--mount=type=cache,target=/var/cache/apt,sharing=locked,id=apt-cache-${TARGETARCH} \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked,id=apt-lists-${TARGETARCH} \
-    apt-get update && rosdep update --rosdistro ${ROS_DISTRO}@GIT_AUTH@ \
+    @APT_MOUNTS@@APT_RUN@ <<'STEP'
+apt-get update && rosdep update --rosdistro ${ROS_DISTRO}@GIT_AUTH@ \
  && PIP_BREAK_SYSTEM_PACKAGES=1 ardt deps
+STEP
 # 1b) the full source, AFTER the deps layer: a code edit invalidates from here
 # down, not the dependency install above
 COPY . /ws/src/@PROJECT@
@@ -162,7 +178,8 @@ ARG TARGETARCH
 COPY --from=build /opt/runtime-manifests /tmp/runtime-manifests
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked,id=apt-cache-${TARGETARCH} \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked,id=apt-lists-${TARGETARCH} \
-    { [ ! -f /etc/apt/apt.conf.d/docker-clean ] || mv /etc/apt/apt.conf.d/docker-clean /tmp/docker-clean; } \
+    @APT_MOUNTS@@APT_RUN@ <<'STEP'
+{ [ ! -f /etc/apt/apt.conf.d/docker-clean ] || mv /etc/apt/apt.conf.d/docker-clean /tmp/docker-clean; } \
  && apt-get update \
  && { command -v rosdep >/dev/null 2>&1 \
       || apt-get install -y --no-install-recommends python3-rosdep; } \
@@ -174,6 +191,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked,id=apt-cache-${TARGE
       --rosdistro ${ROS_DISTRO} --dependency-types exec@RUNTIME_SKIP@ \
  && rm -rf /root/.ros/rosdep /tmp/runtime-manifests \
  && { [ ! -f /tmp/docker-clean ] || mv /tmp/docker-clean /etc/apt/apt.conf.d/docker-clean; }
+STEP
 # 5c) the install space, AFTER the deps layer — a rebuilt binary invalidates
 # from here down, not the apt install above
 COPY --from=@INSTALL_SRC@ @INSTALL_BASE@ @INSTALL_BASE@
