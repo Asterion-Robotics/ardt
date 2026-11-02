@@ -27,10 +27,11 @@
 #   apt-get update && apt-get install -y ...
 #   STEP
 #
-# The cache is used in apt-cacher-ng's URL-prefix form: a source
-# `http(s)://<host>/<path>` is read as `http://<cache>/<host>/<path>`, which
-# serves an HTTPS source too when the cache remaps that prefix to an https://
-# backend. The rewritten sources and the apt configuration naming them live in
+# The cache is read in URL-prefix form: a source `http(s)://<host>/<path>` is
+# read as `http://<cache>/<host>/<path>`, and the cache fetches it from the
+# source, over HTTPS where the source needs it (a caching nginx with one
+# location per source, or apt-cacher-ng with a Remap- rule). The lists it
+# serves are still checked against the image's keys. The rewritten sources and the apt configuration naming them live in
 # a temporary directory handed to apt through APT_CONFIG, so nothing under
 # /etc changes and nothing of it reaches a layer. Without the secret (a plain
 # `docker build`, no proxy configured) the step runs as written.

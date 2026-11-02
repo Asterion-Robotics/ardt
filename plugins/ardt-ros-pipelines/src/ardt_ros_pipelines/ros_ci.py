@@ -51,7 +51,7 @@ into the rendered recipe as a stage:
         git_host: code.asterion-robotics.com   # private `.repos` deps need auth
         git_ssh_port: 5022
       apt_proxy:
-        url: http://apt-cache.lan:3142   # an apt-cacher-ng; one that does not answer is skipped
+        url: http://apt-cache.lan:3142   # a caching proxy; one that does not answer is skipped
 
 Publishing: with every configured platform in one run, bake pushes one
 manifest list under the image name. A run narrowed to a subset (``--arg

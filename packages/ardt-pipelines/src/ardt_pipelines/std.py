@@ -259,9 +259,11 @@ class AptProxyConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     url: str | None = None
-    """``http://host[:port]`` of an apt-cacher-ng. Sources are read through it in
-    its URL-prefix form (``http://<cache>/<host>/<path>``); an HTTPS source needs
-    a ``Remap-`` rule with an ``https://`` backend on the cache."""
+    """``http://host[:port]`` of a caching proxy that serves sources in URL-prefix
+    form: ``http(s)://<host>/<path>`` is read as ``http://<cache>/<host>/<path>``,
+    the cache fetching it from the source (over HTTPS where the source needs it).
+    A caching nginx with one location per source does it, as does apt-cacher-ng
+    with ``Remap-`` rules."""
     probe_timeout: float = Field(default=2.0, gt=0)
     """Seconds the cache has to answer before a step goes to the image's own
     sources."""
@@ -290,7 +292,7 @@ def apt_proxy(ctx: Context) -> Credentials:
     if urlsplit(url).scheme != "http":
         raise ArdtError(
             f"apt cache `{url}` is not an http:// URL",
-            hint="an apt-cacher-ng serves plain HTTP and fetches HTTPS sources itself; "
+            hint="the cache serves plain HTTP and fetches HTTPS sources itself; "
             "set pipelines.apt_proxy.url to http://host[:port]",
         )
     return Credentials(

@@ -4,6 +4,10 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 
 ## Unreleased
 
+### Added
+
+- `pipelines.apt_proxy` (`url`, `probe_timeout`): an apt cache the image builds fetch through, a caching proxy serving sources in URL-prefix form (`http://<cache>/<host>/<path>`). `ARDT_APT_PROXY` replaces the URL for one run, and an empty value switches the cache off. The address reaches the build as the `apt_proxy` BuildKit secret, not a build arg, so it is part of no layer's cache key: builds with and without the cache share every layer and the registry cache, and no image carries the address. `ros-ci`: each apt-running step (the builder's packages, `ardt deps`, the runtime stage's rosdep pass) runs through `ardt-apt`, a shell wrapper bind-mounted from a scratch stage of the rendered recipe. It probes the cache with a HEAD request (`probe_timeout`, 2 s), points apt at rewritten copies of the image's sources through `APT_CONFIG` (nothing under `/etc` changes, the image's keys still check every list), and runs the step again from the image's own sources when the cache does not answer or the step fails through it. Without the secret, as in a plain `docker build` of the exported recipe, the step runs as written.
+
 ## [0.6.1] - 2026-10-15
 
 ### Added

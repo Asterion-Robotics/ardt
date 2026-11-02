@@ -100,7 +100,8 @@ tasks:
 #
 # ardt-pipelines — the `pipelines.apt_proxy:` subsection, read by every image build.
 #   apt_proxy:
-#     url: http://apt-cache.lan:3142 # an apt-cacher-ng the apt steps fetch through;
+#     url: http://apt-cache.lan:3142 # a caching proxy the apt steps fetch through,
+#                                    # sources read as http://<cache>/<host>/<path>;
 #                                    # ARDT_APT_PROXY overrides it, empty switches it off
 #     probe_timeout: 2 # seconds it has to answer before a step uses the image's sources
 
