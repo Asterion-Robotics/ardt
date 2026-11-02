@@ -18,8 +18,8 @@
 
 # ardt-apt: run one build step, read from stdin, with its apt fetches going
 # through the apt cache the `apt_proxy` build secret names, and run it again
-# straight from the image's own sources when the cache does not answer or the
-# step fails through it.
+# straight from the image's own sources when the cache does not answer, a
+# fetch through it fails, or the step fails through it.
 #
 #   RUN --mount=type=secret,id=apt_proxy,required=false \
 #       --mount=type=bind,from=ardt-apt,source=/ardt-apt,target=/run/ardt/ardt-apt \
@@ -131,9 +131,44 @@ Dir::Etc::sourceparts "$work/sources.list.d";
 Dir::Etc::parts "$work/apt.conf.d";
 EOF
 
+# apt-get and apt reach the step through a shim. Once a fetch through the cache
+# has failed (apt's `Failed to fetch <cache>/...`, such as a 503 passed on from
+# the source for a package the cache does not hold yet), every later call in the step fails at once instead of
+# fetching again: a step that calls apt-get once per package, as rosdep does,
+# would otherwise spend each package's retries on the same failing cache before
+# the step is run again from the image's sources.
+mkdir -p "$work/bin"
+cat > "$work/shim.sh" <<'EOF'
+work=$1 url=$2 real=$3
+shift 3
+if [ -e "$work/cache-failed" ]; then
+  echo "ardt-apt: not running ${real##*/} $*: a fetch through the apt cache at $url failed earlier in this step" >&2
+  exit 100
+fi
+log=$(mktemp "$work/stderr.XXXXXX") || exit 1
+status=$(mktemp "$work/status.XXXXXX") || exit 1
+# stderr copied aside to be read once the command ends, stdout left alone
+{ { "$real" "$@" 2>&1 1>&3 3>&-; echo $? > "$status"; } | tee "$log" >&2; } 3>&1
+rc=$(cat "$status")
+if grep -qF "Failed to fetch $url/" "$log"; then
+  : > "$work/cache-failed"
+fi
+rm -f "$log" "$status"
+exit "${rc:-1}"
+EOF
+for tool in apt-get apt; do
+  real=$(command -v "$tool") || continue
+  printf '#!/bin/sh\nexec sh "%s/shim.sh" "%s" "%s" "%s" "$@"\n' "$work" "$work" "$url" "$real" > "$work/bin/$tool"
+  chmod +x "$work/bin/$tool"
+done
+
 echo "ardt-apt: fetching through the apt cache at $url"
-if APT_CONFIG="$work/apt.conf" sh "$work/step.sh"; then
+if APT_CONFIG="$work/apt.conf" PATH="$work/bin:$PATH" sh "$work/step.sh" && [ ! -e "$work/cache-failed" ]; then
   exit 0
 fi
-echo "ardt-apt: the step failed through the apt cache at $url; running it again from the image's sources"
+if [ -e "$work/cache-failed" ]; then
+  echo "ardt-apt: a fetch through the apt cache at $url failed; running the step again from the image's sources"
+else
+  echo "ardt-apt: the step failed through the apt cache at $url; running it again from the image's sources"
+fi
 direct

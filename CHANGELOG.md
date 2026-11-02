@@ -4,6 +4,10 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 
 ## Unreleased
 
+### Fixed
+
+- `ardt-apt`: a step falls back to the image's sources as soon as one fetch through the apt cache fails, not once the whole step has failed. While the step runs through the cache, `apt-get` and `apt` reach it through a shim; after apt reports `Failed to fetch <cache>/...` (such as a 503 the cache passes on from the source for a package it does not hold yet), every later call in the step exits 100 at once, and the step is run again from the image's sources, also when the step itself tolerated the failure. A step calling apt-get once per package, as rosdep does, no longer spends every package's retries on a failing cache first: a `ros-ci` build lost 27 minutes that way before its fallback.
+
 ## [0.6.2] - 2026-11-02
 
 ### Added

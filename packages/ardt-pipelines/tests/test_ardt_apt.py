@@ -130,7 +130,7 @@ def _free_port() -> int:
 
 
 def run(
-    tmp_path: Path, etc: Path, step: str, *, spec: str | None
+    tmp_path: Path, etc: Path, step: str, *, spec: str | None, bin_dir: Path | None = None
 ) -> subprocess.CompletedProcess[str]:
     spec_path = tmp_path / "apt_proxy"
     if spec is not None:
@@ -142,13 +142,52 @@ def run(
         text=True,
         check=False,
         env={
-            "PATH": "/usr/bin:/bin",
+            "PATH": f"{bin_dir}:/usr/bin:/bin" if bin_dir else "/usr/bin:/bin",
             "ARDT_APT_SPEC": str(spec_path),
             "ARDT_APT_ETC": str(etc),
             "TMPDIR": str(tmp_path),
         },
         timeout=30,
     )
+
+
+# A stand-in for apt-get: through the cache it fails the way apt does when the
+# cache answers 503 (or, with `unknown` as its first argument, the way it does
+# for a package no source has), direct it succeeds; every call is logged.
+FAKE_APT_GET = """#!/bin/sh
+via=direct
+[ -n "${APT_CONFIG:-}" ] && via=cache
+echo "$via $*" >> "@CALLS@"
+if [ "$via" = cache ]; then
+  if [ "$1" = unknown ]; then
+    echo "E: Unable to locate package $1" >&2
+    exit 100
+  fi
+  echo "fetching $*"
+  echo "E: Failed to fetch @URL@/snapshot.ubuntu.com/pool/$1.deb  503  Service Unavailable" >&2
+  exit 100
+fi
+echo "installed $*"
+"""
+
+
+def fake_apt_get(tmp_path: Path, url: str) -> tuple[Path, Path]:
+    bin_dir = tmp_path / "fake-bin"
+    bin_dir.mkdir()
+    calls = tmp_path / "calls"
+    tool = bin_dir / "apt-get"
+    tool.write_text(FAKE_APT_GET.replace("@CALLS@", str(calls)).replace("@URL@", url))
+    tool.chmod(0o755)
+    return bin_dir, calls
+
+
+# What rosdep does: one apt-get per package, carrying on past a failure.
+PER_PACKAGE = """failed=""
+for package in a b c; do
+  apt-get "$package" || failed=1
+done
+[ -z "$failed" ]
+"""
 
 
 def test_without_the_secret_the_step_runs_as_written(tmp_path: Path, etc: Path) -> None:
@@ -226,3 +265,43 @@ def test_an_https_cache_url_is_refused_and_the_step_runs_direct(tmp_path: Path, 
     assert result.returncode == 0
     assert "must be an http:// URL" in result.stderr
     assert result.stdout.splitlines()[-1] == "via=direct"
+
+
+def test_after_a_failed_fetch_through_the_cache_the_step_stops_fetching_and_runs_direct(
+    tmp_path: Path, etc: Path, cache: _Server
+) -> None:
+    url = f"http://127.0.0.1:{cache.port}"
+    bin_dir, calls = fake_apt_get(tmp_path, url)
+    result = run(tmp_path, etc, PER_PACKAGE, spec=f"url={url}\n", bin_dir=bin_dir)
+    assert result.returncode == 0, result.stderr
+    # one fetch through the cache, the other packages refused at once, then the
+    # whole step again from the image's sources
+    assert calls.read_text().splitlines() == ["cache a", "direct a", "direct b", "direct c"]
+    assert "not running apt-get b" in result.stderr
+    assert "a fetch through the apt cache" in result.stdout
+    # apt-get's own output still reaches the log, in both streams
+    assert "fetching a" in result.stdout
+    assert "Failed to fetch" in result.stderr
+
+
+def test_a_step_that_tolerates_a_failed_fetch_through_the_cache_still_runs_direct(
+    tmp_path: Path, etc: Path, cache: _Server
+) -> None:
+    url = f"http://127.0.0.1:{cache.port}"
+    bin_dir, calls = fake_apt_get(tmp_path, url)
+    result = run(tmp_path, etc, "apt-get a || true\n", spec=f"url={url}\n", bin_dir=bin_dir)
+    assert result.returncode == 0
+    assert calls.read_text().splitlines() == ["cache a", "direct a"]
+
+
+def test_a_failure_that_is_not_a_fetch_leaves_the_cache_in_use(
+    tmp_path: Path, etc: Path, cache: _Server
+) -> None:
+    url = f"http://127.0.0.1:{cache.port}"
+    bin_dir, calls = fake_apt_get(tmp_path, url)
+    step = 'apt-get unknown; echo "rc=$?"; apt-get b || true\n'
+    result = run(tmp_path, etc, step, spec=f"url={url}\n", bin_dir=bin_dir)
+    # the exit code of apt-get passes through the shim, and the next call is
+    # still made through the cache
+    assert "rc=100" in result.stdout
+    assert calls.read_text().splitlines()[:2] == ["cache unknown", "cache b"]
