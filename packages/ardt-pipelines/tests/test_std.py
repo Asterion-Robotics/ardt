@@ -202,16 +202,28 @@ class TestAptProxy:
         env = std.apt_proxy(_context(repo, _ci())).env[std.APT_PROXY_ENV]
         assert "probe_timeout=0.5\n" in env
 
-    def test_override_replaces_the_configured_url(self, repo: Path) -> None:
-        self._configure(repo, "  apt_proxy:\n    url: http://cache.example:3142\n")
-        ci = CIInfo(platform=Platform.LOCAL, is_ci=False, apt_proxy="http://other.example:3142")
+    def test_the_environment_names_the_cache(self, repo: Path) -> None:
+        """The normal case: nothing in ardt.yaml, the CI sets ARDT_APT_PROXY."""
+        ci = CIInfo(platform=Platform.GITLAB, is_ci=True, apt_proxy="http://ci.example:3142")
         env = std.apt_proxy(_context(repo, ci)).env[std.APT_PROXY_ENV]
-        assert env.startswith("url=http://other.example:3142\n")
+        assert env == "url=http://ci.example:3142\nprobe_timeout=2\n"
 
-    def test_override_set_empty_switches_the_cache_off(self, repo: Path) -> None:
-        self._configure(repo, "  apt_proxy:\n    url: http://cache.example:3142\n")
-        ci = CIInfo(platform=Platform.LOCAL, is_ci=False, apt_proxy="")
+    def test_the_repository_overrides_the_environment(self, repo: Path) -> None:
+        self._configure(repo, "  apt_proxy:\n    url: http://test.example:3142\n")
+        ci = CIInfo(platform=Platform.GITLAB, is_ci=True, apt_proxy="http://ci.example:3142")
+        env = std.apt_proxy(_context(repo, ci)).env[std.APT_PROXY_ENV]
+        assert env.startswith("url=http://test.example:3142\n")
+
+    def test_the_repository_can_switch_the_cache_off(self, repo: Path) -> None:
+        self._configure(repo, '  apt_proxy:\n    url: ""\n')
+        ci = CIInfo(platform=Platform.GITLAB, is_ci=True, apt_proxy="http://ci.example:3142")
         assert std.apt_proxy(_context(repo, ci)) == std.Credentials()
+
+    def test_probe_timeout_applies_to_the_environment_cache(self, repo: Path) -> None:
+        self._configure(repo, "  apt_proxy:\n    probe_timeout: 0.5\n")
+        ci = CIInfo(platform=Platform.GITLAB, is_ci=True, apt_proxy="http://ci.example:3142")
+        env = std.apt_proxy(_context(repo, ci)).env[std.APT_PROXY_ENV]
+        assert env == "url=http://ci.example:3142\nprobe_timeout=0.5\n"
 
     def test_https_cache_is_a_clean_error(self, repo: Path) -> None:
         self._configure(repo, "  apt_proxy:\n    url: https://cache.example\n")

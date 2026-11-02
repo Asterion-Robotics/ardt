@@ -154,10 +154,9 @@ def test_apt_proxy_override_is_read_on_every_platform(monkeypatch: pytest.Monkey
     assert ci.detect().apt_proxy == "http://cache.example:3142"
 
 
-def test_apt_proxy_set_empty_switches_the_cache_off(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Empty is not unset: it overrides a configured cache with none."""
+def test_apt_proxy_set_empty_means_none(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ARDT_APT_PROXY", "")
-    assert ci.detect().apt_proxy == ""
+    assert ci.detect().apt_proxy is None
 
 
 def test_malformed_credentials_file_is_a_clean_error(

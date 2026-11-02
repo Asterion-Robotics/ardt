@@ -246,21 +246,24 @@ command only."""
 
 
 class AptProxyConfig(BaseModel):
-    """``pipelines.apt_proxy:`` — an apt cache the image builds fetch through.
+    """``pipelines.apt_proxy:`` — the apt cache the image builds fetch through.
 
-    The recipe's apt steps try it first and fall back to the image's own sources
-    when it does not answer within ``probe_timeout`` or a step fails through it,
+    The cache normally comes from the environment, ``ARDT_APT_PROXY``, set by the
+    CI (a group variable, a runner's environment) or by hand; ``url`` here is the
+    exception, for a repository that must override it (a test against another
+    cache, ``""`` to build without one). The recipe's apt steps try the cache
+    first and fall back to the image's own sources when it does not answer
+    within ``probe_timeout`` or a step fails through it,
     so a build off the cache's network, or with the cache down, is slower at
     worst, never red. The address reaches the build as a secret, not a build
     arg: it is no part of any layer's cache key, and no image carries it.
-    ``ARDT_APT_PROXY`` in the environment replaces ``url`` for one run, and an
-    empty value switches the cache off.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     url: str | None = None
-    """``http://host[:port]`` of a caching proxy that serves sources in URL-prefix
+    """Overrides ``ARDT_APT_PROXY`` when set: ``""`` builds without a cache, and
+    anything else is the ``http://host[:port]`` of a caching proxy that serves sources in URL-prefix
     form: ``http(s)://<host>/<path>`` is read as ``http://<cache>/<host>/<path>``,
     the cache fetching it from the source (over HTTPS where the source needs it).
     A caching nginx with one location per source does it, as does apt-cacher-ng
@@ -327,18 +330,18 @@ def apt_step(body: str) -> str:
 def apt_proxy(ctx: Context) -> Credentials:
     """The apt cache secret of a build, empty when no cache is configured.
 
-    ``ctx.ci.apt_proxy`` (``ARDT_APT_PROXY``) wins over ``pipelines.apt_proxy.url``
-    when set, an empty value meaning no cache for this run.
+    ``pipelines.apt_proxy.url`` when the repository sets it (``""`` meaning no
+    cache), else ``ctx.ci.apt_proxy`` (``ARDT_APT_PROXY``).
     """
     cfg = apt_proxy_config(ctx)
-    url = cfg.url if ctx.ci.apt_proxy is None else ctx.ci.apt_proxy
+    url = ctx.ci.apt_proxy if cfg.url is None else cfg.url
     if not url:
         return Credentials()
     if urlsplit(url).scheme != "http":
         raise ArdtError(
             f"apt cache `{url}` is not an http:// URL",
             hint="the cache serves plain HTTP and fetches HTTPS sources itself; "
-            "set pipelines.apt_proxy.url to http://host[:port]",
+            "set ARDT_APT_PROXY (or pipelines.apt_proxy.url) to http://host[:port]",
         )
     return Credentials(
         secret=[f"id={APT_PROXY_SECRET},env={APT_PROXY_ENV}"],
