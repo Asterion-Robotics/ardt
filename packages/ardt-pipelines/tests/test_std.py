@@ -26,6 +26,7 @@ fallback (GitLab's registry would reject it anyway).
 from __future__ import annotations
 
 import re
+from importlib import resources
 from pathlib import Path
 
 import pytest
@@ -172,6 +173,84 @@ class TestGitCredentials:
         )
         with pytest.raises(ArdtError, match="no git credentials"):
             std.git_credentials(ctx, host="code.example.com")
+
+
+class TestAptProxy:
+    """The apt cache reaches a build as a secret read from the bake command's
+    environment, from ardt.yaml or the ARDT_APT_PROXY override."""
+
+    @staticmethod
+    def _configure(repo: Path, body: str) -> None:
+        (repo / "ardt.yaml").write_text(f"project:\n  name: demo\npipelines:\n{body}")
+
+    def test_nothing_configured_means_no_secret(self, repo: Path) -> None:
+        assert std.apt_proxy(_context(repo, _ci())) == std.Credentials()
+
+    def test_configured_cache_becomes_the_named_secret(self, repo: Path) -> None:
+        self._configure(repo, "  apt_proxy:\n    url: http://cache.example:3142/\n")
+        credentials = std.apt_proxy(_context(repo, _ci()))
+        assert credentials.secret == [f"id={std.APT_PROXY_SECRET},env={std.APT_PROXY_ENV}"]
+        assert credentials.env == {
+            std.APT_PROXY_ENV: "url=http://cache.example:3142\nprobe_timeout=2\n"
+        }
+        assert credentials.ssh == []
+
+    def test_probe_timeout_is_configurable(self, repo: Path) -> None:
+        self._configure(
+            repo, "  apt_proxy:\n    url: http://cache.example:3142\n    probe_timeout: 0.5\n"
+        )
+        env = std.apt_proxy(_context(repo, _ci())).env[std.APT_PROXY_ENV]
+        assert "probe_timeout=0.5\n" in env
+
+    def test_the_environment_names_the_cache(self, repo: Path) -> None:
+        """The normal case: nothing in ardt.yaml, the CI sets ARDT_APT_PROXY."""
+        ci = CIInfo(platform=Platform.GITLAB, is_ci=True, apt_proxy="http://ci.example:3142")
+        env = std.apt_proxy(_context(repo, ci)).env[std.APT_PROXY_ENV]
+        assert env == "url=http://ci.example:3142\nprobe_timeout=2\n"
+
+    def test_the_repository_overrides_the_environment(self, repo: Path) -> None:
+        self._configure(repo, "  apt_proxy:\n    url: http://test.example:3142\n")
+        ci = CIInfo(platform=Platform.GITLAB, is_ci=True, apt_proxy="http://ci.example:3142")
+        env = std.apt_proxy(_context(repo, ci)).env[std.APT_PROXY_ENV]
+        assert env.startswith("url=http://test.example:3142\n")
+
+    def test_the_repository_can_switch_the_cache_off(self, repo: Path) -> None:
+        self._configure(repo, '  apt_proxy:\n    url: ""\n')
+        ci = CIInfo(platform=Platform.GITLAB, is_ci=True, apt_proxy="http://ci.example:3142")
+        assert std.apt_proxy(_context(repo, ci)) == std.Credentials()
+
+    def test_probe_timeout_applies_to_the_environment_cache(self, repo: Path) -> None:
+        self._configure(repo, "  apt_proxy:\n    probe_timeout: 0.5\n")
+        ci = CIInfo(platform=Platform.GITLAB, is_ci=True, apt_proxy="http://ci.example:3142")
+        env = std.apt_proxy(_context(repo, ci)).env[std.APT_PROXY_ENV]
+        assert env == "url=http://ci.example:3142\nprobe_timeout=0.5\n"
+
+    def test_https_cache_is_a_clean_error(self, repo: Path) -> None:
+        self._configure(repo, "  apt_proxy:\n    url: https://cache.example\n")
+        with pytest.raises(ArdtError, match="not an http:// URL"):
+            std.apt_proxy(_context(repo, _ci()))
+
+    def test_the_stage_embeds_the_packaged_wrapper(self) -> None:
+        script = (resources.files("ardt_pipelines") / "ardt-apt.sh").read_text(encoding="utf-8")
+        stage = std.apt_stage()
+        assert stage.startswith(f"FROM scratch AS {std.APT_STAGE}\n")
+        assert f"/ardt-apt\n{script.rstrip()}\nARDT_APT\n" in stage
+
+    def test_a_step_reads_its_body_from_a_heredoc_through_both_mounts(self) -> None:
+        step = std.apt_step("apt-get update \\\n && apt-get install -y git\n")
+        assert step.startswith("RUN --mount=type=secret,id=apt_proxy,required=false")
+        assert f"from={std.APT_STAGE},source=/ardt-apt,target={std.APT_WRAPPER}" in step
+        assert step.endswith(
+            f"{std.APT_WRAPPER} <<'STEP'\napt-get update \\\n && apt-get install -y git\nSTEP"
+        )
+
+    def test_combine_keeps_every_entry_in_order(self) -> None:
+        git = std.Credentials(secret=["id=a,env=A"], ssh=["default=/s"], env={"A": "1"})
+        apt = std.Credentials(secret=["id=b,env=B"], env={"B": "2"})
+        combined = std.combine(git, apt)
+        assert combined.secret == ["id=a,env=A", "id=b,env=B"]
+        assert combined.ssh == ["default=/s"]
+        assert combined.env == {"A": "1", "B": "2"}
 
 
 class TestCacheRef:

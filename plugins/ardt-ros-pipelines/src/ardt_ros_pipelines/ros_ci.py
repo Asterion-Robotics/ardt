@@ -50,6 +50,8 @@ into the rendered recipe as a stage:
         platforms: [linux/amd64, linux/arm64]
         git_host: code.asterion-robotics.com   # private `.repos` deps need auth
         git_ssh_port: 5022
+      apt_proxy:                         # normally ARDT_APT_PROXY, from the CI;
+        url: http://apt-cache.lan:3142   # here it overrides that. Not answering = skipped
 
 Publishing: with every configured platform in one run, bake pushes one
 manifest list under the image name. A run narrowed to a subset (``--arg
@@ -316,7 +318,8 @@ def ros_ci(
 ) -> None:
     cfg, images = _config(ctx), std.images_config(ctx)
     build_platforms = _selected_platforms(cfg, platforms)
-    credentials = _git_credentials(ctx, cfg)
+    # the apt cache travels beside the git credentials, as one more build secret
+    credentials = std.combine(_git_credentials(ctx, cfg), std.apt_proxy(ctx))
     rendered = _render(ctx, cfg, ardt_source)
     export_dir = _prepare_export(ctx, rendered)
 

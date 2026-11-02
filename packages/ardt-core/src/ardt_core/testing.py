@@ -69,6 +69,7 @@ _CI_VARIABLES = (
     "GITHUB_TOKEN",
     "GITHUB_REPOSITORY",
     "SSH_AUTH_SOCK",  # not a CI variable, but ctx.ci reads it locally
+    "ARDT_APT_PROXY",  # ardt's own override, read into ctx.ci on every platform
 )
 
 

@@ -265,12 +265,17 @@ def render(
     lines = [
         "# syntax=docker/dockerfile:1",
         "# Rendered by `ardt pipe run docs-ci` — machine-owned, exported with every run.",
-        f"FROM {cfg.builder} AS builder",
     ]
     if cfg.apt_packages:
+        # through the apt cache when `pipelines.apt_proxy` names one that answers
+        lines.append(std.apt_stage())
+    lines.append(f"FROM {cfg.builder} AS builder")
+    if cfg.apt_packages:
         lines.append(
-            "RUN apt-get update && apt-get install -y --no-install-recommends "
-            f"{' '.join(cfg.apt_packages)} && rm -rf /var/lib/apt/lists/*"
+            std.apt_step(
+                "apt-get update && apt-get install -y --no-install-recommends "
+                f"{' '.join(cfg.apt_packages)} && rm -rf /var/lib/apt/lists/*"
+            )
         )
     # Ahead of the ardt install: a style package moves per release, the ardt
     # layer moves every commit, so this order keeps the cheaper layer cached.
@@ -366,6 +371,7 @@ def docs_ci(ctx: Context, builder: Buildx, ardt_source: str = "") -> None:
     contexts = {GIT_CONTEXT: str(git_module.common_dir(ctx.project_root))}
     if local_ardt:
         contexts[LOCAL_ARDT_CONTEXT] = str(Path(ardt_source).resolve())
+    apt = std.apt_proxy(ctx)
     target = std.gate_target(
         ctx,
         std.images_config(ctx),
@@ -374,11 +380,13 @@ def docs_ci(ctx: Context, builder: Buildx, ardt_source: str = "") -> None:
         stage=SITE_TARGET,
         dest=SITE_DIR,
         image="docs",
+        credentials=apt,
         cache_stage="builder",
     )
     target.contexts = contexts
     bake_file = export_dir / BAKE_NAME
     bake_file.write_text(render_bake([target]), encoding="utf-8")
+    builder.with_env(apt.env)
 
     # wipe: a version removed from the config must also leave public/ — a stale
     # directory would otherwise ride along into the Pages artifact forever.

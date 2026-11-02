@@ -97,6 +97,14 @@ tasks:
 #     git_host: code.asterion-robotics.com # auth for private `.repos` deps:
 #     git_ssh_port: 5022                   # CI job token, or a local ssh agent
 #     git_token_user: gitlab-ci-token # username the job token authenticates as
+#
+# ardt-pipelines — the `pipelines.apt_proxy:` subsection, read by every image build.
+# The apt cache normally comes from ARDT_APT_PROXY (a CI variable, or exported by
+# hand): a caching proxy the apt steps fetch through, sources read as
+# http://<cache>/<host>/<path>. Set here only to override it.
+#   apt_proxy:
+#     url: http://apt-cache.lan:3142 # overrides ARDT_APT_PROXY; "" builds without a cache
+#     probe_timeout: 2 # seconds it has to answer before a step uses the image's sources
 
 # ardt-doc-pipelines — the `pipelines.docs_ci:` subsection.
 #   docs_ci:

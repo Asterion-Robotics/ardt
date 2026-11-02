@@ -27,6 +27,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
+from importlib import resources
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -223,6 +224,129 @@ def git_credentials(ctx: Context, *, host: str) -> Credentials:
             "`job_token:` (a PAT) in ~/.config/ardt/credentials.yaml",
         )
     return Credentials(secret=secret, ssh=ssh, env=env)
+
+
+def combine(*parts: Credentials) -> Credentials:
+    """Several sets of build secrets as one, in order."""
+    return Credentials(
+        secret=[entry for part in parts for entry in part.secret],
+        ssh=[entry for part in parts for entry in part.ssh],
+        env={key: value for part in parts for key, value in part.env.items()},
+    )
+
+
+APT_PROXY_SECRET = "apt_proxy"
+"""BuildKit secret id for the apt cache, the contract between :func:`apt_proxy`
+and a recipe's apt steps. It holds ``key=value`` lines: ``url`` and
+``probe_timeout``."""
+
+APT_PROXY_ENV = "ARDT_APT_PROXY_SPEC"
+"""The environment variable the apt cache secret is read from, set for the bake
+command only."""
+
+
+class AptProxyConfig(BaseModel):
+    """``pipelines.apt_proxy:`` — the apt cache the image builds fetch through.
+
+    The cache normally comes from the environment, ``ARDT_APT_PROXY``, set by the
+    CI (a group variable, a runner's environment) or by hand; ``url`` here is the
+    exception, for a repository that must override it (a test against another
+    cache, ``""`` to build without one). The recipe's apt steps try the cache
+    first and fall back to the image's own sources when it does not answer
+    within ``probe_timeout`` or a step fails through it,
+    so a build off the cache's network, or with the cache down, is slower at
+    worst, never red. The address reaches the build as a secret, not a build
+    arg: it is no part of any layer's cache key, and no image carries it.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    url: str | None = None
+    """Overrides ``ARDT_APT_PROXY`` when set: ``""`` builds without a cache, and
+    anything else is the ``http://host[:port]`` of a caching proxy that serves sources in URL-prefix
+    form: ``http(s)://<host>/<path>`` is read as ``http://<cache>/<host>/<path>``,
+    the cache fetching it from the source (over HTTPS where the source needs it).
+    A caching nginx with one location per source does it, as does apt-cacher-ng
+    with ``Remap-`` rules."""
+    probe_timeout: float = Field(default=2.0, gt=0)
+    """Seconds the cache has to answer before a step goes to the image's own
+    sources."""
+
+
+class _AptProxySection(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    apt_proxy: AptProxyConfig = Field(default_factory=AptProxyConfig)
+
+
+def apt_proxy_config(ctx: Context) -> AptProxyConfig:
+    return ctx.cfg.section_as("pipelines", _AptProxySection).apt_proxy
+
+
+APT_STAGE = "ardt-apt"
+"""Scratch stage holding the apt step wrapper (``ardt-apt.sh``), bind-mounted
+into every apt-running step and never copied into an image."""
+
+APT_WRAPPER = "/run/ardt/ardt-apt"
+"""Where an apt step finds the wrapper: a mount target, which BuildKit removes
+after the step, so no layer carries it."""
+
+APT_MOUNTS = (
+    f"--mount=type=secret,id={APT_PROXY_SECRET},required=false \\\n"
+    f"    --mount=type=bind,from={APT_STAGE},source=/ardt-apt,target={APT_WRAPPER} \\\n"
+    "    "
+)
+"""The two mounts of an apt step, ready to sit between ``RUN`` (and any mounts of
+the recipe's own) and :data:`APT_WRAPPER`."""
+
+
+def apt_stage() -> str:
+    """The recipe stage holding the apt step wrapper, to render ahead of the
+    first stage that runs apt.
+
+    The wrapper runs a step through the cache named by the :data:`APT_PROXY_SECRET`
+    secret when that cache answers, and again from the image's own sources when it
+    does not or when the step fails through it; without the secret the step runs
+    as written. A recipe gets it by rendering this stage and running each apt step
+    through :func:`apt_step` (or :data:`APT_MOUNTS` and :data:`APT_WRAPPER` with a
+    heredoc of its own), and the pipeline by adding :func:`apt_proxy` to the
+    target's secrets.
+    """
+    script = (resources.files("ardt_pipelines") / "ardt-apt.sh").read_text(encoding="utf-8")
+    return (
+        f"FROM scratch AS {APT_STAGE}\n"
+        "COPY --chmod=0755 <<'ARDT_APT' /ardt-apt\n"
+        f"{script.rstrip(chr(10))}\n"
+        "ARDT_APT\n"
+    )
+
+
+def apt_step(body: str) -> str:
+    """A ``RUN`` of ``body`` (shell, may span lines) through the apt step wrapper.
+    The body is a heredoc the wrapper reads, so it can run it twice."""
+    return f"RUN {APT_MOUNTS}{APT_WRAPPER} <<'STEP'\n{body.rstrip(chr(10))}\nSTEP"
+
+
+def apt_proxy(ctx: Context) -> Credentials:
+    """The apt cache secret of a build, empty when no cache is configured.
+
+    ``pipelines.apt_proxy.url`` when the repository sets it (``""`` meaning no
+    cache), else ``ctx.ci.apt_proxy`` (``ARDT_APT_PROXY``).
+    """
+    cfg = apt_proxy_config(ctx)
+    url = ctx.ci.apt_proxy if cfg.url is None else cfg.url
+    if not url:
+        return Credentials()
+    if urlsplit(url).scheme != "http":
+        raise ArdtError(
+            f"apt cache `{url}` is not an http:// URL",
+            hint="the cache serves plain HTTP and fetches HTTPS sources itself; "
+            "set ARDT_APT_PROXY (or pipelines.apt_proxy.url) to http://host[:port]",
+        )
+    return Credentials(
+        secret=[f"id={APT_PROXY_SECRET},env={APT_PROXY_ENV}"],
+        env={APT_PROXY_ENV: f"url={url.rstrip('/')}\nprobe_timeout={cfg.probe_timeout:g}\n"},
+    )
 
 
 def write_digest(ctx: Context, *, repository: str, platform: str, digest: str) -> Path:

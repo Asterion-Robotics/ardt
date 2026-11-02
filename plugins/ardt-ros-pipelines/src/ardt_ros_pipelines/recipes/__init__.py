@@ -96,6 +96,11 @@ GIT_TOKEN_SECRET = std.GIT_TOKEN_SECRET
 """BuildKit secret id the deps layer's token mount uses — the contract with
 ``ardt_pipelines.std.git_credentials``."""
 
+APT_PROXY_SECRET = std.APT_PROXY_SECRET
+APT_STAGE = std.APT_STAGE
+APT_WRAPPER = std.APT_WRAPPER
+"""The apt step wrapper's contract, owned by :mod:`ardt_pipelines.std`."""
+
 
 ARDT_VENV = "/opt/ardt"
 """Where the build stage installs ardt: a venv of its own, so its Python
@@ -301,4 +306,7 @@ def render_ros2(
         .replace("@BASE_EXT@", base_ext)
         .replace("@RUNTIME_FROM@", runtime_from)
         .replace("@CMD@", rendered_cmd)
+        .replace("@APT_STAGE@", std.apt_stage())
+        .replace("@APT_MOUNTS@", std.APT_MOUNTS)
+        .replace("@APT_RUN@", APT_WRAPPER)
     )

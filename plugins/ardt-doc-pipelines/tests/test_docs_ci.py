@@ -28,6 +28,7 @@ from ardt_core.config import ArdtConfig
 from ardt_core.context import Context
 from ardt_core.testing import build_context, console_output, git, run_cli
 from ardt_doc_pipelines import docs_ci
+from ardt_pipelines import std
 
 run = run_cli
 
@@ -212,6 +213,24 @@ class TestRecipe:
         assert f"(ardt doc build || touch build/doc/html/{docs_ci.FAILED_MARKER})" in rendered
         assert "FROM scratch AS site" in rendered
         assert "COPY --from=ref-1 /ws/build/doc/html /feature-x" in rendered
+
+    def test_apt_packages_install_through_the_apt_step_wrapper(self, repo: Path) -> None:
+        rendered = docs_ci.render(
+            build_context(repo), docs_ci.DocsCiConfig(), refs=[], local_ardt=False, ardt_source=""
+        )
+        assert rendered.index(std.apt_stage()) < rendered.index("AS builder")
+        step = rendered[rendered.index(f"RUN {std.APT_MOUNTS}") :]
+        assert step.index(f"{std.APT_WRAPPER} <<'STEP'\n") < step.index("apt-get update")
+
+    def test_no_apt_packages_no_wrapper(self, repo: Path) -> None:
+        rendered = docs_ci.render(
+            build_context(repo),
+            docs_ci.DocsCiConfig(apt_packages=[]),
+            refs=[],
+            local_ardt=False,
+            ardt_source="",
+        )
+        assert std.APT_STAGE not in rendered
 
     def test_local_ardt_installs_from_the_named_context(self, repo: Path) -> None:
         ctx = build_context(repo)
