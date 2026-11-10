@@ -360,6 +360,21 @@ def test_devcontainer_json_carries_the_editor_config_so_repos_need_no_vscode_dir
     assert data["customizations"]["vscode"]["settings"]["git.repositoryScanMaxDepth"] == 2
 
 
+def test_post_create_installs_ardt_then_hands_over_to_bootstrap() -> None:
+    """The script runs nothing of its own: every create step is a profile
+    argv run by `ardt dev bootstrap`, where a leading `KEY=VALUE` word is the
+    environment, so a step's shape is checked once, there, not in shell."""
+    script = plan(ArdtConfig()).files[render_module.POST_CREATE]
+    commands = [line for line in script.splitlines() if line and line[0] not in "#"]
+    assert commands[0] == "set -euo pipefail"
+    assert commands[-1] == "exec ardt dev bootstrap"
+    # pip is the only other command: ardt cannot install itself.
+    assert all(
+        line.startswith(("cd ", "python3 -m pip ", "  -r ", "set ", "exec ")) for line in commands
+    )
+    assert "PIP_BREAK_SYSTEM_PACKAGES" not in script
+
+
 # --- the .vscode/ half ------------------------------------------------------
 
 

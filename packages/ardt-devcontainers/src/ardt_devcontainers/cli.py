@@ -376,11 +376,23 @@ def bootstrap(ctx: Context) -> None:
     if cfg.isolate_build_dirs:
         _claim_volume_dirs(ctx)
     for step in prof.bootstrap:
-        command = [part.replace(DISTRO, distro) for part in step]
-        with ctx.console.section(" ".join(command)):
-            ctx.runner.run(command)
+        words = [part.replace(DISTRO, distro) for part in step]
+        with ctx.console.section(" ".join(words)):
+            extra_env, command = _split_env(words)
+            ctx.runner.run(command, extra_env=extra_env)
     ctx.emit(profile=cfg.profile, bootstrap_steps=len(prof.bootstrap))
     ctx.console.success("container ready — `ardt build`, then `ardt test`")
+
+
+def _split_env(words: list[str]) -> tuple[dict[str, str], list[str]]:
+    """Leading ``KEY=VALUE`` words are the command's environment, as a shell
+    reads them; the runner takes an argv, so handed over raw they would be
+    looked up as the program (`PIP_BREAK_SYSTEM_PACKAGES=1 is not on PATH`)."""
+    env: dict[str, str] = {}
+    while words and "=" in words[0] and words[0].partition("=")[0].isidentifier():
+        key, _, value = words.pop(0).partition("=")
+        env[key] = value
+    return env, words
 
 
 def _claim_volume_dirs(ctx: Context) -> None:
