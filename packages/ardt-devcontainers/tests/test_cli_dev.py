@@ -72,6 +72,13 @@ def test_shell_dry_run_prints_the_exec_at_the_workspace_root(
     assert "-w /ws" in capsys.readouterr().err
 
 
+def test_shell_with_a_command_runs_it_in_the_login_shell(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert run(repo, "dev", "shell", "--dry-run", "--", "ardt", "build") == 0
+    assert "bash -l -c 'ardt build'" in capsys.readouterr().err
+
+
 def test_bootstrap_runs_a_steps_env_assignment_as_environment_not_as_the_program(
     repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

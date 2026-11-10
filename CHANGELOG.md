@@ -4,6 +4,10 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 
 ## Unreleased
 
+### Added
+
+- `ardt dev shell -- <command>`: runs one command in the container's login shell, at the workspace root, and exits with its status (`ardt dev shell -- ardt build`; a quoted word may carry a whole line). The `docker compose exec ... bash -lc` line it replaces no longer has to be typed by hand.
+
 ### Fixed
 
 - `ardt dev up` (and `ardt dev bootstrap` behind `postCreate.sh`) failed on the `ros2` profile's last step with `PIP_BREAK_SYSTEM_PACKAGES=1 is not on PATH`: a profile's bootstrap steps are argv lists, and the leading environment assignment was handed to the runner as the program. Leading `KEY=VALUE` words of a step now set that command's environment, as a shell would.

@@ -27,6 +27,8 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
+import sys
 from pathlib import Path
 
 import click
@@ -309,12 +311,21 @@ def open_command(ctx: Context, build: bool) -> None:
 
 
 @dev.command()
+@click.argument("command", nargs=-1)
 @pass_ardt
-def shell(ctx: Context) -> None:
-    """Open a login shell in the running dev container, at the workspace root."""
+def shell(ctx: Context, command: tuple[str, ...]) -> None:
+    """Open a login shell in the running dev container, at the workspace root.
+
+    With a COMMAND after `--`, run it in that shell instead and exit with its
+    status: `ardt dev shell -- ardt build`. The words are joined and read by
+    bash, so one quoted word may carry a whole line (`-- 'ardt deps && ardt
+    build'`).
+    """
     argv = [
         *docker_module.compose_argv(ctx),
         "exec",
+        # No pseudo-TTY when there is no terminal to hand over (a script, CI).
+        *([] if sys.stdin.isatty() else ["-T"]),
         "-u",
         USER,
         "-w",
@@ -322,9 +333,10 @@ def shell(ctx: Context) -> None:
         "dev",
         "bash",
         "-l",
+        *(["-c", " ".join(command)] if command else []),
     ]
     if ctx.dry_run:
-        ctx.console.info("[dry-run] " + " ".join(argv))
+        ctx.console.info("[dry-run] " + shlex.join(argv))
         return
     # The Runner pipes output, which is exactly wrong for an interactive shell:
     # hand the terminal over to docker instead of proxying it.

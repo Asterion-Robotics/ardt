@@ -9,7 +9,7 @@ The container is a canonical colcon workspace: the repo at `/ws/src/<project>`, 
 | Command | Runs | Does |
 |---|---|---|
 | `ardt dev open` | host | everything needed, then VS Code attached to `/ws` (`--build` rebuilds first) |
-| `ardt dev up` / `shell` / `down` | host | everything needed + postCreate / login shell at `/ws` / stop |
+| `ardt dev up` / `shell` / `down` | host | everything needed + postCreate / login shell at `/ws` (`shell -- <command>` runs one command there) / stop |
 | `ardt dev sync` | host | render `.devcontainer/` + `.vscode/` (also implicit in `up`/`open`) |
 | `ardt dev volumes` | host | create the shared caches and the colcon subpaths (also implicit) |
 | `ardt dev doctor` | either | check docker + daemon, CI parity, ardt pin, render freshness, host wiring |
