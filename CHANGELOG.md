@@ -4,6 +4,8 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 
 ## Unreleased
 
+## [0.6.3] - 2026-11-10
+
 ### Added
 
 - `ardt dev shell -- <command>`: runs one command in the container's login shell, at the workspace root, and exits with its status (`ardt dev shell -- ardt build`; a quoted word may carry a whole line). The `docker compose exec ... bash -lc` line it replaces no longer has to be typed by hand.
