@@ -23,7 +23,7 @@ One exception to "everything under `.devcontainer/`": cpptools reads its C/C++ c
 | Command | Runs | Does |
 |---|---|---|
 | `ardt dev sync` | host | render `.devcontainer/` + `.vscode/` and add them to `.gitignore` |
-| `ardt dev up` / `shell` / `down` | host | `docker compose` up + postCreate / login shell / stop |
+| `ardt dev up` / `shell` / `down` | host | `docker compose` up + postCreate / login shell (`shell -- <command>` runs one command there) / stop |
 | `ardt dev open` | host | start the container and open VS Code inside it (`--build` rebuilds first) |
 | `ardt dev volumes` | host | create the shared caches and the colcon subpaths (idempotent) |
 | `ardt dev doctor` | either | check CI parity, ardt pin, render freshness, host wiring |

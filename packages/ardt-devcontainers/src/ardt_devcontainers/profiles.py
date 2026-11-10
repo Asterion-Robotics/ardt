@@ -113,7 +113,10 @@ class Profile:
     """``(label, packages)`` — labels become comments in the rendered recipe, so
     a human debugging the image can see why each group is there."""
     bootstrap: tuple[tuple[str, ...], ...]
-    """Commands ``ardt dev bootstrap`` runs inside the container, in order."""
+    """Commands ``ardt dev bootstrap`` runs inside the container, in order.
+
+    Each one is an argv, not a shell line: no quoting, no ``&&``. Leading
+    ``KEY=VALUE`` words set that command's environment, as a shell would."""
     extensions: tuple[str, ...]
     settings: dict[str, object] = field(default_factory=dict)
     container_env: dict[str, str] = field(default_factory=dict)

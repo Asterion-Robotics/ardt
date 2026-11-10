@@ -12,6 +12,7 @@ No editor, or a headless machine? Same thing in the terminal:
 ```bash
 ardt dev up              # start the container + run its bootstrap
 ardt dev shell           # a login shell inside it
+ardt dev shell -- ardt build   # or one command in that shell, exiting with its status
 ```
 
 The **first** run is slow: it builds the dev image (minutes) and runs `postCreate` (rosdep + `ardt deps`, more minutes). Every run after that takes seconds. Progress is printed step by step; if something stalls, start with `ardt dev doctor`.

@@ -29,6 +29,7 @@ from pathlib import Path
 import pytest
 
 from ardt_core.cli import main
+from ardt_core.runner import Result, Runner
 
 DEVCONTAINER = ".devcontainer"
 
@@ -69,6 +70,33 @@ def test_shell_dry_run_prints_the_exec_at_the_workspace_root(
 ) -> None:
     assert run(repo, "dev", "shell", "--dry-run") == 0
     assert "-w /ws" in capsys.readouterr().err
+
+
+def test_shell_with_a_command_runs_it_in_the_login_shell(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert run(repo, "dev", "shell", "--dry-run", "--", "ardt", "build") == 0
+    assert "bash -l -c 'ardt build'" in capsys.readouterr().err
+
+
+def test_bootstrap_runs_a_steps_env_assignment_as_environment_not_as_the_program(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The ros2 profile ends on `PIP_BREAK_SYSTEM_PACKAGES=1 ardt deps`, an argv
+    whose first word is an assignment: it reaches the runner as the command's
+    environment, never looked up on PATH as the program (the `ardt dev up`
+    failure `PIP_BREAK_SYSTEM_PACKAGES=1 is not on PATH`)."""
+    monkeypatch.setenv("ARDT_DEV_CONTAINER", "1")
+    calls: list[tuple[list[str], dict[str, str]]] = []
+
+    def record(self: Runner, command: list[str], **kwargs: object) -> Result:
+        calls.append((list(command), dict(kwargs.get("extra_env") or {})))  # type: ignore[call-overload]
+        return Result(command=list(command), returncode=0, tail="")
+
+    monkeypatch.setattr(Runner, "run", record)
+    assert run(repo, "dev", "bootstrap") == 0
+    assert (["ardt", "deps"], {"PIP_BREAK_SYSTEM_PACKAGES": "1"}) in calls
+    assert all("=" not in argv[0] for argv, _ in calls)
 
 
 def test_volumes_dry_run_plans_the_provisioning(
