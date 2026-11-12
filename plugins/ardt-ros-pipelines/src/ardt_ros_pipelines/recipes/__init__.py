@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import json
 import re
+import shlex
 from collections.abc import Sequence
 from importlib import resources
 from pathlib import Path
@@ -178,6 +179,12 @@ def _runtime_skip(keys: Sequence[str]) -> str:
     return f' --skip-keys "{" ".join(keys)}"'
 
 
+def _runtime_overlays(overlays: Sequence[str]) -> str:
+    """The runtime rosdep pass sources the same overlays `ardt deps` sources, in
+    order: the POSIX ``local_setup.sh``, since the step runs under ``sh``."""
+    return "".join(f" && . {shlex.quote(f'{prefix}/local_setup.sh')} \\\n" for prefix in overlays)
+
+
 def _template(name: str) -> str:
     return (resources.files("ardt_ros_pipelines.recipes") / name).read_text(encoding="utf-8")
 
@@ -242,6 +249,7 @@ def render_ros2(
     git_ssh_port: int = 22,
     git_token_user: str = "gitlab-ci-token",
     rosdep_skip_keys: Sequence[str] = (),
+    overlays: Sequence[str] = (),
 ) -> str:
     """Render the ROS 2 workspace recipe for one repo.
 
@@ -256,7 +264,9 @@ def render_ros2(
     the runtime branching between them.
     ``rosdep_skip_keys`` reaches the runtime stage's own rosdep pass (exec
     dependencies of the shipped install space), mirroring what ``ardt deps``
-    skipped in the build stage.
+    skipped in the build stage; ``overlays`` (``tasks.ros.overlays``) are
+    sourced before that pass, as ``ardt deps`` sources them, so an overlay's
+    packages resolve as installed without a skip key.
     """
     base_ext = ""
     runtime_from = "${BASE_IMAGE}"
@@ -302,6 +312,7 @@ def render_ros2(
         .replace("@INSTALL_BASE@", install_base)
         .replace("@INSTALL_SRC@", install_src)
         .replace("@RUNTIME_SKIP@", _runtime_skip(rosdep_skip_keys))
+        .replace("@RUNTIME_OVERLAYS@", _runtime_overlays(overlays))
         .replace("@STRIP@", strip)
         .replace("@BASE_EXT@", base_ext)
         .replace("@RUNTIME_FROM@", runtime_from)

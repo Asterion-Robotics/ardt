@@ -31,7 +31,8 @@ ardt pipe run ros-ci
          + COPY the built install base + CMD
      5b) rosdep install --dependency-types exec over that install base
          ← exec deps only, resolved from the share/*/package.xml files
-           the copy brought along; skips tasks.ros.rosdep_skip_keys
+           the copy brought along; sources tasks.ros.overlays first,
+           skips tasks.ros.rosdep_skip_keys
       → always built (a broken runtime stage fails the MR run)
       → with --publish and every configured platform: one multi-arch
         manifest pushed as <registry>/<project>:<ctx.version>, digest in

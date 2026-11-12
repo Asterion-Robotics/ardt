@@ -64,6 +64,35 @@ class TestConfig:
         assert parsed.platforms == ["linux/arm64"]
 
 
+class TestTasksRosReads:
+    """Cross-section reads of `tasks.ros`, as plain data: the runtime stage's
+    rosdep pass mirrors what `ardt deps` skips and sources in the build stage."""
+
+    def test_overlays_and_skip_keys_read_raw(self, repo: Path) -> None:
+        from types import SimpleNamespace
+
+        from ardt_core import config as config_module
+
+        (repo / "ardt.yaml").write_text(
+            "tasks:\n  ros:\n    overlays: [/opt/acme/sdk]\n    rosdep_skip_keys: [gazebo]\n"
+        )
+        cfg, _ = config_module.load(repo)
+        ctx = SimpleNamespace(cfg=cfg)
+        assert ros_ci._tasks_ros_list(ctx, "overlays") == ("/opt/acme/sdk",)
+        assert ros_ci._tasks_ros_list(ctx, "rosdep_skip_keys") == ("gazebo",)
+
+    def test_absent_or_malformed_reads_empty(self, repo: Path) -> None:
+        from types import SimpleNamespace
+
+        from ardt_core import config as config_module
+
+        (repo / "ardt.yaml").write_text("tasks:\n  ros:\n    overlays: /opt/acme/sdk\n")
+        cfg, _ = config_module.load(repo)
+        ctx = SimpleNamespace(cfg=cfg)
+        assert ros_ci._tasks_ros_list(ctx, "overlays") == ()
+        assert ros_ci._tasks_ros_list(ctx, "rosdep_skip_keys") == ()
+
+
 class TestCliDiscovery:
     """ros-ci is reachable through `ardt pipe` purely via the entry point."""
 
