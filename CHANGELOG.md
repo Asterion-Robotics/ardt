@@ -4,6 +4,10 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 
 ## Unreleased
 
+### Fixed
+
+- `ros-ci`: the runtime stage's rosdep pass sources `tasks.ros.overlays` (each prefix's `local_setup.sh`, in order) before resolving the exec dependencies, as `ardt deps` already sources them in the build stage. Under `--ignore-src` rosdep treats every package in the ament index of `AMENT_PREFIX_PATH` as workspace-built, so a package an overlay provides no longer fails the runtime image with `Cannot locate rosdep definition for [<package>]` unless listed in `rosdep_skip_keys`: repos that listed their overlay's packages there can drop them. `rosdep_skip_keys` still applies on top. An overlay the runtime base image does not carry fails that step.
+
 ## [0.6.3] - 2026-11-10
 
 ### Added

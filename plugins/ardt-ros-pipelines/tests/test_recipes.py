@@ -263,6 +263,31 @@ class TestRuntimeExecDeps:
     def test_no_skip_flag_without_keys(self, tmp_path: Path) -> None:
         assert "--skip-keys" not in render(tmp_path)
 
+    def test_overlays_are_sourced_before_the_runtime_rosdep_pass(self, tmp_path: Path) -> None:
+        """Regression: `ardt deps` sources tasks.ros.overlays in the build stage,
+        the runtime pass ran raw rosdep without them, and every overlay package
+        hard-failed resolution (`Cannot locate rosdep definition for [aos_skill_sdk]`)
+        unless listed in rosdep_skip_keys. Under --ignore-src rosdep treats the
+        packages in the ament index of AMENT_PREFIX_PATH as workspace-built, so
+        sourcing the overlay (the POSIX local_setup.sh: the step runs under sh)
+        is the whole fix; a missing overlay fails the step, as in the tasks."""
+        stage = self._runtime_stage(render(tmp_path, overlays=("/opt/acme/sdk", "/opt/acme/ext")))
+        first = stage.index(" && . /opt/acme/sdk/local_setup.sh \\\n")
+        second = stage.index(" && . /opt/acme/ext/local_setup.sh \\\n")
+        install = stage.index("rosdep install --from-paths /tmp/runtime-manifests")
+        assert stage.index("rosdep update") < first < second < install, "in order, before the pass"
+        assert "local_setup.bash" not in stage
+
+    def test_skip_keys_still_add_to_sourced_overlays(self, tmp_path: Path) -> None:
+        stage = self._runtime_stage(
+            render(tmp_path, overlays=("/opt/acme/sdk",), rosdep_skip_keys=("gazebo",))
+        )
+        assert "/opt/acme/sdk/local_setup.sh" in stage
+        assert '--skip-keys "gazebo"' in stage
+
+    def test_no_sourcing_without_overlays(self, tmp_path: Path) -> None:
+        assert " && . " not in self._runtime_stage(render(tmp_path))
+
     def test_staging_is_independent_of_the_install_base(self, tmp_path: Path) -> None:
         """Source-tree staging must not vary with install_base — only the
         install-space copy and the entrypoint do."""
