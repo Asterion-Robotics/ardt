@@ -266,7 +266,7 @@ class TestRuntimeExecDeps:
     def test_overlays_are_sourced_before_the_runtime_rosdep_pass(self, tmp_path: Path) -> None:
         """Regression: `ardt deps` sources tasks.ros.overlays in the build stage,
         the runtime pass ran raw rosdep without them, and every overlay package
-        hard-failed resolution (`Cannot locate rosdep definition for [aos_skill_sdk]`)
+        hard-failed resolution (`Cannot locate rosdep definition for [<overlay package>]`)
         unless listed in rosdep_skip_keys. Under --ignore-src rosdep treats the
         packages in the ament index of AMENT_PREFIX_PATH as workspace-built, so
         sourcing the overlay (the POSIX local_setup.sh: the step runs under sh)
