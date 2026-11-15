@@ -161,6 +161,9 @@ def _wsl2(facts: HostFacts, *, gui: bool) -> HostProfile:
                 {
                     "DISPLAY": facts.display or ":0",
                     "WAYLAND_DISPLAY": "wayland-0",
+                    # With WAYLAND_DISPLAY set Qt picks Wayland, and rviz2's OGRE
+                    # (GLX) aborts on "Invalid parentWindowHandle": Qt stays on X11.
+                    "QT_QPA_PLATFORM": "xcb",
                     "XDG_RUNTIME_DIR": "/mnt/wslg/runtime-dir",
                     "PULSE_SERVER": "/mnt/wslg/PulseServer",
                     "LD_LIBRARY_PATH": "/usr/lib/wsl/lib",

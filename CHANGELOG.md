@@ -4,6 +4,14 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 
 ## Unreleased
 
+### Added
+
+- `ardt dev`: `RMW_IMPLEMENTATION` and `ZENOH_CONFIG_OVERRIDE` pass through from the shell that starts the container, as `ROS_DOMAIN_ID` already does; unset on the host, they stay unset in the container. `RMW_IMPLEMENTATION=rmw_zenoh_cpp ardt dev up` joins the ROS graph of a Zenoh router reachable on the host's `localhost:7447`.
+
+### Fixed
+
+- `ardt dev` on WSL2: rviz2 aborted at start with `Invalid parentWindowHandle (wrong server or screen)`. The WSLg wiring sets `WAYLAND_DISPLAY`, so Qt chose its Wayland platform while rviz2's OGRE renders through GLX. The host overlay now sets `QT_QPA_PLATFORM=xcb`.
+
 ## [0.6.4] - 2026-11-12
 
 ### Fixed

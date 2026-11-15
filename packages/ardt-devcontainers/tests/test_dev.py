@@ -103,6 +103,8 @@ def test_wsl2_wires_wslg_sockets_and_gpu() -> None:
     host = host_module.detect(WSL)
     assert host.kind == host_module.WSL2
     assert host.environment["WAYLAND_DISPLAY"] == "wayland-0"
+    # rviz2 renders through GLX: Qt on Wayland hands OGRE a window it cannot use.
+    assert host.environment["QT_QPA_PLATFORM"] == "xcb"
     assert "/mnt/wslg/.X11-unix:/tmp/.X11-unix" in host.volumes
     assert host.devices == ["/dev/dxg"]
     assert host.service == {"network_mode": "host", "ipc": "host"}
@@ -336,6 +338,17 @@ def test_published_dev_image_replaces_the_local_build() -> None:
     service = yaml.safe_load(plan(cfg).files[render_module.COMPOSE])["services"]["dev"]
     assert service["image"] == "registry/ros2-dev@sha256:abc"
     assert "build" not in service
+
+
+def test_the_middleware_choice_passes_through_from_the_host() -> None:
+    """A null value is compose's pass-through: set in the container only when
+    the shell running `ardt dev up` has it, so the default stays the image's."""
+    env = yaml.safe_load(plan(ArdtConfig()).files[render_module.COMPOSE])["services"]["dev"][
+        "environment"
+    ]
+    assert env["RMW_IMPLEMENTATION"] is None
+    assert env["ZENOH_CONFIG_OVERRIDE"] is None
+    assert env["ROS_DOMAIN_ID"] == "${ROS_DOMAIN_ID:-0}"
 
 
 def test_host_overlay_is_a_separate_file_and_never_empty() -> None:

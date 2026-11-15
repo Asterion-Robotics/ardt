@@ -24,6 +24,16 @@ One clone works on WSL2, Linux and macOS: `devcontainer.json` has no conditional
 | GUI (rviz2, rqt) | WSLg sockets + `/dev/dxg` | X11 socket + `/dev/dri` | not wired yet (noVNC is the intended answer) |
 | DDS across host and container | `network_mode: host`, `ipc: host` | same | unavailable, falls back to localhost-scoped discovery |
 
+## Middleware
+
+`RMW_IMPLEMENTATION` and `ZENOH_CONFIG_OVERRIDE` pass through from the shell that starts the container, as `ROS_DOMAIN_ID` does; unset there, they are unset in the container and it runs the image's default middleware. This is how a dev container joins a ROS graph served by a Zenoh router the host can reach (`rmw_zenoh`'s default session connects to `tcp/localhost:7447`):
+
+```bash
+RMW_IMPLEMENTATION=rmw_zenoh_cpp ardt dev up
+```
+
+Three things to know. The whole container is joined, `ardt test` included: tests then run on that graph. With `rmw_zenoh_cpp` set and no router reachable, every ROS command fails at initialization; start the container again without the variable to leave. And the variables are read where `docker compose` runs: `ardt dev up` and `ardt dev open` see your shell's, VS Code's "Reopen in Container" sees the editor's.
+
 ## Opening the editor
 
 `ardt dev open` starts the container and attaches VS Code to it in one step. Two launch paths, best first:
