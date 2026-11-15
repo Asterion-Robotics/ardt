@@ -396,7 +396,14 @@ def compose(
         {
             "init": True,
             "command": "sleep infinity",
-            "environment": {"ROS_DOMAIN_ID": "${ROS_DOMAIN_ID:-0}"},
+            "environment": {
+                "ROS_DOMAIN_ID": "${ROS_DOMAIN_ID:-0}",
+                # None is compose's pass-through: set only when the shell that
+                # runs `ardt dev up` has them, so the container joins a Zenoh
+                # router on demand and keeps the image's middleware otherwise.
+                "RMW_IMPLEMENTATION": None,
+                "ZENOH_CONFIG_OVERRIDE": None,
+            },
             "volumes": volumes,
         }
     )

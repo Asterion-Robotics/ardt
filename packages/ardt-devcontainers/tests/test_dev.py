@@ -338,6 +338,17 @@ def test_published_dev_image_replaces_the_local_build() -> None:
     assert "build" not in service
 
 
+def test_the_middleware_choice_passes_through_from_the_host() -> None:
+    """A null value is compose's pass-through: set in the container only when
+    the shell running `ardt dev up` has it, so the default stays the image's."""
+    env = yaml.safe_load(plan(ArdtConfig()).files[render_module.COMPOSE])["services"]["dev"][
+        "environment"
+    ]
+    assert env["RMW_IMPLEMENTATION"] is None
+    assert env["ZENOH_CONFIG_OVERRIDE"] is None
+    assert env["ROS_DOMAIN_ID"] == "${ROS_DOMAIN_ID:-0}"
+
+
 def test_host_overlay_is_a_separate_file_and_never_empty() -> None:
     overlay = yaml.safe_load(plan(ArdtConfig(), facts=MAC).files[render_module.COMPOSE_HOST])
     assert overlay["services"]["dev"]["environment"]["ROS_AUTOMATIC_DISCOVERY_RANGE"] == "LOCALHOST"

@@ -4,6 +4,10 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 
 ## Unreleased
 
+### Added
+
+- `ardt dev`: `RMW_IMPLEMENTATION` and `ZENOH_CONFIG_OVERRIDE` pass through from the shell that starts the container, as `ROS_DOMAIN_ID` already does; unset on the host, they stay unset in the container. `RMW_IMPLEMENTATION=rmw_zenoh_cpp ardt dev up` joins the ROS graph of a Zenoh router reachable on the host's `localhost:7447`.
+
 ## [0.6.4] - 2026-11-12
 
 ### Fixed
