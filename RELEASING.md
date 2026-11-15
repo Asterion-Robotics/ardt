@@ -12,7 +12,7 @@ A release is a git tag; there is no version file to bump. hatch-vcs derives ever
    git push origin main vX.Y.Z
    ```
 
-3. Create the GitHub release. Generated notes give the PR-level detail; the changelog stays the curated record.
+3. Nothing: the pipeline's last job, `release`, creates the GitHub release once the image and the site are published. Generated notes give the PR-level detail; the changelog stays the curated record. A tag from before that job has no entry; create it by hand:
 
    ```bash
    gh release create vX.Y.Z --generate-notes
