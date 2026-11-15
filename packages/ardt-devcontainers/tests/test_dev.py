@@ -103,6 +103,8 @@ def test_wsl2_wires_wslg_sockets_and_gpu() -> None:
     host = host_module.detect(WSL)
     assert host.kind == host_module.WSL2
     assert host.environment["WAYLAND_DISPLAY"] == "wayland-0"
+    # rviz2 renders through GLX: Qt on Wayland hands OGRE a window it cannot use.
+    assert host.environment["QT_QPA_PLATFORM"] == "xcb"
     assert "/mnt/wslg/.X11-unix:/tmp/.X11-unix" in host.volumes
     assert host.devices == ["/dev/dxg"]
     assert host.service == {"network_mode": "host", "ipc": "host"}
