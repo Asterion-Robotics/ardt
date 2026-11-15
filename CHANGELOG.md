@@ -4,6 +4,12 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 
 ## Unreleased
 
+## [0.6.6] - 2026-11-15
+
+### Changed
+
+- Releasing: the tag pipeline's last job creates the GitHub release, with generated notes, once the CI image and the docs site are published. No change to the tool.
+
 ## [0.6.5] - 2026-11-15
 
 ### Added
