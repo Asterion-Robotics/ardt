@@ -109,6 +109,12 @@ class RosCiConfig(BaseModel):
     """IP protection: remove headers (``include/``), static libs (``*.a``) and
     CMake/pkg-config exports from the install base before the runtime copy, so
     the shipped image cannot be developed against."""
+    prune_build_files: bool = False
+    """Smaller runtime image: the runtime stage's exec-dependency install also
+    removes from the system what only a build needs (headers, static libs,
+    compilers, CMake, docs), in the same step, so the -dev packages rosdep
+    pulls in never reach a layer. The install space is copied after it,
+    untouched. Leave it off if the shipped image compiles anything."""
     cmd: list[str] | None = None
     """Container CMD of the shipped image; ``["bash"]`` when unset. It runs
     under an entrypoint that sources the workspace overlay first, so commands
@@ -210,6 +216,7 @@ def _render(ctx: Context, cfg: RosCiConfig, ardt_source: str) -> str:
         local_ardt=local_ardt,
         install_base=cfg.install_base,
         strip_dev_files=cfg.strip_dev_files,
+        prune_build_files=cfg.prune_build_files,
         git_host=cfg.git_host,
         git_ssh_port=cfg.git_ssh_port,
         git_token_user=cfg.git_token_user,

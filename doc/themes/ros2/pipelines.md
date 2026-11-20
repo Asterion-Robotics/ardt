@@ -66,6 +66,7 @@ All knobs live under `pipelines.ros_ci:`.
 | `cmd` | the shipped image's CMD |
 | `install_base` | where the workspace installs in the image (default `/opt/ros/app`) |
 | `strip_dev_files` | IP protection: strip headers, static libs and CMake/pkg-config exports before the runtime copy |
+| `prune_build_files` | smaller runtime image: the runtime stage's exec-dependency install also removes from the system what only a build needs (headers, static libs, compilers, CMake, docs), in the same step; the install space is untouched. Leave it off if the shipped image compiles anything |
 | `platforms` | manifest platforms, e.g. `[linux/amd64, linux/arm64]` |
 | `registry_cache` | keep every stage's layer cache in the registry as `<project>/cache:<stage>` (default on; CI writes, every run reads); off, the builder's own cache alone |
 | `compression` | layer compression of the published image: `gzip` (default) or `zstd` (smaller, faster to unpack; consumers on containerd 1.6 or Docker 23 and later) |

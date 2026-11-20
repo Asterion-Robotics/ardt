@@ -429,6 +429,41 @@ class TestInstallBaseAndStrip:
         assert f"AS {recipes.STRIP_STAGE}" not in render(tmp_path)
 
 
+class TestPruneBuildFiles:
+    """``prune_build_files``: the runtime stage's exec-dependency install also
+    removes what only a build needs (headers, static libraries, compilers,
+    CMake, docs) from the system, in the same step, so the -dev packages rosdep
+    pulls in never reach a layer."""
+
+    def _install_step(self, rendered: str) -> str:
+        stage = rendered.split("AS runtime", 1)[1]
+        step = stage[stage.index("rosdep install --from-paths /tmp/runtime-manifests") :]
+        return step[: step.index("STEP\n")]
+
+    def test_off_by_default(self, tmp_path: Path) -> None:
+        step = self._install_step(render(tmp_path))
+        assert "/usr/include" not in step
+        assert "*.a" not in step
+
+    def test_prunes_in_the_install_step(self, tmp_path: Path) -> None:
+        step = self._install_step(render(tmp_path, prune_build_files=True))
+        for path in (
+            "/usr/include",
+            "/usr/lib/gcc",
+            "/usr/bin/cmake",
+            "/usr/share/doc",
+            "/usr/lib/*-linux-gnu/libasan.so*",
+        ):
+            assert path in step
+        assert "-name '*.a' \\( -type f -o -type l \\) -delete" in step
+
+    def test_the_install_space_is_copied_after_the_prune(self, tmp_path: Path) -> None:
+        """The workspace's own files land after the prune: it never touches them."""
+        rendered = render(tmp_path, prune_build_files=True)
+        stage = rendered.split("AS runtime", 1)[1]
+        assert stage.index("/usr/include") < stage.index("COPY --from=build /opt/ros/app")
+
+
 class TestCacheMounts:
     """Per-arch BuildKit cache mounts; they pay off on a persistent engine."""
 

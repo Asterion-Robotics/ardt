@@ -4,6 +4,10 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 
 ## Unreleased
 
+### Added
+
+- `ros-ci`: `pipelines.ros_ci.prune_build_files` (off by default) makes the runtime image smaller. The runtime stage's exec-dependency install also removes from the system what only a build needs, in the same step: headers, static libraries, compilers, CMake and docs. The ROS Debian packages hard-depend on their build tooling, so apt cannot uninstall it; the files go and the package database keeps listing them. The workspace's install space is copied after the step, untouched. On a Nav2 module built on a runtime base already pruned the same way, the image went from 2055 MB to 1370 MB.
+
 ## [0.6.6] - 2026-11-15
 
 ### Changed

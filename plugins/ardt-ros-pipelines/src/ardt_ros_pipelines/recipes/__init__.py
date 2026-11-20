@@ -172,6 +172,23 @@ RUN find {{base}} -type d \\( -name include -o -name cmake -o -name pkgconfig \\
 """
 
 
+_PRUNE_STEP = """\
+ && rm -rf /usr/include /opt/ros/*/include /usr/lib/gcc /usr/libexec/gcc \\
+      /usr/bin/*-linux-gnu-gcc* /usr/bin/*-linux-gnu-g++* /usr/bin/*-linux-gnu-cpp* \\
+      /usr/bin/cmake /usr/bin/ctest /usr/bin/cpack /usr/share/cmake* \\
+      /usr/share/doc /usr/share/man /usr/share/info \\
+      /usr/lib/*-linux-gnu/libasan.so* /usr/lib/*-linux-gnu/libtsan.so* \\
+      /usr/lib/*-linux-gnu/liblsan.so* /usr/lib/*-linux-gnu/libubsan.so* \\
+      /usr/lib/*-linux-gnu/libhwasan.so* \\
+ && find / -xdev -name '*.a' \\( -type f -o -type l \\) -delete \\
+"""
+"""``prune_build_files``: what only a build needs, removed from the system at the
+end of the runtime stage's install step (the same RUN, so it never reaches a
+layer). The ROS Debian packages hard-depend on their build tooling, so apt
+cannot uninstall it; the files go and the package database keeps listing
+them. The workspace's install space is copied after this step, untouched."""
+
+
 def _runtime_skip(keys: Sequence[str]) -> str:
     """The runtime rosdep pass must skip the same keys `ardt deps` skips."""
     if not keys:
@@ -245,6 +262,7 @@ def render_ros2(
     local_ardt: bool,
     install_base: str = "/opt/ros/app",
     strip_dev_files: bool = False,
+    prune_build_files: bool = False,
     git_host: str | None = None,
     git_ssh_port: int = 22,
     git_token_user: str = "gitlab-ci-token",
@@ -314,6 +332,7 @@ def render_ros2(
         .replace("@RUNTIME_SKIP@", _runtime_skip(rosdep_skip_keys))
         .replace("@RUNTIME_OVERLAYS@", _runtime_overlays(overlays))
         .replace("@STRIP@", strip)
+        .replace("@RUNTIME_PRUNE@", _PRUNE_STEP if prune_build_files else "")
         .replace("@BASE_EXT@", base_ext)
         .replace("@RUNTIME_FROM@", runtime_from)
         .replace("@CMD@", rendered_cmd)
