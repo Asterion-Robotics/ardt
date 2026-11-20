@@ -234,6 +234,18 @@ class TestRuntimeExecDeps:
         assert "--dependency-types exec" in stage
         assert "rosdep install --from-paths /opt/ros/app" not in stage
 
+    def test_runtime_stage_prunes_build_files_in_the_install_step(self, tmp_path: Path) -> None:
+        """The base's prune script runs after the exec-dependency install and
+        before that RUN ends, so the -dev files rosdep pulls in never reach a
+        layer; a base without the script builds as before."""
+        stage = self._runtime_stage(render(tmp_path))
+        step = stage[stage.index("rosdep install --from-paths /tmp/runtime-manifests") :]
+        step = step[: step.index("STEP\n")]
+        assert (
+            "{ [ ! -x /usr/local/sbin/prune-build-files ] || /usr/local/sbin/prune-build-files; }"
+            in step
+        )
+
     def test_build_stage_stages_source_manifests_of_the_built_set(self, tmp_path: Path) -> None:
         """Built set from colcon's build base, manifests from the source tree —
         never from the install space, where plain-cmake packages have none."""
