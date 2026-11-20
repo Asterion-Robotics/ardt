@@ -36,6 +36,7 @@ Per-repo knobs, all in `ardt.yaml` (`pipelines.ros_ci:`):
 | `cmd` | the shipped image's CMD |
 | `install_base` | where the workspace installs in the image (default `/opt/ros/app`) |
 | `strip_dev_files` | IP protection: strip headers, static libs and CMake/pkg-config exports before the runtime copy |
+| `prune_build_files` | smaller runtime image: the runtime stage's exec-dependency install also removes from the system what only a build needs (headers, static libs, compilers, CMake, docs), in the same step; the install space is untouched. Leave it off if the shipped image compiles anything |
 | `base.Dockerfile` (file) | the only local Docker file a repo may carry: a single-stage base extension (`FROM ${BASE_IMAGE}` + layers below the app — drivers, kernel modules); spliced into the rendered recipe |
 
 Until the baked `ardt-ci` tool image exists, the recipe pip-installs the ardt *task plane* (never the pipeline plane) into the build stage from `ardt_source` — the public git repo by default, or a local checkout for development: `ardt pipe run ros-ci --arg ardt_source=/path/to/ardt`.

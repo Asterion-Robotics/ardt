@@ -91,6 +91,7 @@ tasks:
 #     base_dockerfile: base.Dockerfile # in-repo base extension, spliced when present
 #     install_base: /opt/ros/app # where the workspace installs inside the image
 #     strip_dev_files: true # remove headers/static libs/CMake exports before shipping
+#     prune_build_files: true # remove the system's headers/static libs/compilers/CMake/docs from the runtime image
 #     cmd: ["ros2", "launch", "my_robot", "bringup.launch.py"] # shipped image CMD
 #     image: runtime # sub-image under the registry project path; default the path itself
 #     platforms: [linux/amd64]
